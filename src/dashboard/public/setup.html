@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qwen Proxy Setup Wizard</title>
+    <link rel="stylesheet" href="/dashboard/style.css">
+</head>
+<body class="setup-page">
+    <div class="setup-container">
+        <div class="setup-card">
+            <!-- Step 1: Welcome -->
+            <div id="step1" class="setup-step">
+                <div class="setup-header">
+                    <h1>🚀 Welcome to Qwen Proxy</h1>
+                    <p>Let's get you set up with your first Qwen account and API key</p>
+                    <div class="admin-notice">
+                        <span class="admin-icon">🔒</span>
+                        <span>Admin authentication required for setup operations</span>
+                    </div>
+                </div>
+                
+                <div class="setup-content">
+                    <div class="setup-info">
+                        <h3>What you'll need:</h3>
+                        <ul>
+                            <li>🏢 A Qwen account (we'll help you authorize it)</li>
+                            <li>🌐 Internet connection for OAuth authentication</li>
+                            <li>📱 Access to your web browser</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="setup-benefits">
+                        <h3>What you'll get:</h3>
+                        <ul>
+                            <li>🔐 Secure API key management</li>
+                            <li>📊 Usage tracking and monitoring</li>
+                            <li>🎛️ Web-based configuration</li>
+                            <li>🔄 Automatic token refresh</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="setup-actions">
+                    <button class="btn btn-secondary" onclick="skipSetup()">Skip Setup</button>
+                    <button class="btn btn-primary" onclick="nextStep(2)">🚀 Get Started</button>
+                </div>
+            </div>
+
+            <!-- Step 2: Account Setup -->
+            <div id="step2" class="setup-step" style="display: none;">
+                <div class="setup-header">
+                    <h2>🏢 Add Your First Qwen Account</h2>
+                    <p>Choose an ID for your account and authorize it</p>
+                </div>
+                
+                <form id="setupAccountForm" class="setup-form">
+                    <div class="form-group">
+                        <label for="setupAccountId">Account ID *</label>
+                        <input type="text" id="setupAccountId" name="accountId" required placeholder="e.g., main-account" value="main-account">
+                        <small>This is just a label to identify your account in the dashboard</small>
+                    </div>
+                    
+                    <div class="setup-actions">
+                        <button type="button" class="btn btn-secondary" onclick="previousStep(1)">← Back</button>
+                        <button type="submit" class="btn btn-primary">🔗 Authorize Account</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Step 3: OAuth Authorization -->
+            <div id="step3" class="setup-step" style="display: none;">
+                <div class="setup-header">
+                    <h2>🔐 Authorize Your Account</h2>
+                    <p>Complete the authorization in your browser</p>
+                </div>
+                
+                <div class="oauth-instructions">
+                    <div class="oauth-info">
+                        <p><strong>Account:</strong> <span id="authAccountId"></span></p>
+                        
+                        <div class="auth-info">
+                            <a id="setupAuthLink" href="#" target="_blank" class="auth-link">
+                                🚀 Open Qwen Authorization Page
+                            </a>
+                            <div class="user-code">
+                                Code to enter: <span id="setupUserCode"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="polling-status">
+                            <div class="spinner"></div>
+                            <span id="setupPollingMessage">⏳ Waiting for authorization...</span>
+                            <div id="setupTimeRemaining"></div>
+                        </div>
+                        
+                        <div class="oauth-help">
+                            <h4>📋 Instructions:</h4>
+                            <ol>
+                                <li>Click the authorization link above</li>
+                                <li>Enter the code: <strong id="setupUserCodeCopy"></strong></li>
+                                <li>Authorize the application in Qwen</li>
+                                <li>Return here - we'll detect it automatically!</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="setup-actions">
+                    <button class="btn btn-secondary" onclick="cancelSetupOAuth()">Cancel</button>
+                    <button class="btn btn-primary" onclick="openAuthInNewTab()" id="retryAuthBtn" style="display: none;">🔄 Retry Authorization</button>
+                </div>
+            </div>
+
+            <!-- Step 4: API Key Creation -->
+            <div id="step4" class="setup-step" style="display: none;">
+                <div class="setup-header">
+                    <h2>🔑 Create Your First API Key</h2>
+                    <p>Set up an API key to start using the proxy</p>
+                </div>
+                
+                <form id="setupApiKeyForm" class="setup-form">
+                    <div class="form-group">
+                        <label for="setupKeyName">API Key Name *</label>
+                        <input type="text" id="setupKeyName" name="name" required placeholder="e.g., Main Application" value="Setup Key">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="setupKeyDescription">Description</label>
+                        <textarea id="setupKeyDescription" name="description" placeholder="Optional description">API key created during initial setup</textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Permissions</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="permissions" value="chat.completions" checked>
+                                Chat Completions
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="permissions" value="models.list" checked>
+                                List Models
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="permissions" value="full_access">
+                                Full Access
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="setup-actions">
+                        <button type="button" class="btn btn-secondary" onclick="skipApiKey()">Skip for Now</button>
+                        <button type="submit" class="btn btn-primary">🔑 Create API Key</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Step 5: API Key Display -->
+            <div id="step5" class="setup-step" style="display: none;">
+                <div class="setup-header">
+                    <h2>✅ Your API Key is Ready!</h2>
+                    <p>Save this key securely - you won't see it again</p>
+                </div>
+                
+                <div class="api-key-display">
+                    <div class="api-key-code">
+                        <input type="text" id="setupGeneratedKey" readonly>
+                        <button class="btn btn-copy" onclick="copySetupApiKey()">📋 Copy</button>
+                    </div>
+                    
+                    <div class="warning-box">
+                        <p>⚠️ <strong>IMPORTANT:</strong> Save this key now! You won't be able to see it again for security reasons.</p>
+                    </div>
+                    
+                    <div class="usage-info">
+                        <h4>💡 Quick Start:</h4>
+                        <p>Use this key in your API requests:</p>
+                        <code>Authorization: Bearer &lt;your-api-key&gt;</code>
+                        
+                        <p><strong>Endpoint:</strong> <code id="setupEndpoint"></code></p>
+                    </div>
+                </div>
+                
+                <div class="setup-actions">
+                    <button class="btn btn-primary" onclick="completeSetup()">🏠 Go to Dashboard</button>
+                </div>
+            </div>
+
+            <!-- Step 6: Completion -->
+            <div id="step6" class="setup-step" style="display: none;">
+                <div class="setup-header">
+                    <h2>🎉 Setup Complete!</h2>
+                    <p>You're all set to start using Qwen Proxy</p>
+                </div>
+                
+                <div class="completion-info">
+                    <div class="success-summary">
+                        <h3>✅ What's been configured:</h3>
+                        <ul>
+                            <li>🏢 Qwen account authorized and ready</li>
+                            <li>🔑 API key created and configured</li>
+                            <li>🎛️ Dashboard authentication enabled</li>
+                            <li>📊 Monitoring and tracking active</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="next-steps">
+                        <h3>🚀 Next Steps:</h3>
+                        <ul>
+                            <li>📖 Check the dashboard for usage statistics</li>
+                            <li>🔧 Create additional API keys if needed</li>
+                            <li>⚡ Start making API requests to your proxy</li>
+                            <li>📈 Monitor your usage and quota</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="setup-actions">
+                    <button class="btn btn-primary btn-large" onclick="goToDashboard()">🏠 Open Dashboard</button>
+                </div>
+            </div>
+
+            <!-- Error Display -->
+            <div id="setupError" class="error-message" style="display: none;"></div>
+            
+            <!-- Progress Indicator -->
+            <div class="setup-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 16.67%;"></div>
+                </div>
+                <div class="progress-text">
+                    Step <span id="currentStep">1</span> of 6
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class SetupWizard {
+            constructor() {
+                this.currentStep = 1;
+                this.activeOAuthFlow = null;
+                this.pollInterval = null;
+                this.setupData = {};
+                this.init();
+            }
+
+            init() {
+                this.setupEventListeners();
+                this.updateProgress();
+                this.setEndpoint();
+            }
+
+            setupEventListeners() {
+                document.getElementById('setupAccountForm')?.addEventListener('submit', (e) => this.handleAccountSetup(e));
+                document.getElementById('setupApiKeyForm')?.addEventListener('submit', (e) => this.handleApiKeySetup(e));
+            }
+
+            setEndpoint() {
+                const endpoint = `${window.location.protocol}//${window.location.host}/v1`;
+                document.getElementById('setupEndpoint').textContent = endpoint;
+            }
+
+            nextStep(step) {
+                this.currentStep = step;
+                this.showStep(step);
+                this.updateProgress();
+            }
+
+            previousStep(step) {
+                this.currentStep = step;
+                this.showStep(step);
+                this.updateProgress();
+            }
+
+            showStep(stepNumber) {
+                document.querySelectorAll('.setup-step').forEach(step => {
+                    step.style.display = 'none';
+                });
+                
+                const targetStep = document.getElementById(`step${stepNumber}`);
+                if (targetStep) {
+                    targetStep.style.display = 'block';
+                }
+            }
+
+            updateProgress() {
+                const progressPercentage = (this.currentStep / 6) * 100;
+                document.getElementById('progressFill').style.width = progressPercentage + '%';
+                document.getElementById('currentStep').textContent = this.currentStep;
+            }
+
+            async handleAccountSetup(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(e.target);
+                const accountId = formData.get('accountId').trim();
+
+                if (!accountId) {
+                    this.showError('Account ID is required');
+                    return;
+                }
+
+                this.setupData.accountId = accountId;
+
+                try {
+                    const response = await fetch('/api/setup/accounts/initiate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ accountId })
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        this.activeOAuthFlow = result.flow;
+                        this.showOAuthStep(result.flow);
+                        this.nextStep(3);
+                        this.startOAuthPolling();
+                    } else {
+                        throw new Error(result.error || 'Failed to initiate OAuth flow');
+                    }
+                } catch (error) {
+                    console.error('Error initiating OAuth:', error);
+                    this.showError('Failed to start authorization: ' + error.message);
+                }
+            }
+
+            showOAuthStep(flow) {
+                document.getElementById('authAccountId').textContent = this.setupData.accountId;
+                document.getElementById('setupAuthLink').href = flow.verificationUriComplete || flow.verificationUri;
+                document.getElementById('setupUserCode').textContent = flow.userCode;
+                document.getElementById('setupUserCodeCopy').textContent = flow.userCode;
+            }
+
+            startOAuthPolling() {
+                if (!this.activeOAuthFlow || this.pollInterval) return;
+
+                this.pollInterval = setInterval(async () => {
+                    try {
+                        const response = await fetch('/api/setup/accounts/poll', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                device_code: this.activeOAuthFlow.device_code,
+                                code_verifier: this.activeOAuthFlow.code_verifier,
+                                accountId: this.setupData.accountId
+                            })
+                        });
+                        const result = await response.json();
+
+                        if (result.success) {
+                            this.stopOAuthPolling();
+                            this.nextStep(4);
+                        } else if (result.pending) {
+                            this.updateOAuthStatus({ 
+                                message: 'Waiting for authorization...'
+                            });
+                        } else {
+                            const errorMessage = typeof result.error === 'string' ? result.error : 
+                                               (result.error?.message || 'Unknown error');
+                            this.showError('Authorization failed: ' + errorMessage);
+                            this.stopOAuthPolling();
+                            document.getElementById('retryAuthBtn').style.display = 'inline-block';
+                        }
+                    } catch (error) {
+                        console.error('OAuth polling error:', error);
+                        this.updateOAuthStatus({ 
+                            message: 'Connection error during authorization check'
+                        });
+                    }
+                }, 3000);
+            }
+
+            updateOAuthStatus(status) {
+                const messageElement = document.getElementById('setupPollingMessage');
+                const timeElement = document.getElementById('setupTimeRemaining');
+                
+                if (messageElement) {
+                    messageElement.textContent = status.message || '⏳ Waiting for authorization...';
+                }
+                
+                if (timeElement && status.remainingTime !== undefined) {
+                    const minutes = Math.floor(status.remainingTime / 60);
+                    const seconds = status.remainingTime % 60;
+                    timeElement.textContent = `Time remaining: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                }
+            }
+
+            stopOAuthPolling() {
+                if (this.pollInterval) {
+                    clearInterval(this.pollInterval);
+                    this.pollInterval = null;
+                }
+            }
+
+            async handleApiKeySetup(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(e.target);
+                const permissions = Array.from(formData.getAll('permissions'));
+
+                const keyData = {
+                    name: formData.get('name'),
+                    description: formData.get('description') || undefined,
+                    permissions
+                };
+
+                try {
+                    const response = await fetch('/api/setup/keys', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(keyData)
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        this.setupData.apiKey = result.rawKey;
+                        document.getElementById('setupGeneratedKey').value = result.rawKey;
+                        this.nextStep(5);
+                    } else {
+                        throw new Error(result.error || 'Failed to create API key');
+                    }
+                } catch (error) {
+                    console.error('Error creating API key:', error);
+                    this.showError('Failed to create API key: ' + error.message);
+                }
+            }
+
+            showError(message) {
+                const errorElement = document.getElementById('setupError');
+                errorElement.textContent = message;
+                errorElement.style.display = 'block';
+            }
+
+            hideError() {
+                document.getElementById('setupError').style.display = 'none';
+            }
+        }
+
+        // Global functions
+        function nextStep(step) { wizard.nextStep(step); }
+        function previousStep(step) { wizard.previousStep(step); }
+        function skipSetup() { window.location.href = '/login'; }
+        function skipApiKey() { wizard.nextStep(6); }
+        function completeSetup() { wizard.nextStep(6); }
+        function goToDashboard() { window.location.href = '/dashboard'; }
+        function cancelSetupOAuth() { 
+            wizard.stopOAuthPolling();
+            wizard.previousStep(2);
+        }
+        function openAuthInNewTab() {
+            const link = document.getElementById('setupAuthLink');
+            if (link) window.open(link.href, '_blank');
+        }
+
+        function copySetupApiKey() {
+            const keyInput = document.getElementById('setupGeneratedKey');
+            keyInput.select();
+            keyInput.setSelectionRange(0, 99999);
+            
+            navigator.clipboard.writeText(keyInput.value).then(() => {
+                const button = event.target;
+                const originalText = button.textContent;
+                button.textContent = '✅ Copied!';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            }).catch(() => {
+                document.execCommand('copy');
+            });
+        }
+
+        // Initialize wizard
+        let wizard;
+        document.addEventListener('DOMContentLoaded', () => {
+            wizard = new SetupWizard();
+        });
+    </script>
+</body>
+</html>

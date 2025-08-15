@@ -97,8 +97,10 @@ ehthumbs.db
 Thumbs.db
 
 # Environment files
-.env*
-!.env.example
+.env
+.env.local
+.env.production
+.env.development
 
 # Temporary files
 tmp/
@@ -122,3 +124,10 @@ test-proxy.js
 
 # Debug logs
 debug/
+
+# Sensitive data files
+cookies*.txt
+data/oauth_creds*.json
+data/api_keys.json
+data/key_usage_stats.json
+data/request_counts.json

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qwen Proxy Dashboard</title>
+    <link rel="stylesheet" href="/dashboard/style.css">
+</head>
+<body class="dashboard-page">
+    <header class="dashboard-header">
+        <h1>Qwen Proxy Dashboard</h1>
+        <nav class="dashboard-nav">
+            <button class="nav-btn active" data-tab="overview">Overview</button>
+            <button class="nav-btn" data-tab="apikeys">API Keys</button>
+            <button class="nav-btn" data-tab="accounts">Qwen Accounts</button>
+            <button class="nav-btn" data-tab="stats">Statistics</button>
+            <button class="nav-btn setup-btn" onclick="window.location.href='/setup'">⚙️ Setup</button>
+            <button class="logout-btn">Logout</button>
+        </nav>
+    </header>
+
+    <main class="dashboard-main">
+        <!-- Overview Tab -->
+        <section id="overview-tab" class="tab-content active">
+            <h2>📊 Overview</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Qwen Accounts</h3>
+                    <div class="stat-value" id="totalAccounts">0</div>
+                    <div class="stat-label">Active</div>
+                </div>
+                <div class="stat-card">
+                    <h3>API Keys</h3>
+                    <div class="stat-value" id="totalApiKeys">0</div>
+                    <div class="stat-label">Active</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Requests Today</h3>
+                    <div class="stat-value" id="requestsToday">0</div>
+                    <div class="stat-label">Total</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- API Keys Tab -->
+        <section id="apikeys-tab" class="tab-content">
+            <div class="section-header">
+                <h2>🔑 API Keys Management</h2>
+                <button class="btn btn-primary" id="newApiKeyBtn">+ New API Key</button>
+            </div>
+            
+            <div class="loading-spinner" id="apiKeysLoading" style="display: none;">
+                <div class="spinner"></div>
+                <span>Loading API keys...</span>
+            </div>
+            
+            <div class="table-container" id="apiKeysContainer">
+                <table id="apiKeysTable" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Key Name</th>
+                            <th>Key (Last 4)</th>
+                            <th>Last Used</th>
+                            <th>Usage Today</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="apiKeysTableBody">
+                        <tr>
+                            <td colspan="6" class="loading-row">Click refresh to load API keys</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="empty-state" id="apiKeysEmpty" style="display: none;">
+                <div class="empty-state-icon">🔑</div>
+                <h3>No API Keys</h3>
+                <p>Create your first API key to start using the proxy</p>
+                <button class="btn btn-primary" onclick="document.getElementById('newApiKeyBtn').click()">Create API Key</button>
+            </div>
+        </section>
+
+        <!-- Qwen Accounts Tab -->
+        <section id="accounts-tab" class="tab-content">
+            <div class="section-header">
+                <h2>🏢 Qwen Accounts</h2>
+                <button class="btn btn-primary" id="addAccountBtn">+ Add Account</button>
+            </div>
+            
+            <div class="loading-spinner" id="accountsLoading" style="display: none;">
+                <div class="spinner"></div>
+                <span>Loading Qwen accounts...</span>
+            </div>
+            
+            <div class="table-container" id="accountsContainer">
+                <table id="accountsTable" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Account ID</th>
+                            <th>Status</th>
+                            <th>Token Expiry</th>
+                            <th>Usage Today</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="accountsTableBody">
+                        <tr>
+                            <td colspan="5" class="loading-row">Click refresh to load accounts</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="empty-state" id="accountsEmpty" style="display: none;">
+                <div class="empty-state-icon">🏢</div>
+                <h3>No Qwen Accounts</h3>
+                <p>Add your first Qwen account to start using the proxy</p>
+                <button class="btn btn-primary" onclick="document.getElementById('addAccountBtn').click()">Add Account</button>
+            </div>
+        </section>
+
+        <!-- Statistics Tab -->
+        <section id="stats-tab" class="tab-content">
+            <h2>📈 Statistics</h2>
+            <div class="stats-container">
+                <!-- TODO: Charts and detailed statistics -->
+                <p>Detailed statistics will be implemented here</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modals -->
+    
+    <!-- API Key Creation Modal -->
+    <div id="apiKeyModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🔑 Create New API Key</h3>
+                <button class="modal-close" onclick="closeModal('apiKeyModal')">&times;</button>
+            </div>
+            <form id="apiKeyForm">
+                <div class="form-group">
+                    <label for="keyName">Key Name *</label>
+                    <input type="text" id="keyName" name="name" required placeholder="e.g., Frontend App">
+                </div>
+                
+                <div class="form-group">
+                    <label for="keyDescription">Description</label>
+                    <textarea id="keyDescription" name="description" placeholder="Optional description"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>Permissions</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="permissions" value="chat.completions" checked>
+                            Chat Completions
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="permissions" value="models.list" checked>
+                            List Models
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="permissions" value="full_access">
+                            Full Access
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="enableRateLimit"> Enable Rate Limiting
+                    </label>
+                    <div id="rateLimitSettings" style="display: none; margin-top: 10px;">
+                        <input type="number" id="rateLimit" placeholder="Requests per minute" min="1" max="10000">
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('apiKeyModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">🔑 Generate Key</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- API Key Display Modal -->
+    <div id="apiKeyDisplayModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>✅ API Key Created Successfully!</h3>
+            </div>
+            <div class="api-key-display">
+                <p><strong>🔐 Your new API key:</strong></p>
+                <div class="api-key-code">
+                    <input type="text" id="generatedApiKey" readonly>
+                    <button class="btn btn-copy" onclick="copyApiKey()">📋 Copy</button>
+                </div>
+                <div class="warning-box">
+                    <p>⚠️ <strong>IMPORTANT:</strong> Save this key now! You won't be able to see it again for security reasons.</p>
+                </div>
+                <div class="usage-info">
+                    <p><strong>💡 Usage:</strong></p>
+                    <code>Authorization: Bearer &lt;your-api-key&gt;</code>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary" onclick="closeModal('apiKeyDisplayModal')">Got it!</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Account Addition Modal -->
+    <div id="accountModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🏢 Add Qwen Account</h3>
+                <button class="modal-close" onclick="closeModal('accountModal')">&times;</button>
+            </div>
+            
+            <div id="accountStep1">
+                <form id="accountForm">
+                    <div class="form-group">
+                        <label for="accountId">Account ID *</label>
+                        <input type="text" id="accountId" name="accountId" required placeholder="e.g., account1">
+                        <small>Choose a unique identifier for this account</small>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('accountModal')">Cancel</button>
+                        <button type="submit" class="btn btn-primary">🚀 Start Authorization</button>
+                    </div>
+                </form>
+            </div>
+            
+            <div id="accountStep2" style="display: none;">
+                <div class="oauth-step">
+                    <h4>🔗 Authorize This Proxy</h4>
+                    <p>Click to authorize this proxy in your Qwen account:</p>
+                    
+                    <div class="auth-info">
+                        <a id="authLink" href="#" target="_blank" class="auth-link">
+                            🚀 Open Qwen Authorization Page
+                        </a>
+                        <div class="user-code">
+                            Code to enter: <span id="userCode"></span>
+                        </div>
+                    </div>
+                    
+                    <div class="polling-status">
+                        <div class="spinner"></div>
+                        <span id="pollingMessage">⏳ Waiting for authorization...</span>
+                        <div id="timeRemaining"></div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button class="btn btn-secondary" onclick="cancelOAuth()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="accountStep3" style="display: none;">
+                <div class="success-step">
+                    <div class="success-icon">✅</div>
+                    <h4>Account Added Successfully!</h4>
+                    <p>Your Qwen account has been authorized and is ready to use.</p>
+                    
+                    <div class="form-actions">
+                        <button class="btn btn-primary" onclick="closeModal('accountModal')">🏠 Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/dashboard/app.js"></script>
+</body>
+</html>
