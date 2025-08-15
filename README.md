@@ -101,7 +101,7 @@ const openai = new OpenAI({
 
 async function main() {
   const response = await openai.chat.completions.create({
-    model: 'qwen-coder-plus',
+    model: 'qwen3-coder-plus',
     messages: [
       { "role": "user", "content": "Hello!" }
     ]
