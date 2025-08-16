@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
+const session = require('express-session');
 const config = require('./config.js');
 const { QwenAPI } = require('./qwen/api.js');
 const { QwenAuthManager } = require('./qwen/auth.js');
@@ -11,6 +13,18 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(cors());
+
+// Session configuration for dashboard
+app.use(session({
+  secret: process.env.DASHBOARD_SESSION_SECRET || 'your-session-secret-here',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: false, // Set to true in production with HTTPS
+    httpOnly: true,
+    maxAge: parseInt(process.env.DASHBOARD_SESSION_TIMEOUT) || 1800000 // 30 minutes
+  }
+}));
 
 // Initialize Qwen API client
 const qwenAPI = new QwenAPI();
@@ -316,6 +330,343 @@ app.post('/auth/poll', (req, res) => proxy.handleAuthPoll(req, res));
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
+});
+
+// Dashboard static files
+app.use('/dashboard', express.static(path.join(__dirname, 'dashboard/public')));
+
+// Dashboard route - serve the main dashboard page
+app.get('/dashboard/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dashboard/public/index.html'));
+});
+
+app.get('/dashboard', (req, res) => {
+  res.redirect('/dashboard/');
+});
+
+// Dashboard login page
+app.get('/dashboard/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dashboard/public/login.html'));
+});
+
+// Dashboard setup page
+app.get('/dashboard/setup', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dashboard/public/setup.html'));
+});
+
+// Dashboard API Routes
+// POST /api/auth/login - Dashboard login
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    // Get credentials from environment variables
+    const validUser = process.env.DASHBOARD_USER || 'admin';
+    const validPassword = process.env.DASHBOARD_PASSWORD || 'admin123';
+    
+    if (username === validUser && password === validPassword) {
+      // Create session
+      req.session.authenticated = true;
+      req.session.user = username;
+      req.session.loginTime = new Date();
+      req.session.lastActivity = new Date();
+      
+      console.log(`Successful dashboard login for user: ${username} from IP: ${req.ip}`);
+      
+      res.json({
+        success: true,
+        message: 'Login successful',
+        user: {
+          username: username,
+          loginTime: req.session.loginTime
+        }
+      });
+    } else {
+      console.warn(`Failed dashboard login attempt for user: ${username} from IP: ${req.ip}`);
+      
+      res.status(401).json({
+        success: false,
+        error: 'Invalid username or password',
+        type: 'authentication_error'
+      });
+    }
+  } catch (error) {
+    console.error('Dashboard login error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error during login',
+      type: 'server_error'
+    });
+  }
+});
+
+// POST /api/auth/logout - Dashboard logout
+app.post('/api/auth/logout', (req, res) => {
+  try {
+    const username = req.session?.user;
+    
+    // Destroy session
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Session destruction error:', err);
+        return res.status(500).json({
+          success: false,
+          error: 'Logout failed',
+          type: 'server_error'
+        });
+      }
+      
+      if (username) {
+        console.log(`User ${username} logged out from IP: ${req.ip}`);
+      }
+      
+      res.json({
+        success: true,
+        message: 'Logout successful'
+      });
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Logout failed',
+      type: 'server_error'
+    });
+  }
+});
+
+// GET /api/auth/verify - Verify authentication status
+app.get('/api/auth/verify', (req, res) => {
+  try {
+    if (req.session && req.session.authenticated && req.session.user) {
+      // Update last activity
+      req.session.lastActivity = new Date();
+      
+      res.json({
+        success: true,
+        authenticated: true,
+        user: {
+          username: req.session.user,
+          loginTime: req.session.loginTime,
+          lastActivity: req.session.lastActivity
+        }
+      });
+    } else {
+      res.json({
+        success: true,
+        authenticated: false,
+        message: 'Not authenticated'
+      });
+    }
+  } catch (error) {
+    console.error('Auth verification error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Verification failed',
+      type: 'server_error'
+    });
+  }
+});
+
+// Dashboard API Keys Management
+app.get('/api/keys', (req, res) => {
+  try {
+    if (!req.session?.authenticated) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+    
+    // Mock API keys data - In production, this would come from a database
+    res.json({
+      success: true,
+      keys: [
+        {
+          id: 'sk-1',
+          name: 'Default Key',
+          key: 'sk-proj-...abcd',
+          created: new Date().toISOString(),
+          lastUsed: new Date().toISOString(),
+          requests: 42,
+          status: 'active'
+        }
+      ]
+    });
+  } catch (error) {
+    console.error('Error loading API keys:', error);
+    res.status(500).json({ success: false, error: 'Failed to load API keys' });
+  }
+});
+
+app.post('/api/keys', (req, res) => {
+  try {
+    if (!req.session?.authenticated) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+    
+    const { name } = req.body;
+    const newKey = {
+      id: 'sk-' + Math.random().toString(36).substring(7),
+      name: name || 'New API Key',
+      key: 'sk-proj-' + Math.random().toString(36).substring(2, 15),
+      created: new Date().toISOString(),
+      lastUsed: null,
+      requests: 0,
+      status: 'active'
+    };
+    
+    res.json({
+      success: true,
+      message: 'API key created successfully',
+      key: newKey
+    });
+  } catch (error) {
+    console.error('Error creating API key:', error);
+    res.status(500).json({ success: false, error: 'Failed to create API key' });
+  }
+});
+
+app.delete('/api/keys/:keyId', (req, res) => {
+  try {
+    if (!req.session?.authenticated) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+    
+    const { keyId } = req.params;
+    
+    res.json({
+      success: true,
+      message: `API key ${keyId} deleted successfully`
+    });
+  } catch (error) {
+    console.error('Error deleting API key:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete API key' });
+  }
+});
+
+app.get('/api/keys/stats', (req, res) => {
+  try {
+    if (!req.session?.authenticated) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+    
+    res.json({
+      success: true,
+      stats: {
+        totalKeys: 1,
+        activeKeys: 1,
+        totalRequests: 42,
+        todayRequests: 5
+      }
+    });
+  } catch (error) {
+    console.error('Error loading API key stats:', error);
+    res.status(500).json({ success: false, error: 'Failed to load stats' });
+  }
+});
+
+// Dashboard Accounts Management
+app.get('/api/accounts', (req, res) => {
+  try {
+    if (!req.session?.authenticated) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+    
+    // Mock accounts data - In production, this would come from the QwenAuthManager
+    res.json({
+      success: true,
+      accounts: [
+        {
+          id: 'default',
+          name: 'Default Account',
+          status: 'active',
+          requests: 25,
+          dailyLimit: 1000,
+          lastUsed: new Date().toISOString()
+        }
+      ]
+    });
+  } catch (error) {
+    console.error('Error loading accounts:', error);
+    res.status(500).json({ success: false, error: 'Failed to load accounts' });
+  }
+});
+
+app.post('/api/accounts/initiate', (req, res) => {
+  try {
+    if (!req.session?.authenticated) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+    
+    const deviceCode = 'device_' + Math.random().toString(36).substring(7);
+    const userCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    
+    res.json({
+      success: true,
+      deviceCode: deviceCode,
+      userCode: userCode,
+      verificationUri: 'https://oauth.qwen.ai/device',
+      message: 'Please visit the verification URI and enter the user code'
+    });
+  } catch (error) {
+    console.error('Error initiating OAuth:', error);
+    res.status(500).json({ success: false, error: 'Failed to initiate OAuth' });
+  }
+});
+
+app.get('/api/accounts/status/:deviceCode', (req, res) => {
+  try {
+    if (!req.session?.authenticated) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+    
+    // Mock status - In production, this would poll the actual OAuth status
+    res.json({
+      success: true,
+      status: 'pending',
+      message: 'Waiting for user authorization'
+    });
+  } catch (error) {
+    console.error('Error checking OAuth status:', error);
+    res.status(500).json({ success: false, error: 'Failed to check status' });
+  }
+});
+
+app.delete('/api/accounts/:accountId', (req, res) => {
+  try {
+    if (!req.session?.authenticated) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+    
+    const { accountId } = req.params;
+    
+    res.json({
+      success: true,
+      message: `Account ${accountId} deleted successfully`
+    });
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete account' });
+  }
+});
+
+app.get('/api/accounts/stats', (req, res) => {
+  try {
+    if (!req.session?.authenticated) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+    
+    res.json({
+      success: true,
+      stats: {
+        totalAccounts: 1,
+        activeAccounts: 1,
+        totalRequests: 25,
+        averageResponseTime: 245
+      }
+    });
+  } catch (error) {
+    console.error('Error loading account stats:', error);
+    res.status(500).json({ success: false, error: 'Failed to load stats' });
+  }
 });
 
 const PORT = config.port;

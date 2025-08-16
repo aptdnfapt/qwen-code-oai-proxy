@@ -1,9 +1,13 @@
 services:
   # Main Qwen Proxy Application
   qwen-proxy:
-    image: drnit29/qwen-code-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: qwen-proxy-app
     restart: unless-stopped
+    ports:
+      - "8951:8951"
     environment:
       - NODE_ENV=production
       - HOST=0.0.0.0

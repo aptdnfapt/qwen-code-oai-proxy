@@ -109,21 +109,21 @@ class QwenDashboard {
       const result = await response.json();
       
       if (!result.authenticated) {
-        window.location.href = '/login';
+        window.location.href = '/dashboard/login';
       }
     } catch (error) {
       console.error('Auth check failed:', error);
-      window.location.href = '/login';
+      window.location.href = '/dashboard/login';
     }
   }
 
   async logout() {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
-      window.location.href = '/login';
+      window.location.href = '/dashboard/login';
     } catch (error) {
       console.error('Logout failed:', error);
-      window.location.href = '/login';
+      window.location.href = '/dashboard/login';
     }
   }
 
@@ -140,12 +140,12 @@ class QwenDashboard {
       ]);
 
       if (apiKeysResponse.success) {
-        document.getElementById('totalApiKeys').textContent = apiKeysResponse.stats.total || 0;
+        document.getElementById('totalApiKeys').textContent = apiKeysResponse.stats.totalKeys || 0;
       }
 
       if (accountsResponse.success) {
         document.getElementById('totalAccounts').textContent = accountsResponse.stats.activeAccounts || 0;
-        document.getElementById('requestsToday').textContent = accountsResponse.stats.totalRequestsToday || 0;
+        document.getElementById('requestsToday').textContent = accountsResponse.stats.totalRequests || 0;
       }
     } catch (error) {
       console.error('Error loading overview data:', error);
@@ -531,7 +531,7 @@ class QwenDashboard {
     const response = await fetch(url, { ...defaultOptions, ...options });
     
     if (response.status === 401) {
-      window.location.href = '/login?message=session_expired';
+      window.location.href = '/dashboard/login?message=session_expired';
       throw new Error('Session expired');
     }
 
