@@ -3,7 +3,7 @@ require('dotenv').config();
 
 module.exports = {
   // Server configuration
-  port: parseInt(process.env.PORT) || 8080,
+  port: parseInt(process.env.PORT) || 8951,
   host: process.env.HOST || 'localhost',
   
   // Streaming configuration

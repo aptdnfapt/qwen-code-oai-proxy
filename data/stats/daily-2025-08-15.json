@@ -1,0 +1,71 @@
+{
+  "system": {
+    "current": {
+      "timestamp": 1755302357106,
+      "memory": {
+        "rss": 79306752,
+        "heapTotal": 20463616,
+        "heapUsed": 13929200,
+        "external": 9361530,
+        "arrayBuffers": 93796
+      },
+      "cpu": {
+        "user": 1560137,
+        "system": 728052
+      },
+      "uptime": 8163.62096762,
+      "heap": {
+        "used": 13929664,
+        "total": 20463616
+      },
+      "activeConnections": 0,
+      "bufferSizes": {
+        "requests": 105,
+        "errors": 105,
+        "tokens": 0,
+        "apiKeys": 0
+      }
+    }
+  },
+  "errors": {
+    "daily": {
+      "2025-08-15": 3
+    },
+    "hourly": {
+      "21": 3
+    },
+    "byType": {
+      "Error": 3
+    },
+    "byEndpoint": {
+      "/v1/chat/completions": 3
+    }
+  },
+  "requests": {
+    "daily": {
+      "2025-08-15": 3
+    },
+    "hourly": {
+      "21": 3
+    },
+    "byEndpoint": {
+      "/v1/chat/completions": 3
+    },
+    "byStatus": {
+      "500": 3
+    }
+  },
+  "performance": {
+    "responseTime": {
+      "total": 9039,
+      "count": 3,
+      "min": 2576,
+      "max": 3336,
+      "samples": [
+        3336,
+        2576,
+        3127
+      ]
+    }
+  }
+}

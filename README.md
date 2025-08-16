@@ -64,7 +64,7 @@ A comprehensive enterprise-grade proxy server that exposes Qwen models through a
    ```
 
 5. **Access Dashboard**: 
-   - Open http://localhost:3000/dashboard
+   - Open http://localhost:8951/dashboard
    - Login with credentials from your .env file
 
 ### Dashboard Setup
@@ -119,7 +119,7 @@ docker-compose up -d
 
 # Or build manually
 docker build -t qwen-proxy .
-docker run -p 3000:3000 --env-file .env qwen-proxy
+docker run -p 8951:8951 --env-file .env qwen-proxy
 ```
 
 #### PM2 Process Management
@@ -141,7 +141,7 @@ server {
     server_name your-domain.com;
     
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:8951;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -183,7 +183,7 @@ import OpenAI from 'openai';
 
 const openai = new OpenAI({
   apiKey: 'your-api-key', // Generated from dashboard
-  baseURL: 'http://localhost:3000/v1'
+  baseURL: 'http://localhost:8951/v1'
 });
 
 const response = await openai.chat.completions.create({
@@ -209,7 +209,7 @@ All API requests require authentication via API key:
 curl -H "Authorization: Bearer your-api-key" \
      -H "Content-Type: application/json" \
      -d '{"model":"qwen3-coder-plus","messages":[{"role":"user","content":"Hello"}]}' \
-     http://localhost:3000/v1/chat/completions
+     http://localhost:8951/v1/chat/completions
 ```
 
 ## 🛠️ Tool Integration
@@ -223,7 +223,7 @@ curl -H "Authorization: Bearer your-api-key" \
       "npm": "@ai-sdk/openai-compatible",
       "name": "proxy",
       "options": {
-        "baseURL": "http://localhost:3000/v1",
+        "baseURL": "http://localhost:8951/v1",
         "apiKey": "your-api-key"
       },
       "models": {
@@ -243,7 +243,7 @@ curl -H "Authorization: Bearer your-api-key" \
   "providers": {
     "qwen-proxy": {
       "type": "openai",
-      "base_url": "http://localhost:3000/v1",
+      "base_url": "http://localhost:8951/v1",
       "api_key": "your-api-key",
       "models": [
         {

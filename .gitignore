@@ -84,6 +84,7 @@ typings/
 .idea/
 .serena/
 .claude/
+.gemini/
 *.swp
 *.swo
 
@@ -131,3 +132,25 @@ data/oauth_creds*.json
 data/api_keys.json
 data/key_usage_stats.json
 data/request_counts.json
+
+# Build and deployment scripts (keep only essentials)
+build-and-push.bat
+*-test.bat
+test-*.bat
+simple-*.bat
+*-clean.bat
+
+# PRPs directory
+PRPs/
+
+# Null files and system artifacts
+nul
+NUL
+*~
+*.bak
+*.backup
+
+# Additional temporary patterns
+tmp-*/
+temp-*/
+test-*/

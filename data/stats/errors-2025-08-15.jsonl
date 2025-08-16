@@ -1,0 +1,3 @@
+{"timestamp":1755291788989,"type":"Error","message":"All accounts failed. Last error: Request failed with status code 400","endpoint":"/v1/chat/completions","apiKeyId":null,"accountId":null,"stack":null,"statusCode":500}
+{"timestamp":1755291971553,"type":"Error","message":"All accounts failed. Last error: Request failed with status code 400","endpoint":"/v1/chat/completions","apiKeyId":null,"accountId":null,"stack":null,"statusCode":500}
+{"timestamp":1755291994721,"type":"Error","message":"All accounts failed. Last error: Request failed with status code 400","endpoint":"/v1/chat/completions","apiKeyId":null,"accountId":null,"stack":null,"statusCode":500}

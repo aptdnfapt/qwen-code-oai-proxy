@@ -1,15 +1,13 @@
 services:
   # Main Qwen Proxy Application
   qwen-proxy:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: drnit29/qwen-code-api:latest
     container_name: qwen-proxy-app
     restart: unless-stopped
     environment:
       - NODE_ENV=production
       - HOST=0.0.0.0
-      - PORT=3000
+      - PORT=8951
       - DASHBOARD_ENABLED=true
       - TRUST_PROXY=true
       - DOCKER_CONTAINER=true
@@ -22,7 +20,7 @@ services:
     networks:
       - qwen_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8951/health"]
       interval: 30s
       timeout: 10s
       retries: 3
