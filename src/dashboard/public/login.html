@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qwen Proxy Dashboard - Login</title>
+    <link rel="stylesheet" href="/dashboard/style.css">
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <h1>🔐 Qwen Proxy Dashboard</h1>
+                <p>Please login to continue</p>
+            </div>
+            
+            <form id="loginForm" class="login-form">
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">🔐 Login</button>
+                </div>
+                
+                <div id="errorMessage" class="error-message" style="display: none;"></div>
+            </form>
+            
+            <div class="login-footer">
+                <p>💡 Credentials are configured via environment variables</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Login form handling
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const submitButton = e.target.querySelector('button[type="submit"]');
+            const errorMessage = document.getElementById('errorMessage');
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            
+            // Clear previous errors
+            hideError();
+            
+            // Basic validation
+            if (!username || !password) {
+                showError('Please enter both username and password');
+                return;
+            }
+            
+            // Disable submit button and show loading
+            submitButton.disabled = true;
+            submitButton.textContent = '🔄 Logging in...';
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Login successful - redirect to dashboard
+                    window.location.href = '/dashboard';
+                } else {
+                    // Login failed
+                    const errorMsg = result.error || 'Login failed';
+                    showError(errorMsg);
+                    
+                    // Clear password field
+                    document.getElementById('password').value = '';
+                    document.getElementById('password').focus();
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showError('Connection error. Please try again.');
+            } finally {
+                // Re-enable submit button
+                submitButton.disabled = false;
+                submitButton.textContent = '🔐 Login';
+            }
+        });
+        
+        // Show error message
+        function showError(message) {
+            const errorElement = document.getElementById('errorMessage');
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+        }
+        
+        // Hide error message
+        function hideError() {
+            const errorElement = document.getElementById('errorMessage');
+            errorElement.style.display = 'none';
+        }
+        
+        // Check if already authenticated
+        async function checkAuthStatus() {
+            try {
+                const response = await fetch('/api/auth/verify');
+                const result = await response.json();
+                
+                if (result.authenticated) {
+                    // Already logged in - redirect to dashboard
+                    window.location.href = '/dashboard';
+                }
+            } catch (error) {
+                // Ignore errors - just continue with login page
+                console.log('Auth check failed:', error);
+            }
+        }
+        
+        // Handle URL parameters (e.g., session expired message)
+        function handleUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const message = urlParams.get('message');
+            
+            if (message === 'session_expired') {
+                showError('Your session has expired. Please log in again.');
+            }
+        }
+        
+        // Auto-focus username field
+        function setupFocus() {
+            document.getElementById('username').focus();
+        }
+        
+        // Enter key handling for password field
+        document.getElementById('password').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+            }
+        });
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuthStatus();
+            handleUrlParams();
+            setupFocus();
+        });
+    </script>
+</body>
+</html>
