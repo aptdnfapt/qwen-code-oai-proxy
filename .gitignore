@@ -120,8 +120,8 @@ temp/
 # qwen-code directory (not needed for the proxy server)
 qwen-code/
 
-# Test files
-test-proxy.js
+# Temporary test files (keep test-proxy.js and test-simple.js)
+# test-*.tmp
 
 # Debug logs
 debug/
