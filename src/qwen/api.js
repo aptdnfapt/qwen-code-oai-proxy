@@ -93,6 +93,20 @@ function isQuotaExceededError(error) {
   );
 }
 
+// Utility function to safely stringify objects with circular references
+function safeStringify(obj, space = 2) {
+  const seen = new WeakSet();
+  return JSON.stringify(obj, (key, val) => {
+    if (val !== null && typeof val === "object") {
+      if (seen.has(val)) {
+        return "[Circular]";
+      }
+      seen.add(val);
+    }
+    return val;
+  }, space);
+}
+
 class QwenAPI {
   constructor() {
     this.authManager = new QwenAuthManager();
@@ -360,7 +374,7 @@ class QwenAPI {
         // For other errors, re-throw
         if (error.response) {
           // The request was made and the server responded with a status code
-          throw new Error(`Qwen API error: ${error.response.status} ${JSON.stringify(error.response.data)}`);
+          throw new Error(`Qwen API error: ${error.response.status} ${safeStringify(error.response.data)}`);
         } else if (error.request) {
           // The request was made but no response was received
           throw new Error(`Qwen API request failed: No response received`);
@@ -433,13 +447,13 @@ class QwenAPI {
         } catch (retryError) {
           console.error('\x1b[31m%s\x1b[0m', 'Request failed even after token refresh');
           // If retry fails, throw the original error with additional context
-          throw new Error(`Qwen API error (after token refresh attempt): ${error.response?.status || 'N/A'} ${JSON.stringify(error.response?.data || error.message)}`);
+          throw new Error(`Qwen API error (after token refresh attempt): ${error.response?.status || 'N/A'} ${safeStringify(error.response?.data || error.message)}`);
         }
       }
       
       if (error.response) {
         // The request was made and the server responded with a status code
-        throw new Error(`Qwen API error: ${error.response.status} ${JSON.stringify(error.response.data)}`);
+        throw new Error(`Qwen API error: ${error.response.status} ${safeStringify(error.response.data)}`);
       } else if (error.request) {
         // The request was made but no response was received
         throw new Error(`Qwen API request failed: No response received`);
@@ -578,13 +592,13 @@ class QwenAPI {
           } catch (retryError) {
             console.error('\x1b[31m%s\x1b[0m', 'Streaming request failed even after token refresh');
             // If retry fails, throw the original error with additional context
-            throw new Error(`Qwen API streaming error (after token refresh attempt): ${error.response?.status || 'N/A'} ${JSON.stringify(error.response?.data || error.message)}`);
+            throw new Error(`Qwen API streaming error (after token refresh attempt): ${error.response?.status || 'N/A'} ${safeStringify(error.response?.data || error.message)}`);
           }
         }
         
         if (error.response) {
           // The request was made and the server responded with a status code
-          throw new Error(`Qwen API error: ${error.response.status} ${JSON.stringify(error.response.data)}`);
+          throw new Error(`Qwen API error: ${error.response.status} ${safeStringify(error.response.data)}`);
         } else if (error.request) {
           // The request was made but no response was received
           throw new Error(`Qwen API request failed: No response received`);
@@ -772,7 +786,7 @@ class QwenAPI {
           // For other errors, re-throw
           if (error.response) {
             // The request was made and the server responded with a status code
-            throw new Error(`Qwen API error: ${error.response.status} ${JSON.stringify(error.response.data)}`);
+            throw new Error(`Qwen API error: ${error.response.status} ${safeStringify(error.response.data)}`);
           } else if (error.request) {
             // The request was made but no response was received
             throw new Error(`Qwen API request failed: No response received`);
