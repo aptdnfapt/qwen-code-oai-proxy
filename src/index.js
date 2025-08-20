@@ -129,27 +129,32 @@ class QwenOpenAIProxy {
       // Print streaming request message
       console.log('\x1b[32m%s\x1b[0m', `Streaming chat completion request started. Debug log saved to: ${debugFileName}`);
       
-      // Pipe the stream to the response
-      stream.pipe(res);
-      
-      // Handle stream errors
-      stream.on('error', (error) => {
-        console.error('\x1b[31m%s\x1b[0m', `Error in streaming chat completion: ${error.message}`);
-        if (!res.headersSent) {
-          res.status(500).json({
-            error: {
-              message: error.message,
-              type: 'streaming_error'
-            }
-          });
-        }
-        res.end();
-      });
-      
-      // Handle client disconnect
-      req.on('close', () => {
-        stream.destroy();
-      });
+       // Pipe the stream to the response
+       stream.pipe(res);
+       
+       // Handle stream errors
+       stream.on('error', (error) => {
+         console.error('\x1b[31m%s\x1b[0m', `Error in streaming chat completion: ${error.message}`);
+         console.error('\x1b[31m%s\x1b[0m', `Error stack: ${error.stack}`);
+         if (!res.headersSent) {
+           // Try to send an error event to the client
+           res.write('event: error\n');
+           res.write(`data: ${JSON.stringify({ error: error.message, type: 'streaming_error' })}\n\n`);
+         }
+         res.end();
+       });
+       
+       // Handle client disconnect
+       req.on('close', () => {
+         stream.destroy();
+       });
+       
+       // Flush response for server-sent events
+       stream.on('data', () => {
+         if (typeof res.flush === 'function') {
+           res.flush();
+         }
+       });
       
     } catch (error) {
       throw error; // Re-throw to be handled by the main handler

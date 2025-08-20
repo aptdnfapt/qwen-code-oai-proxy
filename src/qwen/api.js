@@ -1,6 +1,6 @@
 const axios = require('axios');
 const { QwenAuthManager } = require('./auth.js');
-const { PassThrough } = require('stream');
+const { PassThrough, Transform } = require('stream');
 const path = require('path');
 const { promises: fs } = require('fs');
 
@@ -105,6 +105,112 @@ function safeStringify(obj, space = 2) {
     }
     return val;
   }, space);
+}
+
+/**
+ * Transform stream to properly handle SSE chunks and prevent missing blocks
+ */
+class SSEChunkHandler extends Transform {
+  constructor(options = {}) {
+    super({ ...options, objectMode: false });
+    this.buffer = '';
+    this.debug = process.env.DEBUG_STREAMING === 'true';
+  }
+
+  _transform(chunk, encoding, callback) {
+    try {
+      // Convert chunk to string
+      const chunkStr = chunk.toString();
+      
+      if (this.debug) {
+        console.log('[DEBUG] Received raw chunk:', JSON.stringify(chunkStr));
+      }
+      
+      // Append to buffer
+      this.buffer += chunkStr;
+      
+      // Process complete lines
+      const lines = this.buffer.split('\n');
+      
+      // Keep the last incomplete line in buffer only if it doesn't look like it's in the middle of a tag
+      // Check if the last line ends with an incomplete tag (like '<th' or similar)
+      const lastLine = lines[lines.length - 1] || '';
+      const looksIncomplete = this.looksLikeIncompleteTag(lastLine);
+      
+      // If it looks incomplete, keep it in the buffer for the next chunk
+      if (looksIncomplete) {
+        this.buffer = lines.pop() || '';
+      } else {
+        // Otherwise, move the last line to processing
+        this.buffer = lines.pop() || '';
+      }
+      
+      // Process complete lines
+      for (const line of lines) {
+        // Ensure proper SSE format
+        let formattedLine = line;
+        if (line.startsWith('data:') && !line.endsWith('\n')) {
+          formattedLine += '\n';
+        } else if (line.startsWith('event:') && !line.endsWith('\n')) {
+          formattedLine += '\n';
+        } else if (line === '' && !line.endsWith('\n')) {
+          formattedLine += '\n';
+        }
+        
+        if (this.debug) {
+          console.log('[DEBUG] Sending formatted line:', JSON.stringify(formattedLine));
+        }
+        
+        // Push the formatted line
+        this.push(formattedLine);
+      }
+      
+      callback();
+    } catch (error) {
+      console.error('[ERROR] Error processing chunk:', error);
+      callback(error);
+    }
+  }
+  
+  /**
+   * Check if a line looks like it's in the middle of an incomplete tag
+   * @param {string} line - The line to check
+   * @returns {boolean} - True if the line looks incomplete
+   */
+  looksLikeIncompleteTag(line) {
+    // Check for common incomplete tag patterns
+    const incompletePatterns = [
+      /<[^>]*$/,  // Opening tag that's not closed
+      /<[a-zA-Z]*$/,  // Incomplete tag name
+      /<t[h]*$/,  // Incomplete <th or <thinking tag
+      /<thinkin[g]*$/,  // Incomplete <thinking tag
+    ];
+    
+    // If any pattern matches, it looks incomplete
+    return incompletePatterns.some(pattern => pattern.test(line));
+  }
+  
+  _flush(callback) {
+    // Send any remaining buffer data
+    if (this.buffer) {
+      if (this.debug) {
+        console.log('[DEBUG] Flushing remaining buffer:', JSON.stringify(this.buffer));
+      }
+      // Ensure proper SSE format for the final buffer content
+      let formattedBuffer = this.buffer;
+      if (this.buffer.startsWith('data:') && !this.buffer.endsWith('\n')) {
+        formattedBuffer += '\n';
+      } else if (this.buffer.startsWith('event:') && !this.buffer.endsWith('\n')) {
+        formattedBuffer += '\n';
+      } else if (this.buffer === '' && !this.buffer.endsWith('\n')) {
+        formattedBuffer += '\n';
+      }
+      
+      this.push(formattedBuffer);
+      this.buffer = '';
+    }
+    callback();
+  }
 }
 
 class QwenAPI {
@@ -518,6 +624,9 @@ class QwenAPI {
         // Create a pass-through stream to forward the response
         const stream = new PassThrough();
         
+        // Create chunk handler for proper SSE formatting
+        const chunkHandler = new SSEChunkHandler();
+        
         // Make the HTTP request with streaming response
         const response = await axios.post(url, payload, {
           headers,
@@ -525,8 +634,8 @@ class QwenAPI {
           responseType: 'stream'
         });
         
-        // Pipe the response stream to our pass-through stream
-        response.data.pipe(stream);
+        // Pipe the response stream through our chunk handler to the pass-through stream
+        response.data.pipe(chunkHandler).pipe(stream);
         
         // Reset auth error count on successful request start
         this.resetAuthErrorCount('default');
@@ -550,6 +659,12 @@ class QwenAPI {
           } else {
             stream.emit('error', error);
           }
+        });
+        
+        // Handle chunk handler errors
+        chunkHandler.on('error', (error) => {
+          console.error('[ERROR] Chunk handler error:', error);
+          stream.emit('error', error);
         });
         
         return stream;
@@ -578,13 +693,16 @@ class QwenAPI {
             // Create a new pass-through stream for the retry
             const retryStream = new PassThrough();
             
+            // Create chunk handler for proper SSE formatting
+            const retryChunkHandler = new SSEChunkHandler();
+            
             const retryResponse = await axios.post(url, payload, {
               headers: retryHeaders,
               timeout: 300000,
               responseType: 'stream'
             });
             
-            retryResponse.data.pipe(retryStream);
+            retryResponse.data.pipe(retryChunkHandler).pipe(retryStream);
             console.log('\x1b[32m%s\x1b[0m', 'Streaming request succeeded after token refresh');
             // Reset auth error count on successful request
             this.resetAuthErrorCount('default');
@@ -666,6 +784,9 @@ class QwenAPI {
           // Create a pass-through stream to forward the response
           const stream = new PassThrough();
           
+          // Create chunk handler for proper SSE formatting
+          const chunkHandler = new SSEChunkHandler();
+          
           // Make the HTTP request with streaming response
           const response = await axios.post(url, payload, {
             headers,
@@ -673,8 +794,8 @@ class QwenAPI {
             responseType: 'stream'
           });
           
-          // Pipe the response stream to our pass-through stream
-          response.data.pipe(stream);
+          // Pipe the response stream through our chunk handler to the pass-through stream
+          response.data.pipe(chunkHandler).pipe(stream);
           
           // Reset auth error count on successful request start
           this.resetAuthErrorCount(accountId);
@@ -704,6 +825,12 @@ class QwenAPI {
             } else {
               stream.emit('error', error);
             }
+          });
+          
+          // Handle chunk handler errors
+          chunkHandler.on('error', (error) => {
+            console.error('[ERROR] Chunk handler error:', error);
+            stream.emit('error', error);
           });
           
           return stream;
@@ -764,13 +891,16 @@ class QwenAPI {
                 // Create a new pass-through stream for the retry
                 const retryStream = new PassThrough();
                 
+                // Create chunk handler for proper SSE formatting
+                const retryChunkHandler = new SSEChunkHandler();
+                
                 const retryResponse = await axios.post(url, payload, {
                   headers: retryHeaders,
                   timeout: 300000,
                   responseType: 'stream'
                 });
                 
-                retryResponse.data.pipe(retryStream);
+                retryResponse.data.pipe(retryChunkHandler).pipe(retryStream);
                 console.log('\x1b[32m%s\x1b[0m', 'Streaming request succeeded after token refresh');
                 // Reset auth error count on successful request
                 this.resetAuthErrorCount(accountId);
@@ -803,4 +933,4 @@ class QwenAPI {
   }
 }
 
-module.exports = { QwenAPI };
+module.exports = { QwenAPI, SSEChunkHandler };

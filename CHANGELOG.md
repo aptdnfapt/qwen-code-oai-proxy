@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Token validation and refresh timing issues
 - Account rotation logic to use sticky selection instead of round-robin per request
 - Various authentication edge cases in the OAuth 2.0 Device Authorization Flow
+- Streaming block issues where some chunks were not appearing in client-side applications
 
 ## [0.1.0] - 2025-08-07
 

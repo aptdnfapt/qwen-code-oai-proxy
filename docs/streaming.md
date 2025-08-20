@@ -52,3 +52,19 @@ stream: process.env.STREAM === 'true', // Disable streaming by default, enable o
 ```
 
 This approach allows users to easily toggle streaming behavior without modifying code.
+
+## Recent Improvements
+
+### Streaming Block Issues Fix
+
+A recent fix was implemented to resolve issues with missing streaming blocks. The solution involved:
+
+1. **Custom Chunk Handler**: Implementation of an `SSEChunkHandler` Transform stream to properly handle SSE chunks and prevent data loss.
+
+2. **Enhanced Error Handling**: Improved error handling and recovery mechanisms for chunk-level errors.
+
+3. **Buffer Management**: Better buffer management to prevent incomplete chunks from being lost.
+
+4. **Client-Side Compatibility**: Enhanced compatibility with various SSE client implementations.
+
+For detailed information about the fix, see [Streaming Fix Documentation](./streaming-fix.md).
