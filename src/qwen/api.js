@@ -218,6 +218,7 @@ class QwenAPI {
     this.authManager = new QwenAuthManager();
     this.requestCount = new Map(); // Track requests per account
     this.authErrorCount = new Map(); // Track consecutive auth errors per account
+    this.tokenUsage = new Map(); // Track token usage per account
     this.lastResetDate = new Date().toISOString().split('T')[0]; // Track last reset date (UTC)
     this.requestCountFile = path.join(this.authManager.qwenDir, 'request_counts.json');
     this.loadRequestCounts();
@@ -243,6 +244,13 @@ class QwenAPI {
         }
       }
       
+      // Restore token usage data
+      if (counts.tokenUsage) {
+        for (const [accountId, usageData] of Object.entries(counts.tokenUsage)) {
+          this.tokenUsage.set(accountId, usageData);
+        }
+      }
+      
       // Reset counts if we've crossed into a new UTC day
       this.resetRequestCountsIfNeeded();
     } catch (error) {
@@ -258,7 +266,8 @@ class QwenAPI {
     try {
       const counts = {
         lastResetDate: this.lastResetDate,
-        requests: Object.fromEntries(this.requestCount)
+        requests: Object.fromEntries(this.requestCount),
+        tokenUsage: Object.fromEntries(this.tokenUsage)
       };
       await fs.writeFile(this.requestCountFile, JSON.stringify(counts, null, 2));
     } catch (error) {
@@ -288,6 +297,47 @@ class QwenAPI {
     const currentCount = this.requestCount.get(accountId) || 0;
     this.requestCount.set(accountId, currentCount + 1);
     await this.saveRequestCounts();
+  }
+
+  /**
+   * Record token usage for an account
+   * @param {string} accountId - The account ID
+   * @param {number} inputTokens - Number of input tokens
+   * @param {number} outputTokens - Number of output tokens
+   */
+  async recordTokenUsage(accountId, inputTokens, outputTokens) {
+    try {
+      // Get current date in YYYY-MM-DD format
+      const currentDate = new Date().toISOString().split('T')[0];
+      
+      // Initialize token usage array for this account if it doesn't exist
+      if (!this.tokenUsage.has(accountId)) {
+        this.tokenUsage.set(accountId, []);
+      }
+      
+      const accountUsage = this.tokenUsage.get(accountId);
+      
+      // Find existing entry for today
+      let todayEntry = accountUsage.find(entry => entry.date === currentDate);
+      
+      if (todayEntry) {
+        // Update existing entry
+        todayEntry.inputTokens += inputTokens;
+        todayEntry.outputTokens += outputTokens;
+      } else {
+        // Create new entry for today
+        accountUsage.push({
+          date: currentDate,
+          inputTokens: inputTokens,
+          outputTokens: outputTokens
+        });
+      }
+      
+      // Save the updated token usage data
+      await this.saveRequestCounts();
+    } catch (error) {
+      console.warn('Failed to record token usage:', error.message);
+    }
   }
 
   /**
@@ -416,6 +466,13 @@ class QwenAPI {
         const response = await axios.post(url, payload, { headers, timeout: 300000 }); // 5 minute timeout
         // Reset auth error count on successful request
         this.resetAuthErrorCount(accountId);
+        
+        // Record token usage if available in response
+        if (response.data && response.data.usage) {
+          const { prompt_tokens = 0, completion_tokens = 0 } = response.data.usage;
+          await this.recordTokenUsage(accountId, prompt_tokens, completion_tokens);
+        }
+        
         return response.data;
       } catch (error) {
         lastError = error;
@@ -523,6 +580,13 @@ class QwenAPI {
       const response = await axios.post(url, payload, { headers, timeout: 300000 }); // 5 minute timeout
       // Reset auth error count on successful request (for consistency, even though we don't rotate)
       this.resetAuthErrorCount('default');
+      
+      // Record token usage if available in response
+      if (response.data && response.data.usage) {
+        const { prompt_tokens = 0, completion_tokens = 0 } = response.data.usage;
+        await this.recordTokenUsage('default', prompt_tokens, completion_tokens);
+      }
+      
       return response.data;
     } catch (error) {
       // Check if this is an authentication error that might benefit from a retry
@@ -627,11 +691,47 @@ class QwenAPI {
         // Create chunk handler for proper SSE formatting
         const chunkHandler = new SSEChunkHandler();
         
+        // Variables to capture usage data from streaming response
+        let usageData = null;
+        
         // Make the HTTP request with streaming response
         const response = await axios.post(url, payload, {
           headers,
           timeout: 300000, // 5 minute timeout
           responseType: 'stream'
+        });
+        
+        // Intercept the response stream to capture usage data
+        response.data.on('data', (chunk) => {
+          const chunkString = chunk.toString();
+          // Look for usage data in the chunk (typically in final chunk with [DONE] marker)
+          if (chunkString.includes('\"usage\":')) {
+            try {
+              // Extract usage data from the chunk
+              const lines = chunkString.split('\n');
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const data = line.substring(6);
+                  if (data.trim() !== '[DONE]') {
+                    const jsonData = JSON.parse(data);
+                    if (jsonData.usage) {
+                      usageData = jsonData.usage;
+                    }
+                  }
+                }
+              }
+            } catch (parseError) {
+              // Ignore parsing errors
+            }
+          }
+        });
+        
+        // Record token usage when stream ends
+        response.data.on('end', async () => {
+          if (usageData) {
+            const { prompt_tokens = 0, completion_tokens = 0 } = usageData;
+            await this.recordTokenUsage('default', prompt_tokens, completion_tokens);
+          }
         });
         
         // Pipe the response stream through our chunk handler to the pass-through stream
@@ -787,11 +887,47 @@ class QwenAPI {
           // Create chunk handler for proper SSE formatting
           const chunkHandler = new SSEChunkHandler();
           
+          // Variables to capture usage data from streaming response
+          let usageData = null;
+          
           // Make the HTTP request with streaming response
           const response = await axios.post(url, payload, {
             headers,
             timeout: 300000, // 5 minute timeout
             responseType: 'stream'
+          });
+          
+          // Intercept the response stream to capture usage data
+          response.data.on('data', (chunk) => {
+            const chunkString = chunk.toString();
+            // Look for usage data in the chunk (typically in final chunk with [DONE] marker)
+            if (chunkString.includes('\"usage\":')) {
+              try {
+                // Extract usage data from the chunk
+                const lines = chunkString.split('\n');
+                for (const line of lines) {
+                  if (line.startsWith('data: ')) {
+                    const data = line.substring(6);
+                    if (data.trim() !== '[DONE]') {
+                      const jsonData = JSON.parse(data);
+                      if (jsonData.usage) {
+                        usageData = jsonData.usage;
+                      }
+                    }
+                  }
+                }
+              } catch (parseError) {
+                // Ignore parsing errors
+              }
+            }
+          });
+          
+          // Record token usage when stream ends
+          response.data.on('end', async () => {
+            if (usageData) {
+              const { prompt_tokens = 0, completion_tokens = 0 } = usageData;
+              await this.recordTokenUsage(accountId, prompt_tokens, completion_tokens);
+            }
           });
           
           // Pipe the response stream through our chunk handler to the pass-through stream

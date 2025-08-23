@@ -12,7 +12,9 @@
     "auth:list": "node authenticate.js list",
     "auth:add": "node authenticate.js add",
     "auth:remove": "node authenticate.js remove",
-    "auth:counts": "node authenticate.js counts"
+    "auth:counts": "node authenticate.js counts",
+    "auth:tokens": "node tokens.js",
+    "tokens": "node tokens.js"
   },
   "keywords": [
     "qwen",
@@ -24,6 +26,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "axios": "^1.11.0",
+    "cli-table3": "^0.6.5",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
