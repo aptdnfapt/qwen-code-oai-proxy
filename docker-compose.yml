@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   qwen-proxy:
     build: .
@@ -14,10 +12,11 @@ services:
       - STREAM=${STREAM:-false}
       - DEFAULT_ACCOUNT=${DEFAULT_ACCOUNT:-}
       - QWEN_CODE_AUTH_USE=${QWEN_CODE_AUTH_USE:-true}
+      - API_KEY=${API_KEY:-}
     
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"]
+      test: ["CMD", "node", "-e", "const req = require('http').request({ hostname: 'localhost', port: '${PORT:-8080}', path: '/health', method: 'GET', headers: { 'X-API-Key': '${API_KEY:-}' } }, (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }); req.on('error', () => process.exit(1)); req.end();"]
       interval: 30s
       timeout: 10s
       retries: 3

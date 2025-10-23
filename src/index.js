@@ -17,6 +17,42 @@ const qwenAPI = new QwenAPI();
 const authManager = new QwenAuthManager();
 const debugLogger = new DebugLogger();
 
+// API Key middleware
+const validateApiKey = (req, res, next) => {
+  // If no API key is configured, skip validation
+  if (!config.apiKey) {
+    return next();
+  }
+
+  // Check for API key in header
+  const apiKey = req.headers["x-api-key"] || req.headers["authorization"];
+
+  // Handle both "Bearer <token>" and direct API key formats
+  let cleanApiKey = null;
+  if (apiKey && typeof apiKey === "string") {
+    if (apiKey.startsWith("Bearer ")) {
+      cleanApiKey = apiKey.substring(7).trim();
+    } else {
+      cleanApiKey = apiKey.trim();
+    }
+  }
+
+  if (!cleanApiKey || cleanApiKey !== config.apiKey) {
+    console.error(
+      "\x1b[31m%s\x1b[0m",
+      "Unauthorized request - Invalid or missing API key",
+    );
+    return res.status(401).json({
+      error: {
+        message: "Invalid or missing API key",
+        type: "authentication_error",
+      },
+    });
+  }
+
+  next();
+};
+
 // Main proxy server
 class QwenOpenAIProxy {
   async handleChatCompletion(req, res) {
@@ -308,6 +344,11 @@ class QwenOpenAIProxy {
 
 // Initialize proxy
 const proxy = new QwenOpenAIProxy();
+
+// Apply API key middleware to all routes (including health check to protect account information)
+app.use("/v1/", validateApiKey);
+app.use("/auth/", validateApiKey);
+app.use("/health", validateApiKey);
 
 // Routes
 app.post('/v1/chat/completions', (req, res) => proxy.handleChatCompletion(req, res));

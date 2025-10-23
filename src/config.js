@@ -34,5 +34,8 @@ module.exports = {
   
   // Debug logging configuration
   debugLog: process.env.DEBUG_LOG === 'true' ? true : false, // Enable/disable debug logging (disabled by default)
-  logFileLimit: parseInt(process.env.LOG_FILE_LIMIT) || 20 // Maximum number of log files to keep
+  logFileLimit: parseInt(process.env.LOG_FILE_LIMIT) || 20, // Maximum number of log files to keep
+
+  // API Key configuration
+  apiKey: process.env.API_KEY || null, // API key for securing access
 };
