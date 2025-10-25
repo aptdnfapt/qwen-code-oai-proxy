@@ -717,6 +717,9 @@ class QwenAPI {
       const response = await axios.post(url, payload, { headers, timeout: 300000 }); // 5 minute timeout
       // Reset auth error count on successful request (for consistency, even though we don't rotate)
       this.resetAuthErrorCount('default');
+
+      // Increment request count for successful request
+      await this.incrementRequestCount('default');
       
       // Record token usage if available in response
       if (response.data && response.data.usage) {

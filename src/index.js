@@ -328,18 +328,24 @@ class QwenOpenAIProxy {
       
       res.json(response);
     } catch (error) {
+      // Check if it's a validation error
+      if (error.message.includes('Validation error')) {
+        console.error('\x1b[31m%s\x1b[0m', `Validation error: ${error.message}`);
+        const validationError = ErrorFormatter.openAIValidationError(error.message);
+        return res.status(validationError.status).json(validationError.body);
+      }
+      
       // Log the API call with error
       await debugLogger.logApiCall('/auth/poll', req, null, error);
+      
+      // Also log detailed error separately
+      await debugLogger.logError('/auth/poll', error, 'error');
       
       // Print error message in red
       console.error('\x1b[31m%s\x1b[0m', `Error polling for token: ${error.message}`);
       
-      res.status(500).json({
-        error: {
-          message: error.message,
-          type: 'authentication_error'
-        }
-      });
+      const apiError = ErrorFormatter.openAIApiError(error.message, 'authentication_error');
+      res.status(apiError.status).json(apiError.body);
     }
   }
 }
@@ -350,7 +356,7 @@ const proxy = new QwenOpenAIProxy();
 // Apply API key middleware to all routes (including health check to protect account information)
 app.use("/v1/", validateApiKey);
 app.use("/auth/", validateApiKey);
-app.use("/health", validateApiKey);
+app.use("/health");
 
 // Routes
 app.post('/v1/chat/completions', (req, res) => proxy.handleChatCompletion(req, res));
@@ -364,12 +370,31 @@ app.post('/auth/poll', (req, res) => proxy.handleAuthPoll(req, res));
 app.get('/health', async (req, res) => {
   try {
     await qwenAPI.authManager.loadAllAccounts();
+    const defaultCredentials = await qwenAPI.authManager.loadCredentials();
     const accountIds = qwenAPI.authManager.getAccountIds();
     const healthyAccounts = qwenAPI.getHealthyAccounts(accountIds);
     const failedAccounts = healthyAccounts.length === 0 ? 
       new Set(accountIds) : new Set(accountIds.filter(id => !healthyAccounts.includes(id)));
     
     const accounts = [];
+    let totalRequestsToday = 0;
+
+    if (defaultCredentials) {
+      const minutesLeft = (defaultCredentials.expiry_date - Date.now()) / 60000;
+      const status = minutesLeft < 0 ? 'expired' : 'healthy';
+      const expiresIn = Math.max(0, minutesLeft);
+      const requestCount = qwenAPI.getRequestCount('default');
+      totalRequestsToday += requestCount;
+      
+      accounts.push({
+        id: 'default',
+        status,
+        expiresIn: expiresIn ? `${expiresIn.toFixed(1)} minutes` : null,
+        requestCount: requestCount,
+        authErrorCount: qwenAPI.getAuthErrorCount('default')
+      });
+    }
+    
     for (const accountId of accountIds) {
       const credentials = qwenAPI.authManager.getAccountCredentials(accountId);
       let status = 'unknown';
@@ -389,31 +414,78 @@ app.get('/health', async (req, res) => {
         expiresIn = Math.max(0, minutesLeft);
       }
       
+      const requestCount = qwenAPI.getRequestCount(accountId);
+      totalRequestsToday += requestCount;
+      
       accounts.push({
-        id: accountId,
+        id: accountId.substring(0, 5),
         status,
         expiresIn: expiresIn ? `${expiresIn.toFixed(1)} minutes` : null,
-        requestCount: qwenAPI.getRequestCount(accountId)
+        requestCount: requestCount,
+        authErrorCount: qwenAPI.getAuthErrorCount(accountId)
       });
     }
     
     const healthyCount = accounts.filter(a => a.status === 'healthy').length;
     const failedCount = accounts.filter(a => a.status === 'failed').length;
+    const expiringSoonCount = accounts.filter(a => a.status === 'expiring_soon').length;
+    const expiredCount = accounts.filter(a => a.status === 'expired').length;
+    
+    // Get token usage data
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    
+    const today = new Date().toISOString().split('T')[0];
+    for (const [accountId, usageData] of qwenAPI.tokenUsage.entries()) {
+      const todayUsage = usageData.find(entry => entry.date === today);
+      if (todayUsage) {
+        totalInputTokens += todayUsage.inputTokens;
+        totalOutputTokens += todayUsage.outputTokens;
+      }
+    }
     
     res.json({
       status: 'ok',
+      timestamp: new Date().toISOString(),
       summary: {
         total: accounts.length,
         healthy: healthyCount,
         failed: failedCount,
+        expiring_soon: expiringSoonCount,
+        expired: expiredCount,
+        total_requests_today: totalRequestsToday,
         lastReset: qwenAPI.lastFailedReset
       },
-      accounts
+      token_usage: {
+        input_tokens_today: totalInputTokens,
+        output_tokens_today: totalOutputTokens,
+        total_tokens_today: totalInputTokens + totalOutputTokens
+      },
+      accounts,
+      server_info: {
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        node_version: process.version,
+        platform: process.platform,
+        arch: process.arch
+      },
+      endpoints: {
+        openai: `${req.protocol}://${req.get('host')}/v1`,
+        metrics: `${req.protocol}://${req.get('host')}/metrics`,
+        health: `${req.protocol}://${req.get('host')}/health`
+      }
     });
   } catch (error) {
     res.status(500).json({
       status: 'error',
-      error: error.message
+      timestamp: new Date().toISOString(),
+      error: error.message,
+      server_info: {
+        uptime: process.uptime(),
+        node_version: process.version,
+        platform: process.platform,
+        arch: process.arch
+      }
     });
   }
 });

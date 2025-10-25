@@ -163,9 +163,23 @@ class QwenAuthManager {
   }
 
   isTokenValid(credentials) {
-    if (!credentials || !credentials.expiry_date) {
+    if (!credentials || !credentials.access_token || !credentials.expiry_date) {
       return false;
     }
+    
+    // Check if token has been tampered with by validating structure
+    if (typeof credentials.access_token !== 'string' || credentials.access_token.length === 0) {
+      console.warn('Invalid access token format');
+      return false;
+    }
+    
+    // Check if expiry date is valid
+    if (isNaN(credentials.expiry_date) || credentials.expiry_date <= 0) {
+      console.warn('Invalid expiry date');
+      return false;
+    }
+    
+    // Check if token is expired or expiring soon
     return Date.now() < credentials.expiry_date - TOKEN_REFRESH_BUFFER_MS;
   }
 
