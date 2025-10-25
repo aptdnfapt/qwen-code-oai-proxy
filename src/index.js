@@ -116,6 +116,7 @@ class QwenOpenAIProxy {
         temperature: req.body.temperature,
         max_tokens: req.body.max_tokens,
         top_p: req.body.top_p,
+        reasoning: req.body.reasoning,
         accountId
       });
       
@@ -160,6 +161,7 @@ class QwenOpenAIProxy {
         temperature: req.body.temperature,
         max_tokens: req.body.max_tokens,
         top_p: req.body.top_p,
+        reasoning: req.body.reasoning,
         accountId
       });
       
