@@ -3,6 +3,8 @@ services:
     build: .
     ports:
       - "${PORT:-8080}:${PORT:-8080}"
+    volumes:
+      - ~/.qwen:/root/.qwen
     environment:
       - NODE_ENV=production
       - PORT=${PORT:-8080}
@@ -13,10 +15,16 @@ services:
       - DEFAULT_ACCOUNT=${DEFAULT_ACCOUNT:-}
       - QWEN_CODE_AUTH_USE=${QWEN_CODE_AUTH_USE:-true}
       - API_KEY=${API_KEY:-}
-    
+
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "const req = require('http').request({ hostname: 'localhost', port: '${PORT:-8080}', path: '/health', method: 'GET', headers: { 'X-API-Key': '${API_KEY:-}' } }, (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }); req.on('error', () => process.exit(1)); req.end();"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const req = require('http').request({ hostname: 'localhost', port: '${PORT:-8080}', path: '/health', method: 'GET', headers: { 'X-API-Key': '${API_KEY:-}' } }, (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }); req.on('error', () => process.exit(1)); req.end();",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
