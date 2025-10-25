@@ -273,7 +273,7 @@ class QwenAuthManager {
       console.log('\x1b[32m%s\x1b[0m', 'Qwen access token refreshed successfully');
       return newCredentials;
     } catch (error) {
-      console.error('\x1b[31m%s\x1b[0m', 'Failed to refresh Qwen access token');
+      console.error('\x1b[31m%s\x1b[0m', 'Failed to refresh Qwen access token with error:', error.message);
       // If refresh fails, the user likely needs to re-auth completely.
       throw new Error('Failed to refresh access token. Please re-authenticate with the Qwen CLI.');
     }

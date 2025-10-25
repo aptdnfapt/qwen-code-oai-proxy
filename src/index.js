@@ -5,6 +5,7 @@ const { QwenAPI } = require('./qwen/api.js');
 const { QwenAuthManager } = require('./qwen/auth.js');
 const { DebugLogger } = require('./utils/logger.js');
 const { countTokens } = require('./utils/tokenCounter.js');
+const { ErrorFormatter } = require('./utils/errorFormatter.js');
 
 const app = express();
 // Increase body parser limits for large requests
@@ -75,8 +76,18 @@ class QwenOpenAIProxy {
         await this.handleRegularChatCompletion(req, res);
       }
     } catch (error) {
+      // Check if it's a validation error
+      if (error.message.includes('Validation error')) {
+        console.error('\x1b[31m%s\x1b[0m', `Validation error: ${error.message}`);
+        const validationError = ErrorFormatter.openAIValidationError(error.message);
+        return res.status(validationError.status).json(validationError.body);
+      }
+
       // Log the API call with error
       const debugFileName = await debugLogger.logApiCall('/v1/chat/completions', req, null, error);
+      
+      // Also log detailed error separately
+      await debugLogger.logError('/v1/chat/completions', error, 'error');
       
       // Print error message in red
       if (debugFileName) {
@@ -87,20 +98,13 @@ class QwenOpenAIProxy {
       
       // Handle authentication errors
       if (error.message.includes('Not authenticated') || error.message.includes('access token')) {
-        return res.status(401).json({
-          error: {
-            message: 'Not authenticated with Qwen. Please authenticate first.',
-            type: 'authentication_error'
-          }
-        });
+        const authError = ErrorFormatter.openAIAuthError();
+        return res.status(authError.status).json(authError.body);
       }
       
-      res.status(500).json({
-        error: {
-          message: error.message,
-          type: 'internal_server_error'
-        }
-      });
+      // Handle other errors
+      const apiError = ErrorFormatter.openAIApiError(error.message);
+      res.status(apiError.status).json(apiError.body);
     }
   }
   
@@ -139,7 +143,27 @@ class QwenOpenAIProxy {
       
       res.json(response);
     } catch (error) {
-      throw error; // Re-throw to be handled by the main handler
+      // Log the API call with error
+      const debugFileName = await debugLogger.logApiCall('/v1/chat/completions', req, null, error);
+      
+      // Also log detailed error separately
+      await debugLogger.logError('/v1/chat/completions regular', error, 'error');
+      
+      // Print error message in red
+      if (debugFileName) {
+        console.error('\x1b[31m%s\x1b[0m', `Error in regular chat completion request. Debug log saved to: ${debugFileName}`);
+      } else {
+        console.error('\x1b[31m%s\x1b[0m', 'Error in regular chat completion request.');
+      }
+      
+      // Handle authentication errors
+      if (error.message.includes('Not authenticated') || error.message.includes('access token')) {
+        const authError = ErrorFormatter.openAIAuthError();
+        return res.status(authError.status).json(authError.body);
+      }
+      
+      // Re-throw to be handled by the main handler
+      throw error;
     }
   }
   
@@ -178,12 +202,8 @@ class QwenOpenAIProxy {
       stream.on('error', (error) => {
         console.error('\x1b[31m%s\x1b[0m', `Error in streaming chat completion: ${error.message}`);
         if (!res.headersSent) {
-          res.status(500).json({
-            error: {
-              message: error.message,
-              type: 'streaming_error'
-            }
-          });
+          const apiError = ErrorFormatter.openAIApiError(error.message, 'streaming_error');
+          res.status(apiError.status).json(apiError.body);
         }
         res.end();
       });
@@ -194,7 +214,35 @@ class QwenOpenAIProxy {
       });
       
     } catch (error) {
-      throw error; // Re-throw to be handled by the main handler
+      // Log the API call with error
+      const debugFileName = await debugLogger.logApiCall('/v1/chat/completions', req, null, error);
+      
+      // Also log detailed error separately
+      await debugLogger.logError('/v1/chat/completions streaming', error, 'error');
+      
+      // Print error message in red
+      if (debugFileName) {
+        console.error('\x1b[31m%s\x1b[0m', `Error in streaming chat completion request. Debug log saved to: ${debugFileName}`);
+      } else {
+        console.error('\x1b[31m%s\x1b[0m', 'Error in streaming chat completion request.');
+      }
+      
+      // Handle authentication errors
+      if (error.message.includes('Not authenticated') || error.message.includes('access token')) {
+        const authError = ErrorFormatter.openAIAuthError();
+        if (!res.headersSent) {
+          res.status(authError.status).json(authError.body);
+          res.end();
+        }
+        return;
+      }
+      
+      // For other errors in streaming context
+      const apiError = ErrorFormatter.openAIApiError(error.message);
+      if (!res.headersSent) {
+        res.status(apiError.status).json(apiError.body);
+        res.end();
+      }
     }
   }
   
@@ -356,7 +404,6 @@ const proxy = new QwenOpenAIProxy();
 // Apply API key middleware to all routes (including health check to protect account information)
 app.use("/v1/", validateApiKey);
 app.use("/auth/", validateApiKey);
-app.use("/health");
 
 // Routes
 app.post('/v1/chat/completions', (req, res) => proxy.handleChatCompletion(req, res));
@@ -471,7 +518,6 @@ app.get('/health', async (req, res) => {
       },
       endpoints: {
         openai: `${req.protocol}://${req.get('host')}/v1`,
-        metrics: `${req.protocol}://${req.get('host')}/metrics`,
         health: `${req.protocol}://${req.get('host')}/health`
       }
     });

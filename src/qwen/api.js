@@ -1,8 +1,29 @@
 const axios = require('axios');
+const http = require('http');
+const https = require('https');
 const { QwenAuthManager } = require('./auth.js');
 const { PassThrough } = require('stream');
 const path = require('path');
 const { promises: fs } = require('fs');
+
+// Create HTTP agents with connection pooling
+const httpAgent = new http.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 1000,
+  maxSockets: 50,
+  maxFreeSockets: 10,
+  timeout: 60000,
+  freeSocketTimeout: 30000
+});
+
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 1000,
+  maxSockets: 50,
+  maxFreeSockets: 10,
+  timeout: 60000,
+  freeSocketTimeout: 30000
+});
 
 // Default Qwen configuration
 const DEFAULT_QWEN_API_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
@@ -563,14 +584,17 @@ class QwenAPI {
     if (accountIds.length === 0) {
       return this.chatCompletionsSingleAccount(request);
     }
+    
     const tried = new Set();
     let lastError = null;
     const maxAttempts = 2;
+    
     for (let i = 0; i < maxAttempts; i++) {
       const bestAccount = await this.getBestAccount(tried);
       if (!bestAccount) {
         break;
       }
+      
       try {
         return await this.processRequestWithAccount(request, bestAccount);
       } catch (error) {
@@ -580,6 +604,7 @@ class QwenAPI {
         continue;
       }
     }
+    
     if (lastError) throw lastError;
     throw new Error('No healthy accounts available');
   }
@@ -622,7 +647,9 @@ class QwenAPI {
 
     const response = await axios.post(url, payload, { 
       headers: headers,
-      timeout: 300000 // 5 minutes timeout
+      timeout: 300000, // 5 minutes timeout
+      httpAgent,
+      httpsAgent
     });
 
     // Increment request count for successful request
@@ -714,7 +741,7 @@ class QwenAPI {
     };
     
     try {
-      const response = await axios.post(url, payload, { headers, timeout: 300000 }); // 5 minute timeout
+      const response = await axios.post(url, payload, { headers, timeout: 300000, httpAgent, httpsAgent }); // 5 minute timeout
       // Reset auth error count on successful request (for consistency, even though we don't rotate)
       this.resetAuthErrorCount('default');
 
@@ -749,7 +776,7 @@ class QwenAPI {
             'User-Agent': 'QwenOpenAIProxy/1.0.0 (linux; x64)'
           };
           
-          const retryResponse = await axios.post(url, payload, { headers: retryHeaders, timeout: 300000 });
+          const retryResponse = await axios.post(url, payload, { headers: retryHeaders, timeout: 300000, httpAgent, httpsAgent });
           console.log('\x1b[32m%s\x1b[0m', 'Request succeeded after token refresh');
           // Reset auth error count on successful request
           this.resetAuthErrorCount('default');
@@ -812,7 +839,7 @@ class QwenAPI {
       const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: request.max_tokens, top_p: request.top_p, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
       const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${credentials.access_token}`, 'User-Agent': 'QwenOpenAIProxy/1.0.0 (linux; x64)', 'Accept': 'text/event-stream' };
       const stream = new PassThrough();
-      const response = await axios.post(url, payload, { headers, timeout: 300000, responseType: 'stream' });
+      const response = await axios.post(url, payload, { headers, timeout: 300000, responseType: 'stream', httpAgent, httpsAgent });
       response.data.pipe(stream);
       return stream;
     }
@@ -828,7 +855,7 @@ class QwenAPI {
       const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: request.max_tokens, top_p: request.top_p, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
       const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'User-Agent': 'QwenOpenAIProxy/1.0.0 (linux; x64)', 'Accept': 'text/event-stream' };
       const stream = new PassThrough();
-      const response = await axios.post(url, payload, { headers, timeout: 300000, responseType: 'stream' });
+      const response = await axios.post(url, payload, { headers, timeout: 300000, responseType: 'stream', httpAgent, httpsAgent });
       response.data.pipe(stream);
       return stream;
     }
@@ -848,7 +875,7 @@ class QwenAPI {
         const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: request.max_tokens, top_p: request.top_p, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
         const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${credentials.access_token}`, 'User-Agent': 'QwenOpenAIProxy/1.0.0 (linux; x64)', 'Accept': 'text/event-stream' };
         const stream = new PassThrough();
-        const response = await axios.post(url, payload, { headers, timeout: 300000, responseType: 'stream' });
+        const response = await axios.post(url, payload, { headers, timeout: 300000, responseType: 'stream', httpAgent, httpsAgent });
         response.data.pipe(stream);
         return stream;
       } catch (error) {
