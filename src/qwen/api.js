@@ -739,7 +739,12 @@ class QwenAPI {
         console.log(`\x1b[31mToken refresh failed for account ${accountId}, marking as failed\x1b[0m`);
         await this.markAccountAsFailed(accountId);
       }
+    } else {
+      // Other errors - log but don't mark as failed also log error details like error message
+      console.log(`\x1b[33mReceived ${status} error for account ${accountId}, not marking as failed\x1b[0m`);
+      console.log(`\x1b[33mError details: ${JSON.stringify(errorData)}\x1b[0m`);
     }
+    
     // For 500/502/504 errors, don't mark account as failed (temporary server issues)
   }
 
