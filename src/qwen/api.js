@@ -665,6 +665,8 @@ class QwenAPI {
       temperature: request.temperature,
       max_tokens: request.max_tokens,
       top_p: request.top_p,
+      top_k: request.top_k,
+      repetition_penalty: request.repetition_penalty,
       tools: request.tools,
       tool_choice: request.tool_choice,
       reasoning: request.reasoning,
@@ -763,6 +765,8 @@ class QwenAPI {
       temperature: request.temperature,
       max_tokens: request.max_tokens,
       top_p: request.top_p,
+      top_k: request.top_k,
+      repetition_penalty: request.repetition_penalty,
       tools: request.tools,
       tool_choice: request.tool_choice,
       reasoning: request.reasoning
@@ -942,7 +946,7 @@ class QwenAPI {
       const url = `${apiEndpoint}/chat/completions`;
       const model = request.model || DEFAULT_MODEL;
       const processedMessages = processMessagesForVision(request.messages, model);
-      const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: request.max_tokens, top_p: request.top_p, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
+      const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: request.max_tokens, top_p: request.top_p, top_k: request.top_k, repetition_penalty: request.repetition_penalty, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
       const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${credentials.access_token}`, 'User-Agent': 'QwenOpenAIProxy/1.0.0 (linux; x64)', 'Accept': 'text/event-stream' };
       
       // Increment request count for successful request
@@ -965,7 +969,7 @@ class QwenAPI {
       const url = `${apiEndpoint}/chat/completions`;
       const model = request.model || DEFAULT_MODEL;
       const processedMessages = processMessagesForVision(request.messages, model);
-      const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: request.max_tokens, top_p: request.top_p, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
+      const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: request.max_tokens, top_p: request.top_p, top_k: request.top_k, repetition_penalty: request.repetition_penalty, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
       const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'User-Agent': 'QwenOpenAIProxy/1.0.0 (linux; x64)', 'Accept': 'text/event-stream' };
       
       // Increment request count for successful request
@@ -1011,7 +1015,7 @@ class QwenAPI {
           const url = `${apiEndpoint}/chat/completions`;
           const model = request.model || DEFAULT_MODEL;
           const processedMessages = processMessagesForVision(request.messages, model);
-          const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: request.max_tokens, top_p: request.top_p, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
+          const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: request.max_tokens, top_p: request.top_p, top_k: request.top_k, repetition_penalty: request.repetition_penalty, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
           const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${credentials.access_token}`, 'User-Agent': 'QwenOpenAIProxy/1.0.0 (linux; x64)', 'Accept': 'text/event-stream' };
           const stream = new PassThrough();
           

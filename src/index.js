@@ -119,9 +119,11 @@ class QwenOpenAIProxy {
         messages: req.body.messages,
         tools: req.body.tools,
         tool_choice: req.body.tool_choice,
-        temperature: req.body.temperature,
-        max_tokens: req.body.max_tokens,
-        top_p: req.body.top_p,
+        temperature: req.body.temperature || config.defaultTemperature,
+        max_tokens: req.body.max_tokens || config.defaultMaxTokens,
+        top_p: req.body.top_p || config.defaultTopP,
+        top_k: req.body.top_k || config.defaultTopK,
+        repetition_penalty: req.body.repetition_penalty || config.defaultRepetitionPenalty,
         reasoning: req.body.reasoning,
         accountId
       });
@@ -177,16 +179,18 @@ class QwenOpenAIProxy {
         messages: req.body.messages,
         tools: req.body.tools,
         tool_choice: req.body.tool_choice,
-        temperature: req.body.temperature,
-        max_tokens: req.body.max_tokens,
-        top_p: req.body.top_p,
+        temperature: req.body.temperature || config.defaultTemperature,
+        max_tokens: req.body.max_tokens || config.defaultMaxTokens,
+        top_p: req.body.top_p || config.defaultTopP,
+        top_k: req.body.top_k || config.defaultTopK,
+        repetition_penalty: req.body.repetition_penalty || config.defaultRepetitionPenalty,
         reasoning: req.body.reasoning,
         accountId
       });
       
       // Log the API call (without response data since it's streaming)
       const debugFileName = await debugLogger.logApiCall('/v1/chat/completions', req, { streaming: true });
-      
+
       // Pipe the stream to the response
       stream.pipe(res);
       
