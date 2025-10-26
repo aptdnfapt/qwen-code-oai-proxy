@@ -6,6 +6,7 @@ const { QwenAuthManager } = require('./qwen/auth.js');
 const { DebugLogger } = require('./utils/logger.js');
 const { countTokens } = require('./utils/tokenCounter.js');
 const { ErrorFormatter } = require('./utils/errorFormatter.js');
+const { AccountRefreshScheduler } = require('./utils/accountRefreshScheduler.js');
 
 const app = express();
 // Increase body parser limits for large requests
@@ -17,6 +18,7 @@ app.use(cors());
 const qwenAPI = new QwenAPI();
 const authManager = new QwenAuthManager();
 const debugLogger = new DebugLogger();
+const accountRefreshScheduler = new AccountRefreshScheduler(qwenAPI);
 
 // API Key middleware
 const validateApiKey = (req, res, next) => {
@@ -62,7 +64,7 @@ class QwenOpenAIProxy {
       const tokenCount = countTokens(req.body.messages);
       
       // Display token count in terminal
-      console.log('\x1b[36m%s\x1b[0m', `Chat completion request received with ${tokenCount} tokens`);
+      console.log('\x1b[36m%s\x1b[0m', `[>] New Chat completion request received with ${tokenCount} tokens`);
       
       // Check if streaming is requested and enabled
       const isStreaming = req.body.stream === true && config.stream;
@@ -134,13 +136,6 @@ class QwenOpenAIProxy {
         tokenInfo = ` (Prompt: ${prompt_tokens}, Completion: ${completion_tokens}, Total: ${total_tokens} tokens)`;
       }
       
-      // Print success message with debug file info in green
-      if (debugFileName) {
-        console.log('\x1b[32m%s\x1b[0m', `Chat completion request processed successfully${tokenInfo}. Debug log saved to: ${debugFileName}`);
-      } else {
-        console.log('\x1b[32m%s\x1b[0m', `Chat completion request processed successfully${tokenInfo}.`);
-      }
-      
       res.json(response);
     } catch (error) {
       // Log the API call with error
@@ -191,9 +186,6 @@ class QwenOpenAIProxy {
       
       // Log the API call (without response data since it's streaming)
       const debugFileName = await debugLogger.logApiCall('/v1/chat/completions', req, { streaming: true });
-      
-      // Print streaming request message
-      console.log('\x1b[32m%s\x1b[0m', `Streaming chat completion request started. Debug log saved to: ${debugFileName}`);
       
       // Pipe the stream to the response
       stream.pipe(res);
@@ -543,6 +535,14 @@ const HOST = config.host;
 process.on('SIGINT', async () => {
   console.log('\n\x1b[33m%s\x1b[0m', 'Received SIGINT, shutting down gracefully...');
   try {
+    // Stop the account refresh scheduler
+    accountRefreshScheduler.stopScheduler();
+    console.log('\x1b[32m%s\x1b[0m', 'Account refresh scheduler stopped');
+  } catch (error) {
+    console.error('\x1b[31m%s\x1b[0m', 'Failed to stop account refresh scheduler:', error.message);
+  }
+
+  try {
     // Force save any pending request counts before exit
     await qwenAPI.saveRequestCounts();
     console.log('\x1b[32m%s\x1b[0m', 'Request counts saved successfully');
@@ -554,6 +554,14 @@ process.on('SIGINT', async () => {
 
 process.on('SIGTERM', async () => {
   console.log('\n\x1b[33m%s\x1b[0m', 'Received SIGTERM, shutting down gracefully...');
+  try {
+    // Stop the account refresh scheduler
+    accountRefreshScheduler.stopScheduler();
+    console.log('\x1b[32m%s\x1b[0m', 'Account refresh scheduler stopped');
+  } catch (error) {
+    console.error('\x1b[31m%s\x1b[0m', 'Failed to stop account refresh scheduler:', error.message);
+  }
+
   try {
     // Force save any pending request counts before exit
     await qwenAPI.saveRequestCounts();
@@ -602,5 +610,12 @@ app.listen(PORT, HOST, async () => {
     }
   } catch (error) {
     console.log('\n\x1b[33mWarning: Could not load account information\x1b[0m');
+  }
+
+  // Initialize the account refresh scheduler
+  try {
+    await accountRefreshScheduler.initialize();
+  } catch (error) {
+    console.log(`\n\x1b[31mFailed to initialize account refresh scheduler: ${error.message}\x1b[0m`);
   }
 });
