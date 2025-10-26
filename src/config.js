@@ -44,5 +44,7 @@ module.exports = {
   logFileLimit: parseInt(process.env.LOG_FILE_LIMIT) || 20, // Maximum number of log files to keep
 
   // API Key configuration
-  apiKey: process.env.API_KEY || null, // API key for securing access
+  apiKey: process.env.API_KEY ?
+    process.env.API_KEY.split(',').map(key => key.trim()).filter(key => key.length > 0) :
+    null, // API key(s) for securing access (can be multiple, comma-separated)
 };
