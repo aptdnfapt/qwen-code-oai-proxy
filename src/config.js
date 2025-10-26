@@ -21,6 +21,13 @@ module.exports = {
   
   // Default model
   defaultModel: process.env.DEFAULT_MODEL || 'qwen3-coder-plus',
+
+  // Default parameters for requests if not specified in the request
+  defaultTemperature: parseFloat(process.env.DEFAULT_TEMPERATURE) || 0.7,
+  defaultMaxTokens: parseInt(process.env.DEFAULT_MAX_TOKENS) || 65536,
+  defaultTopP: parseFloat(process.env.DEFAULT_TOP_P) || 0.8,
+  defaultTopK: parseInt(process.env.DEFAULT_TOP_K) || 20,
+  defaultRepetitionPenalty: parseFloat(process.env.DEFAULT_REPETITION_PENALTY) || 1.05,
   
   // Token refresh buffer (milliseconds)
   tokenRefreshBuffer: parseInt(process.env.TOKEN_REFRESH_BUFFER) || 30000, // 30 seconds
