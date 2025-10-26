@@ -30,13 +30,13 @@ class AccountRefreshScheduler {
     // Run the check immediately when starting
     await this.checkAndRefreshExpiredAccounts();
     
-    // Then run every hour (3600000 milliseconds = 1 hour)
+    // Then run every hour (60 * 60 * 1000 milliseconds = 1 hour)
     this.refreshInterval = setInterval(async () => {
-      console.log('\x1b[36m%s\x1b[0m', 'Running hourly account refresh check...');
+      console.log('\x1b[36m%s\x1b[0m', 'Running background account refresh check...');
       await this.checkAndRefreshExpiredAccounts();
-    }, 3600000); // 1 hour in milliseconds
+    }, 5 * 60 * 1000); // Changed to every 5 minutes for more frequent checks
 
-    console.log('\x1b[32m%s\x1b[0m', 'Account refresh scheduler started - will run every hour');
+    console.log('\x1b[32m%s\x1b[0m', 'Account refresh scheduler started - will run in background every 5 minutes');
   }
 
   /**
@@ -77,8 +77,8 @@ class AccountRefreshScheduler {
         return;
       }
 
-      // Separate expired accounts from valid ones for processing
-      const expiredAccountIds = [];
+      // Separate accounts that need refresh (expired or expiring soon) for processing
+      const accountsToRefresh = [];
       let expiredAccountsFound = false;
 
       for (const accountId of accountIds) {
@@ -95,31 +95,34 @@ class AccountRefreshScheduler {
 
         if (isExpired) {
           expiredAccountsFound = true;
-          expiredAccountIds.push(accountId);
+          accountsToRefresh.push(accountId);
           console.log(`\x1b[33m%s\x1b[0m`, `Account ${accountId} is expired (was valid until ${new Date(credentials.expiry_date).toISOString()})`);
-        } else if (minutesLeft < 60) { // Warn if expiring within the next hour
-          console.log(`\x1b[33m%s\x1b[0m`, `Account ${accountId} token expires in ${minutesLeft.toFixed(1)} minutes`);
         } else {
-          console.log(`\x1b[32m%s\x1b[0m`, `Account ${accountId} token is valid for ${minutesLeft.toFixed(1)} more minutes`);
+          // Generate a random threshold (1-30 minutes) for proactive refresh for each account
+          const refreshThresholdMinutes = Math.floor(Math.random() * 30) + 1;
+
+          if (minutesLeft <= refreshThresholdMinutes) {
+            // Include accounts that will expire soon (within the random threshold)
+            expiredAccountsFound = true;
+            accountsToRefresh.push(accountId);
+            console.log(`\x1b[33m%s\x1b[0m`, `Account ${accountId} expires in ${minutesLeft.toFixed(1)} minutes (less than ${refreshThresholdMinutes} minute threshold), including for proactive refresh`);
+          } else if (minutesLeft < 60) { // Warn if expiring within the next hour but not included for refresh
+            console.log(`\x1b[33m%s\x1b[0m`, `Account ${accountId} token expires in ${minutesLeft.toFixed(1)} minutes`);
+          } else {
+            console.log(`\x1b[32m%s\x1b[0m`, `Account ${accountId} token is valid for ${minutesLeft.toFixed(1)} more minutes`);
+          }
         }
       }
 
       if (!expiredAccountsFound) {
-        console.log('\x1b[32m%s\x1b[0m', 'No expired accounts found');
+        console.log('\x1b[32m%s\x1b[0m', 'No accounts need refresh (no expired or soon-to-expire accounts)');
         return;
       }
 
-      // Process expired accounts in parallel batches of 20
+      // Process accounts that need refresh in parallel batches of 20
       const batchSize = 20;
-      for (let i = 0; i < expiredAccountIds.length; i += batchSize) {
-        const batch = expiredAccountIds.slice(i, i + batchSize);
-
-        // Add random wait time before processing each batch to avoid rate limits
-        if (i > 0) { // Don't wait before the first batch
-          const sleepDuration = Math.floor(Math.random() * (5 - 1 + 1) + 1) * 60000; // 1-5 minutes
-          console.log(`\x1b[36m%s\x1b[0m`, `Waiting ${sleepDuration / 60000} minutes before processing next batch...`);
-          await new Promise(resolve => setTimeout(resolve, sleepDuration));
-        }
+      for (let i = 0; i < accountsToRefresh.length; i += batchSize) {
+        const batch = accountsToRefresh.slice(i, i + batchSize);
 
         // Process the current batch in parallel
         const batchPromises = batch.map(async (accountId) => {
