@@ -107,8 +107,6 @@ The proxy server can be configured using environment variables. Create a `.env` 
 
 *   `LOG_FILE_LIMIT`: Maximum number of debug log files to keep (default: 20)
 *   `DEBUG_LOG`: Set to `true` to enable debug logging (default: false)
-*   `STREAM`: Set to `true` to enable streaming responses (default: false)
-    *   **Important**: Set this to `true` when using tools like opencode or crush that require streaming responses
 *   `DEFAULT_ACCOUNT`: Specify which account the proxy should use by default (when using multi-account setup)
     *   Should match the name used when adding an account with `npm run auth add <name>`
     *   If not set or invalid, the proxy will use the first available account
@@ -120,10 +118,6 @@ LOG_FILE_LIMIT=10
 
 # Enable debug logging (log files will be created)
 DEBUG_LOG=true
-
-# Enable streaming responses (disabled by default)
-# Required for tools like opencode and crush
-STREAM=true
 
 # Specify which account to use by default (when using multi-account setup)
 # Should match the name used when adding an account with 'npm run auth add <name>'
@@ -197,7 +191,7 @@ To use with opencode, add the following to `~/.config/opencode/opencode.json`:
 }
 ```
 
-**Note**: For opencode to work properly with streaming responses, you need to enable streaming in the proxy server by setting `STREAM=true` in your `.env` file.
+
 
 ### crush Configuration
 
@@ -228,7 +222,7 @@ To use with crush, add the following to `~/.config/crush/crush.json`:
 }
 ```
 
-**Note**: For crush to work properly with streaming responses, you need to enable streaming in the proxy server by setting `STREAM=true` in your `.env` file.
+
 
 ### Claude code Router
 ```json
