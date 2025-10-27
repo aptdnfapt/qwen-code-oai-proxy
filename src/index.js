@@ -5,6 +5,8 @@ const { QwenAPI } = require('./qwen/api.js');
 const { QwenAuthManager } = require('./qwen/auth.js');
 const { DebugLogger } = require('./utils/logger.js');
 const { countTokens } = require('./utils/tokenCounter.js');
+const { ErrorFormatter } = require('./utils/errorFormatter.js');
+const { AccountRefreshScheduler } = require('./utils/accountRefreshScheduler.js');
 
 const app = express();
 // Increase body parser limits for large requests
@@ -16,6 +18,44 @@ app.use(cors());
 const qwenAPI = new QwenAPI();
 const authManager = new QwenAuthManager();
 const debugLogger = new DebugLogger();
+const accountRefreshScheduler = new AccountRefreshScheduler(qwenAPI);
+
+// API Key middleware
+const validateApiKey = (req, res, next) => {
+  // If no API key is configured, skip validation
+  if (!config.apiKey) {
+    return next();
+  }
+
+  // Check for API key in header
+  const apiKey = req.headers["x-api-key"] || req.headers["authorization"];
+
+  // Handle both "Bearer <token>" and direct API key formats
+  let cleanApiKey = null;
+  if (apiKey && typeof apiKey === "string") {
+    if (apiKey.startsWith("Bearer ")) {
+      cleanApiKey = apiKey.substring(7).trim();
+    } else {
+      cleanApiKey = apiKey.trim();
+    }
+  }
+
+  // Check if the provided API key matches any of the configured keys
+  if (!cleanApiKey || !config.apiKey.includes(cleanApiKey)) {
+    console.error(
+      "\x1b[31m%s\x1b[0m",
+      "Unauthorized request - Invalid or missing API key",
+    );
+    return res.status(401).json({
+      error: {
+        message: "Invalid or missing API key",
+        type: "authentication_error",
+      },
+    });
+  }
+
+  next();
+};
 
 // Main proxy server
 class QwenOpenAIProxy {
@@ -25,7 +65,7 @@ class QwenOpenAIProxy {
       const tokenCount = countTokens(req.body.messages);
       
       // Display token count in terminal
-      console.log('\x1b[36m%s\x1b[0m', `Chat completion request received with ${tokenCount} tokens`);
+      console.log('\x1b[36m%s\x1b[0m', `[>] New Chat completion request received with ${tokenCount} tokens`);
       
       // Check if streaming is requested and enabled
       const isStreaming = req.body.stream === true && config.stream;
@@ -39,8 +79,18 @@ class QwenOpenAIProxy {
         await this.handleRegularChatCompletion(req, res);
       }
     } catch (error) {
+      // Check if it's a validation error
+      if (error.message.includes('Validation error')) {
+        console.error('\x1b[31m%s\x1b[0m', `Validation error: ${error.message}`);
+        const validationError = ErrorFormatter.openAIValidationError(error.message);
+        return res.status(validationError.status).json(validationError.body);
+      }
+
       // Log the API call with error
       const debugFileName = await debugLogger.logApiCall('/v1/chat/completions', req, null, error);
+      
+      // Also log detailed error separately
+      await debugLogger.logError('/v1/chat/completions', error, 'error');
       
       // Print error message in red
       if (debugFileName) {
@@ -51,20 +101,13 @@ class QwenOpenAIProxy {
       
       // Handle authentication errors
       if (error.message.includes('Not authenticated') || error.message.includes('access token')) {
-        return res.status(401).json({
-          error: {
-            message: 'Not authenticated with Qwen. Please authenticate first.',
-            type: 'authentication_error'
-          }
-        });
+        const authError = ErrorFormatter.openAIAuthError();
+        return res.status(authError.status).json(authError.body);
       }
       
-      res.status(500).json({
-        error: {
-          message: error.message,
-          type: 'internal_server_error'
-        }
-      });
+      // Handle other errors
+      const apiError = ErrorFormatter.openAIApiError(error.message);
+      res.status(apiError.status).json(apiError.body);
     }
   }
   
@@ -77,9 +120,12 @@ class QwenOpenAIProxy {
         messages: req.body.messages,
         tools: req.body.tools,
         tool_choice: req.body.tool_choice,
-        temperature: req.body.temperature,
-        max_tokens: req.body.max_tokens,
-        top_p: req.body.top_p,
+        temperature: req.body.temperature || config.defaultTemperature,
+        max_tokens: req.body.max_tokens || config.defaultMaxTokens,
+        top_p: req.body.top_p || config.defaultTopP,
+        top_k: req.body.top_k || config.defaultTopK,
+        repetition_penalty: req.body.repetition_penalty || config.defaultRepetitionPenalty,
+        reasoning: req.body.reasoning,
         accountId
       });
       
@@ -93,16 +139,29 @@ class QwenOpenAIProxy {
         tokenInfo = ` (Prompt: ${prompt_tokens}, Completion: ${completion_tokens}, Total: ${total_tokens} tokens)`;
       }
       
-      // Print success message with debug file info in green
-      if (debugFileName) {
-        console.log('\x1b[32m%s\x1b[0m', `Chat completion request processed successfully${tokenInfo}. Debug log saved to: ${debugFileName}`);
-      } else {
-        console.log('\x1b[32m%s\x1b[0m', `Chat completion request processed successfully${tokenInfo}.`);
-      }
-      
       res.json(response);
     } catch (error) {
-      throw error; // Re-throw to be handled by the main handler
+      // Log the API call with error
+      const debugFileName = await debugLogger.logApiCall('/v1/chat/completions', req, null, error);
+      
+      // Also log detailed error separately
+      await debugLogger.logError('/v1/chat/completions regular', error, 'error');
+      
+      // Print error message in red
+      if (debugFileName) {
+        console.error('\x1b[31m%s\x1b[0m', `Error in regular chat completion request. Debug log saved to: ${debugFileName}`);
+      } else {
+        console.error('\x1b[31m%s\x1b[0m', 'Error in regular chat completion request.');
+      }
+      
+      // Handle authentication errors
+      if (error.message.includes('Not authenticated') || error.message.includes('access token')) {
+        const authError = ErrorFormatter.openAIAuthError();
+        return res.status(authError.status).json(authError.body);
+      }
+      
+      // Re-throw to be handled by the main handler
+      throw error;
     }
   }
   
@@ -121,18 +180,18 @@ class QwenOpenAIProxy {
         messages: req.body.messages,
         tools: req.body.tools,
         tool_choice: req.body.tool_choice,
-        temperature: req.body.temperature,
-        max_tokens: req.body.max_tokens,
-        top_p: req.body.top_p,
+        temperature: req.body.temperature || config.defaultTemperature,
+        max_tokens: req.body.max_tokens || config.defaultMaxTokens,
+        top_p: req.body.top_p || config.defaultTopP,
+        top_k: req.body.top_k || config.defaultTopK,
+        repetition_penalty: req.body.repetition_penalty || config.defaultRepetitionPenalty,
+        reasoning: req.body.reasoning,
         accountId
       });
       
       // Log the API call (without response data since it's streaming)
       const debugFileName = await debugLogger.logApiCall('/v1/chat/completions', req, { streaming: true });
-      
-      // Print streaming request message
-      console.log('\x1b[32m%s\x1b[0m', `Streaming chat completion request started. Debug log saved to: ${debugFileName}`);
-      
+
       // Pipe the stream to the response
       stream.pipe(res);
       
@@ -140,12 +199,8 @@ class QwenOpenAIProxy {
       stream.on('error', (error) => {
         console.error('\x1b[31m%s\x1b[0m', `Error in streaming chat completion: ${error.message}`);
         if (!res.headersSent) {
-          res.status(500).json({
-            error: {
-              message: error.message,
-              type: 'streaming_error'
-            }
-          });
+          const apiError = ErrorFormatter.openAIApiError(error.message, 'streaming_error');
+          res.status(apiError.status).json(apiError.body);
         }
         res.end();
       });
@@ -156,7 +211,35 @@ class QwenOpenAIProxy {
       });
       
     } catch (error) {
-      throw error; // Re-throw to be handled by the main handler
+      // Log the API call with error
+      const debugFileName = await debugLogger.logApiCall('/v1/chat/completions', req, null, error);
+      
+      // Also log detailed error separately
+      await debugLogger.logError('/v1/chat/completions streaming', error, 'error');
+      
+      // Print error message in red
+      if (debugFileName) {
+        console.error('\x1b[31m%s\x1b[0m', `Error in streaming chat completion request. Debug log saved to: ${debugFileName}`);
+      } else {
+        console.error('\x1b[31m%s\x1b[0m', 'Error in streaming chat completion request.');
+      }
+      
+      // Handle authentication errors
+      if (error.message.includes('Not authenticated') || error.message.includes('access token')) {
+        const authError = ErrorFormatter.openAIAuthError();
+        if (!res.headersSent) {
+          res.status(authError.status).json(authError.body);
+          res.end();
+        }
+        return;
+      }
+      
+      // For other errors in streaming context
+      const apiError = ErrorFormatter.openAIApiError(error.message);
+      if (!res.headersSent) {
+        res.status(apiError.status).json(apiError.body);
+        res.end();
+      }
     }
   }
   
@@ -290,24 +373,34 @@ class QwenOpenAIProxy {
       
       res.json(response);
     } catch (error) {
+      // Check if it's a validation error
+      if (error.message.includes('Validation error')) {
+        console.error('\x1b[31m%s\x1b[0m', `Validation error: ${error.message}`);
+        const validationError = ErrorFormatter.openAIValidationError(error.message);
+        return res.status(validationError.status).json(validationError.body);
+      }
+      
       // Log the API call with error
       await debugLogger.logApiCall('/auth/poll', req, null, error);
+      
+      // Also log detailed error separately
+      await debugLogger.logError('/auth/poll', error, 'error');
       
       // Print error message in red
       console.error('\x1b[31m%s\x1b[0m', `Error polling for token: ${error.message}`);
       
-      res.status(500).json({
-        error: {
-          message: error.message,
-          type: 'authentication_error'
-        }
-      });
+      const apiError = ErrorFormatter.openAIApiError(error.message, 'authentication_error');
+      res.status(apiError.status).json(apiError.body);
     }
   }
 }
 
 // Initialize proxy
 const proxy = new QwenOpenAIProxy();
+
+// Apply API key middleware to all routes (including health check to protect account information)
+app.use("/v1/", validateApiKey);
+app.use("/auth/", validateApiKey);
 
 // Routes
 app.post('/v1/chat/completions', (req, res) => proxy.handleChatCompletion(req, res));
@@ -321,12 +414,31 @@ app.post('/auth/poll', (req, res) => proxy.handleAuthPoll(req, res));
 app.get('/health', async (req, res) => {
   try {
     await qwenAPI.authManager.loadAllAccounts();
+    const defaultCredentials = await qwenAPI.authManager.loadCredentials();
     const accountIds = qwenAPI.authManager.getAccountIds();
     const healthyAccounts = qwenAPI.getHealthyAccounts(accountIds);
     const failedAccounts = healthyAccounts.length === 0 ? 
       new Set(accountIds) : new Set(accountIds.filter(id => !healthyAccounts.includes(id)));
     
     const accounts = [];
+    let totalRequestsToday = 0;
+
+    if (defaultCredentials) {
+      const minutesLeft = (defaultCredentials.expiry_date - Date.now()) / 60000;
+      const status = minutesLeft < 0 ? 'expired' : 'healthy';
+      const expiresIn = Math.max(0, minutesLeft);
+      const requestCount = qwenAPI.getRequestCount('default');
+      totalRequestsToday += requestCount;
+      
+      accounts.push({
+        id: 'default',
+        status,
+        expiresIn: expiresIn ? `${expiresIn.toFixed(1)} minutes` : null,
+        requestCount: requestCount,
+        authErrorCount: qwenAPI.getAuthErrorCount('default')
+      });
+    }
+    
     for (const accountId of accountIds) {
       const credentials = qwenAPI.authManager.getAccountCredentials(accountId);
       let status = 'unknown';
@@ -346,31 +458,77 @@ app.get('/health', async (req, res) => {
         expiresIn = Math.max(0, minutesLeft);
       }
       
+      const requestCount = qwenAPI.getRequestCount(accountId);
+      totalRequestsToday += requestCount;
+      
       accounts.push({
-        id: accountId,
+        id: accountId.substring(0, 5),
         status,
         expiresIn: expiresIn ? `${expiresIn.toFixed(1)} minutes` : null,
-        requestCount: qwenAPI.getRequestCount(accountId)
+        requestCount: requestCount,
+        authErrorCount: qwenAPI.getAuthErrorCount(accountId)
       });
     }
     
     const healthyCount = accounts.filter(a => a.status === 'healthy').length;
     const failedCount = accounts.filter(a => a.status === 'failed').length;
+    const expiringSoonCount = accounts.filter(a => a.status === 'expiring_soon').length;
+    const expiredCount = accounts.filter(a => a.status === 'expired').length;
+    
+    // Get token usage data
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    
+    const today = new Date().toISOString().split('T')[0];
+    for (const [accountId, usageData] of qwenAPI.tokenUsage.entries()) {
+      const todayUsage = usageData.find(entry => entry.date === today);
+      if (todayUsage) {
+        totalInputTokens += todayUsage.inputTokens;
+        totalOutputTokens += todayUsage.outputTokens;
+      }
+    }
     
     res.json({
       status: 'ok',
+      timestamp: new Date().toISOString(),
       summary: {
         total: accounts.length,
         healthy: healthyCount,
         failed: failedCount,
+        expiring_soon: expiringSoonCount,
+        expired: expiredCount,
+        total_requests_today: totalRequestsToday,
         lastReset: qwenAPI.lastFailedReset
       },
-      accounts
+      token_usage: {
+        input_tokens_today: totalInputTokens,
+        output_tokens_today: totalOutputTokens,
+        total_tokens_today: totalInputTokens + totalOutputTokens
+      },
+      accounts,
+      server_info: {
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        node_version: process.version,
+        platform: process.platform,
+        arch: process.arch
+      },
+      endpoints: {
+        openai: `${req.protocol}://${req.get('host')}/v1`,
+        health: `${req.protocol}://${req.get('host')}/health`
+      }
     });
   } catch (error) {
     res.status(500).json({
       status: 'error',
-      error: error.message
+      timestamp: new Date().toISOString(),
+      error: error.message,
+      server_info: {
+        uptime: process.uptime(),
+        node_version: process.version,
+        platform: process.platform,
+        arch: process.arch
+      }
     });
   }
 });
@@ -381,6 +539,14 @@ const HOST = config.host;
 // Handle graceful shutdown to save pending data
 process.on('SIGINT', async () => {
   console.log('\n\x1b[33m%s\x1b[0m', 'Received SIGINT, shutting down gracefully...');
+  try {
+    // Stop the account refresh scheduler
+    accountRefreshScheduler.stopScheduler();
+    console.log('\x1b[32m%s\x1b[0m', 'Account refresh scheduler stopped');
+  } catch (error) {
+    console.error('\x1b[31m%s\x1b[0m', 'Failed to stop account refresh scheduler:', error.message);
+  }
+
   try {
     // Force save any pending request counts before exit
     await qwenAPI.saveRequestCounts();
@@ -393,6 +559,14 @@ process.on('SIGINT', async () => {
 
 process.on('SIGTERM', async () => {
   console.log('\n\x1b[33m%s\x1b[0m', 'Received SIGTERM, shutting down gracefully...');
+  try {
+    // Stop the account refresh scheduler
+    accountRefreshScheduler.stopScheduler();
+    console.log('\x1b[32m%s\x1b[0m', 'Account refresh scheduler stopped');
+  } catch (error) {
+    console.error('\x1b[31m%s\x1b[0m', 'Failed to stop account refresh scheduler:', error.message);
+  }
+
   try {
     // Force save any pending request counts before exit
     await qwenAPI.saveRequestCounts();
@@ -407,6 +581,9 @@ app.listen(PORT, HOST, async () => {
   console.log(`Qwen OpenAI Proxy listening on http://${HOST}:${PORT}`);
   console.log(`OpenAI-compatible endpoint: http://${HOST}:${PORT}/v1`);
   console.log(`Authentication endpoint: http://${HOST}:${PORT}/auth/initiate`);
+
+  // Init auth manager with Qwen API reference
+  qwenAPI.authManager.init(qwenAPI);
   
   // Show available accounts
   try {
@@ -441,5 +618,12 @@ app.listen(PORT, HOST, async () => {
     }
   } catch (error) {
     console.log('\n\x1b[33mWarning: Could not load account information\x1b[0m');
+  }
+
+  // Initialize the account refresh scheduler
+  try {
+    await accountRefreshScheduler.initialize();
+  } catch (error) {
+    console.log(`\n\x1b[31mFailed to initialize account refresh scheduler: ${error.message}\x1b[0m`);
   }
 });

@@ -59,6 +59,10 @@ class QwenAuthManager {
     this.currentAccountIndex = 0; // For round-robin account selection
   }
 
+  init(qwenAPI) {
+    this.qwenAPI = qwenAPI;
+  }
+
   async loadCredentials() {
     // Check if QWEN_CODE_AUTH_USE is disabled
     const config = require('../config.js');
@@ -163,9 +167,23 @@ class QwenAuthManager {
   }
 
   isTokenValid(credentials) {
-    if (!credentials || !credentials.expiry_date) {
+    if (!credentials || !credentials.access_token || !credentials.expiry_date) {
       return false;
     }
+    
+    // Check if token has been tampered with by validating structure
+    if (typeof credentials.access_token !== 'string' || credentials.access_token.length === 0) {
+      console.warn('Invalid access token format');
+      return false;
+    }
+    
+    // Check if expiry date is valid
+    if (isNaN(credentials.expiry_date) || credentials.expiry_date <= 0) {
+      console.warn('Invalid expiry date');
+      return false;
+    }
+    
+    // Check if token is expired or expiring soon
     return Date.now() < credentials.expiry_date - TOKEN_REFRESH_BUFFER_MS;
   }
 
@@ -259,7 +277,7 @@ class QwenAuthManager {
       console.log('\x1b[32m%s\x1b[0m', 'Qwen access token refreshed successfully');
       return newCredentials;
     } catch (error) {
-      console.error('\x1b[31m%s\x1b[0m', 'Failed to refresh Qwen access token');
+      console.error('\x1b[31m%s\x1b[0m', 'Failed to refresh Qwen access token with error:', error.message);
       // If refresh fails, the user likely needs to re-auth completely.
       throw new Error('Failed to refresh access token. Please re-authenticate with the Qwen CLI.');
     }
@@ -330,6 +348,14 @@ class QwenAuthManager {
   }
 
   async performTokenRefresh(credentials, accountId = null) {
+    // Acquire account lock to prevent concurrent refreshes
+    const lockAcquired = await this.qwenAPI.acquireAccountLock(accountId);
+    if (!lockAcquired) {
+      throw new Error(accountId ? 
+        `Account ${accountId} is currently in use, cannot refresh token now` : 
+        'Default account is currently in use, cannot refresh token now');
+    }
+
     try {
       const newCredentials = await this.refreshAccessToken(credentials);
       
@@ -343,6 +369,9 @@ class QwenAuthManager {
       return newCredentials;
     } catch (error) {
       throw new Error(`${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      // Release lock after refresh attempt
+      this.qwenAPI.releaseAccountLock(accountId);
     }
   }
 

@@ -12,13 +12,22 @@ async function listAccounts() {
     await authManager.loadAllAccounts();
     
     const accountIds = authManager.getAccountIds();
-    
-    if (accountIds.length === 0) {
+
+    const defaultCredentials = await authManager.loadCredentials();
+
+    if (accountIds.length === 0 && !defaultCredentials) {
       console.log('No accounts found.');
       return;
     }
-    
-    console.log(`\nFound ${accountIds.length} account(s):\n`);
+
+    const totalAccounts = accountIds.length + (defaultCredentials ? 1 : 0);
+    console.log(`\nFound ${totalAccounts} account(s):\n`);
+
+    if (defaultCredentials) {
+      const isValid = authManager.isTokenValid(defaultCredentials);
+      console.log(`\n\x1b[36mDefault account: ${isValid ? '✅ Valid' : '❌ Invalid/Expired'}\x1b[0m`);
+      console.log('\n\x1b[33mNote: Try using the proxy to make sure the account is not invalid\x1b[0m');
+    }
     
     for (const accountId of accountIds) {
       const credentials = authManager.getAccountCredentials(accountId);
@@ -108,14 +117,19 @@ async function checkRequestCounts() {
     // Load all accounts
     await authManager.loadAllAccounts();
     const accountIds = authManager.getAccountIds();
+
+    // Also show default account if it exists
+    const defaultCredentials = await authManager.loadCredentials();
     
-    if (accountIds.length === 0) {
+    if (accountIds.length === 0 && !defaultCredentials) {
       console.log('No accounts found.');
       return;
     }
-    
-    console.log(`\nFound ${accountIds.length} account(s):\n`);
-    
+
+    const totalAccounts = accountIds.length + (defaultCredentials ? 1 : 0);
+
+    console.log(`\nFound ${totalAccounts} account(s):\n`);
+
     // Load request counts from persisted file
     let requestCounts = new Map();
     const requestCountFile = path.join(authManager.qwenDir, 'request_counts.json');
@@ -149,8 +163,6 @@ async function checkRequestCounts() {
       console.log('');
     }
     
-    // Also show default account if it exists
-    const defaultCredentials = await authManager.loadCredentials();
     if (defaultCredentials) {
       console.log('Default account:');
       const isValid = authManager.isTokenValid(defaultCredentials);

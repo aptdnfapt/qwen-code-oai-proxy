@@ -21,6 +21,13 @@ module.exports = {
   
   // Default model
   defaultModel: process.env.DEFAULT_MODEL || 'qwen3-coder-plus',
+
+  // Default parameters for requests if not specified in the request
+  defaultTemperature: parseFloat(process.env.DEFAULT_TEMPERATURE) || 0.7,
+  defaultMaxTokens: parseInt(process.env.DEFAULT_MAX_TOKENS) || 65536,
+  defaultTopP: parseFloat(process.env.DEFAULT_TOP_P) || 0.8,
+  defaultTopK: parseInt(process.env.DEFAULT_TOP_K) || 20,
+  defaultRepetitionPenalty: parseFloat(process.env.DEFAULT_REPETITION_PENALTY) || 1.05,
   
   // Token refresh buffer (milliseconds)
   tokenRefreshBuffer: parseInt(process.env.TOKEN_REFRESH_BUFFER) || 30000, // 30 seconds
@@ -34,5 +41,10 @@ module.exports = {
   
   // Debug logging configuration
   debugLog: process.env.DEBUG_LOG === 'true' ? true : false, // Enable/disable debug logging (disabled by default)
-  logFileLimit: parseInt(process.env.LOG_FILE_LIMIT) || 20 // Maximum number of log files to keep
+  logFileLimit: parseInt(process.env.LOG_FILE_LIMIT) || 20, // Maximum number of log files to keep
+
+  // API Key configuration
+  apiKey: process.env.API_KEY ?
+    process.env.API_KEY.split(',').map(key => key.trim()).filter(key => key.length > 0) :
+    null, // API key(s) for securing access (can be multiple, comma-separated)
 };
