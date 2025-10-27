@@ -67,15 +67,14 @@ class QwenOpenAIProxy {
       // Display token count in terminal
       console.log('\x1b[36m%s\x1b[0m', `[>] New Chat completion request received with ${tokenCount} tokens`);
       
-      // Check if streaming is requested and enabled
-      const isStreaming = req.body.stream === true && config.stream;
+      // Check if streaming is requested by client
+      const isStreaming = req.body.stream === true;
       
       if (isStreaming) {
         // Handle streaming response
         await this.handleStreamingChatCompletion(req, res);
       } else {
         // Handle regular response
-        // If client requested streaming but it's disabled, we still use regular completion
         await this.handleRegularChatCompletion(req, res);
       }
     } catch (error) {
