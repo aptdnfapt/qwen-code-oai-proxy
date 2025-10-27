@@ -65,7 +65,7 @@ class QwenOpenAIProxy {
       const tokenCount = countTokens(req.body.messages);
       
       // Display token count in terminal
-      console.log('\x1b[36m%s\x1b[0m', `[>] New Chat completion request received with ${tokenCount} tokens`);
+      console.log('\x1b[34m%s\x1b[0m', `[>] New Chat completion request received with ${tokenCount} tokens`);
       
       // Check if streaming is requested by client
       const isStreaming = req.body.stream === true;

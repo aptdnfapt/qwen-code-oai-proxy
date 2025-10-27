@@ -682,7 +682,7 @@ class QwenAPI {
     await this.incrementRequestCount(accountId);
 
     // Log which account is being used with Request number
-    console.log(`\x1b[36m[New Normal Request] Using account ${accountId} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Request #${this.getRequestCount(accountId)} today)\x1b[0m`);
+    console.log(`\x1b[32m[New Normal Request] Using account ${accountId} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Request #${this.getRequestCount(accountId)} today)\x1b[0m`);
 
     const response = await axios.post(url, payload, { 
       headers: headers,
@@ -788,7 +788,7 @@ class QwenAPI {
       await this.incrementRequestCount('default');
 
       // Log which account is being used with Request number
-      console.log(`\x1b[36m[New Normal Request] Using account ${'default'} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Request #${this.getRequestCount('default')} today)\x1b[0m`);
+      console.log(`\x1b[32m[New Normal Request] Using account ${'default'} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Request #${this.getRequestCount('default')} today)\x1b[0m`);
 
       const response = await axios.post(url, payload, { headers, timeout: 300000, httpAgent, httpsAgent }); // 5 minute timeout
       // Reset auth error count on successful request (for consistency, even though we don't rotate)
@@ -958,7 +958,7 @@ class QwenAPI {
       await this.incrementRequestCount(forcedAccountId);
 
       // Log which account is being used with Request number
-      console.log(`\x1b[36m[New Streaming Request] Using account ${forcedAccountId} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Request #${this.getRequestCount(forcedAccountId)} today)\x1b[0m`);
+      console.log(`\x1b[32m[New Streaming Request] Using account ${forcedAccountId} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Request #${this.getRequestCount(forcedAccountId)} today)\x1b[0m`);
       
       const stream = new PassThrough();
       const response = await axios.post(url, payload, { headers, timeout: 300000, responseType: 'stream', httpAgent, httpsAgent });
@@ -981,7 +981,7 @@ class QwenAPI {
       await this.incrementRequestCount('default');
 
       // Log which account is being used with Request number
-      console.log(`\x1b[36m[New Streaming Request] Using account ${'default'} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Request #${this.getRequestCount('default')} today)\x1b[0m`);
+      console.log(`\x1b[32m[New Streaming Request] Using account ${'default'} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Request #${this.getRequestCount('default')} today)\x1b[0m`);
           
       
       const stream = new PassThrough();
@@ -1031,7 +1031,7 @@ class QwenAPI {
           await this.incrementRequestCount(accountId);
 
           // Log which account is being used with Request number
-          console.log(`\x1b[36m[New Streaming Request] Using account ${accountId} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Request #${this.getRequestCount(accountId)} today)\x1b[0m`);
+          console.log(`\x1b[32m[New Streaming Request] Using account ${accountId} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Request #${this.getRequestCount(accountId)} today)\x1b[0m`);
           
           const response = await axios.post(url, payload, { headers, timeout: 300000, responseType: 'stream', httpAgent, httpsAgent });
           response.data.pipe(stream);
