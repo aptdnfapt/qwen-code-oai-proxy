@@ -137,24 +137,6 @@ class AccountRefreshScheduler {
             console.log(`\x1b[31m%s\x1b[0m`, `No credentials found for account ${accountId}`);
             return;
           }
-          
-          // We no longer need to lock accounts here since performTokenRefresh handles locking internally
-          // // Use account lock to prevent conflicts during refresh
-          // const lockAcquired = await this.qwenAPI.acquireAccountLock(accountId);
-          // if (lockAcquired) {
-          //   try {
-          //     // Attempt to refresh the token
-          //     const refreshedCredentials = await this.qwenAPI.authManager.performTokenRefresh(credentials, accountId);
-          //     console.log(`\x1b[32m%s\x1b[0m`, `Successfully refreshed token for account ${accountId}. New expiry: ${new Date(refreshedCredentials.expiry_date).toISOString()}`);
-          //   } catch (refreshError) {
-          //     console.log(`\x1b[31m%s\x1b[0m`, `Failed to refresh token for account ${accountId}: ${refreshError.message}`);
-          //   } finally {
-          //     // Always release the lock after refresh attempt
-          //     this.qwenAPI.releaseAccountLock(accountId);
-          //   }
-          // } else {
-          //   console.log(`\x1b[33m%s\x1b[0m`, `Account ${accountId} is currently in use, skipping refresh`);
-          // }
 
           try {
             // Attempt to refresh the token
