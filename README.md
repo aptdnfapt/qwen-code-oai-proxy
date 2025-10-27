@@ -101,12 +101,57 @@ The proxy provides real-time feedback in the terminal:
 - Shows which account is configured as the default account on server startup
 - Marks the default account in the account list display
 
+## API Key Authentication
+
+The proxy can be secured with API keys to prevent unauthorized access.
+
+### Setting up API Keys
+
+1. **Single API Key:**
+   ```bash
+   API_KEY=your-secret-key-here
+   ```
+
+2. **Multiple API Keys:**
+   ```bash
+   API_KEY=key1,key2,key3
+   ```
+
+3. **Using the Proxy:**
+   ```javascript
+   const openai = new OpenAI({
+     apiKey: 'your-secret-key-here',
+     baseURL: 'http://localhost:8080/v1'
+   });
+   ```
+
+**Headers Supported:**
+- `X-API-Key: your-secret-key`
+- `Authorization: Bearer your-secret-key`
+
+If no API key is configured, the proxy will not require authentication.
+
+## Health Check
+
+Monitor the proxy status with the health endpoint:
+
+```bash
+curl http://localhost:8080/health
+```
+
+Response includes:
+- Server status
+- Account validation status  
+- Token expiry information
+- Request counts
+
 ## Configuration
 
 The proxy server can be configured using environment variables. Create a `.env` file in the project root or set the variables directly in your environment.
 
 *   `LOG_FILE_LIMIT`: Maximum number of debug log files to keep (default: 20)
 *   `DEBUG_LOG`: Set to `true` to enable debug logging (default: false)
+*   `API_KEY`: Set API key(s) for authentication (comma-separated for multiple keys)
 *   `DEFAULT_ACCOUNT`: Specify which account the proxy should use by default (when using multi-account setup)
     *   Should match the name used when adding an account with `npm run auth add <name>`
     *   If not set or invalid, the proxy will use the first available account
@@ -118,6 +163,9 @@ LOG_FILE_LIMIT=10
 
 # Enable debug logging (log files will be created)
 DEBUG_LOG=true
+
+# API key for authentication (comma-separated for multiple keys)
+API_KEY=your-secret-key-here
 
 # Specify which account to use by default (when using multi-account setup)
 # Should match the name used when adding an account with 'npm run auth add <name>'
@@ -160,7 +208,9 @@ The proxy supports the following Qwen models:
 
 ## Supported Endpoints
 
-*   `POST /v1/chat/completions`
+*   `POST /v1/chat/completions` - Chat completions (streaming and non-streaming)
+*   `GET /v1/models` - List available models
+*   `GET /health` - Health check and status
 
 
 ## Tool Calling Support
