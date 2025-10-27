@@ -581,6 +581,9 @@ app.listen(PORT, HOST, async () => {
   console.log(`Qwen OpenAI Proxy listening on http://${HOST}:${PORT}`);
   console.log(`OpenAI-compatible endpoint: http://${HOST}:${PORT}/v1`);
   console.log(`Authentication endpoint: http://${HOST}:${PORT}/auth/initiate`);
+
+  // Init auth manager with Qwen API reference
+  qwenAPI.authManager.init(qwenAPI);
   
   // Show available accounts
   try {

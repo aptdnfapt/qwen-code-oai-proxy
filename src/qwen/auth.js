@@ -59,6 +59,10 @@ class QwenAuthManager {
     this.currentAccountIndex = 0; // For round-robin account selection
   }
 
+  init(qwenAPI) {
+    this.qwenAPI = qwenAPI;
+  }
+
   async loadCredentials() {
     // Check if QWEN_CODE_AUTH_USE is disabled
     const config = require('../config.js');
@@ -344,6 +348,14 @@ class QwenAuthManager {
   }
 
   async performTokenRefresh(credentials, accountId = null) {
+    // Acquire account lock to prevent concurrent refreshes
+    const lockAcquired = await this.qwenAPI.acquireAccountLock(accountId);
+    if (!lockAcquired) {
+      throw new Error(accountId ? 
+        `Account ${accountId} is currently in use, cannot refresh token now` : 
+        'Default account is currently in use, cannot refresh token now');
+    }
+
     try {
       const newCredentials = await this.refreshAccessToken(credentials);
       
@@ -357,6 +369,9 @@ class QwenAuthManager {
       return newCredentials;
     } catch (error) {
       throw new Error(`${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      // Release lock after refresh attempt
+      this.qwenAPI.releaseAccountLock(accountId);
     }
   }
 
