@@ -41,7 +41,7 @@ const validateApiKey = (req, res, next) => {
   }
 
   // Check if the provided API key matches any of the configured keys
-  if (!cleanApiKey || !config.apiKey.includes(cleanApiKey)) {
+  if (!cleanApiKey || !config.apiKey?.includes(cleanApiKey)) {
     console.error(
       "\x1b[31m%s\x1b[0m",
       "Unauthorized request - Invalid or missing API key",

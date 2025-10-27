@@ -89,8 +89,8 @@ class AccountRefreshScheduler {
           continue;
         }
 
-        // Check if the account token is expired or expiring soon
-        const isExpired = !this.qwenAPI.authManager.isTokenValid(credentials);
+        // Check if the account token is actually expired (past expiry date)
+        const isExpired = credentials.expiry_date <= Date.now();
         const minutesLeft = (credentials.expiry_date - Date.now()) / 60000; // Convert to minutes
 
         if (isExpired) {
