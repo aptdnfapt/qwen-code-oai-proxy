@@ -8,6 +8,8 @@ To have a better experience for using it as prod you can use cloud flare worker 
 
 Users might face errors or 504 Gateway Timeout issues when using contexts with 130,000 to 150,000 tokens or more. This appears to be a practical limit for Qwen models. Qwen code itself tends to also break down and get stuck on this limit.
 
+I have also made a proxy out of Atlassian but for access you would want to join the [Discord](https://discord.gg/6S7HwCxbMy) server and dm me. The code is not open source for DMCA takedown protection and also to safeguard against mass usage. We only support self-coding usage for this.
+
 ## Quick Start
 
 ### Option 1: Using Docker (Recommended)
@@ -340,3 +342,7 @@ Both commands display a clean table showing daily token usage trends, lifetime t
 For more detailed documentation, see the `docs/` directory.
 
 For information about configuring a default account, see `docs/default-account.md`.
+
+---
+
+
