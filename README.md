@@ -176,6 +176,7 @@ DEFAULT_ACCOUNT=my-primary-account
 
 ## Example Usage
 
+### Using JavaScript/Node.js:
 ```javascript
 import OpenAI from 'openai';
 
@@ -196,6 +197,43 @@ async function main() {
 }
 
 main();
+```
+
+### Using curl:
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer fake-key" \
+  -d '{
+    "model": "qwen3-coder-plus",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello! Can you help me write a simple JavaScript function that adds two numbers together?"
+      }
+    ],
+    "temperature": 0.7,
+    "max_tokens": 200
+  }'
+```
+
+### Testing with streaming response:
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer fake-key" \
+  -d '{
+    "model": "qwen3-coder-plus",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Explain how to reverse a string in JavaScript."
+      }
+    ],
+    "stream": true,
+    "temperature": 0.7,
+    "max_tokens": 300
+  }'
 ```
 
 ## Supported Models
