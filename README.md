@@ -2,6 +2,9 @@
 
 A proxy server that exposes Qwen models through an OpenAI-compatible API endpoint. Has tool calling and streaming support.
 
+> New - Web search now available via both REST API (`/v1/web/search`) and MCP tool!
+
+
 ## Important Notes
 
 To have a better experience for using it as prod you can use cloud flare worker . check the repo https://github.com/aptdnfapt/qwen-worker-proxy
