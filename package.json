@@ -14,8 +14,9 @@
     "auth:add": "node authenticate.js add",
     "auth:remove": "node authenticate.js remove",
     "auth:counts": "node authenticate.js counts",
-    "auth:tokens": "node tokens.js",
-    "tokens": "node tokens.js"
+    "auth:tokens": "node usage.js",
+    "tokens": "node usage.js",
+    "usage": "node usage.js"
   },
   "keywords": [
     "qwen",

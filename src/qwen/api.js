@@ -216,6 +216,10 @@ class QwenAPI {
     this.accountRequestCounts = new Map(); // Track requests per account per time window
     this.requestWindowDuration = 60000; // 1 minute window
     
+    // Separate counters for chat vs web search
+    this.webSearchRequestCounts = new Map(); // Track web search requests per account per day
+    this.webSearchResultCounts = new Map(); // Track web search results returned per account per day
+    
     this.loadRequestCounts();
     this.loadFailedAccounts();
   }
@@ -260,6 +264,26 @@ class QwenAPI {
         }
       }
       
+      // Restore web search request counts
+      if (counts.webSearchRequests) {
+        for (const [accountId, count] of Object.entries(counts.webSearchRequests)) {
+          this.webSearchRequestCounts.set(accountId, count);
+        }
+      }
+      
+      // Restore web search result counts (with migration for old data)
+      if (counts.webSearchResults) {
+        for (const [accountId, count] of Object.entries(counts.webSearchResults)) {
+          this.webSearchResultCounts.set(accountId, count);
+        }
+      } else {
+        // Migration: If webSearchResults doesn't exist, initialize with 0
+        console.log('Migrating old data structure - adding webSearchResults tracking');
+        for (const accountId of this.webSearchRequestCounts.keys()) {
+          this.webSearchResultCounts.set(accountId, 0);
+        }
+      }
+      
       // Reset counts if we've crossed into a new UTC day
       this.resetRequestCountsIfNeeded();
     } catch (error) {
@@ -276,6 +300,8 @@ class QwenAPI {
       const counts = {
         lastResetDate: this.lastResetDate,
         requests: Object.fromEntries(this.requestCount),
+        webSearchRequests: Object.fromEntries(this.webSearchRequestCounts),
+        webSearchResults: Object.fromEntries(this.webSearchResultCounts),
         tokenUsage: Object.fromEntries(this.tokenUsage)
       };
       await fs.writeFile(this.requestCountFile, JSON.stringify(counts, null, 2));
@@ -313,10 +339,44 @@ class QwenAPI {
     const today = new Date().toISOString().split('T')[0];
     if (today !== this.lastResetDate) {
       this.requestCount.clear();
+      this.webSearchRequestCounts.clear();
+      this.webSearchResultCounts.clear();
       this.lastResetDate = today;
       console.log('Request counts reset for new UTC day');
       this.saveRequestCounts();
     }
+  }
+
+  /**
+   * Increment web search request count for an account
+   */
+  async incrementWebSearchRequestCount(accountId) {
+    const currentCount = this.webSearchRequestCounts.get(accountId) || 0;
+    this.webSearchRequestCounts.set(accountId, currentCount + 1);
+    this.scheduleSave();
+  }
+
+  /**
+   * Get web search request count for an account
+   */
+  getWebSearchRequestCount(accountId) {
+    return this.webSearchRequestCounts.get(accountId) || 0;
+  }
+
+  /**
+   * Increment web search result count for an account
+   */
+  async incrementWebSearchResultCount(accountId, resultCount) {
+    const currentCount = this.webSearchResultCounts.get(accountId) || 0;
+    this.webSearchResultCounts.set(accountId, currentCount + resultCount);
+    this.scheduleSave();
+  }
+
+  /**
+   * Get web search result count for an account
+   */
+  getWebSearchResultCount(accountId) {
+    return this.webSearchResultCounts.get(accountId) || 0;
   }
 
   /**
@@ -780,7 +840,7 @@ class QwenAPI {
     const headers = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${accessToken}`,
-      'User-Agent': 'QwenOpenAIProxy/1.0.0 (linux; x64)'
+
     };
     
     try {
@@ -819,7 +879,7 @@ class QwenAPI {
           const retryHeaders = {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${newAccessToken}`,
-            'User-Agent': 'QwenOpenAIProxy/1.0.0 (linux; x64)'
+      
           };
           
           const retryResponse = await axios.post(url, payload, { headers: retryHeaders, timeout: 300000, httpAgent, httpsAgent });
@@ -1049,6 +1109,227 @@ class QwenAPI {
     }
     if (lastError) throw lastError;
     throw new Error('No healthy accounts available');
+  }
+
+  /**
+   * Perform web search using Qwen's web search API
+   * @param {Object} request - The web search request
+   * @returns {Promise<Object>} - Web search results
+   */
+  async webSearch(request) {
+    // Reset daily state and load accounts
+    await this.resetFailedAccountsIfNeeded();
+    await this.authManager.loadAllAccounts();
+    const forcedAccountId = request.accountId;
+    
+    if (forcedAccountId) {
+      // Use only the specified account
+      const creds0 = this.authManager.getAccountCredentials(forcedAccountId);
+      if (!creds0) {
+        throw new Error(`No credentials found for account ${forcedAccountId}`);
+      }
+      let credentials = creds0;
+      if (!this.authManager.isTokenValid(credentials)) {
+        credentials = await this.authManager.performTokenRefresh(credentials, forcedAccountId);
+      }
+      const accountInfo = { accountId: forcedAccountId, credentials };
+      return await this.processWebSearchWithAccount(request, accountInfo);
+    }
+
+    // Multi-account auto selection
+    const accountIds = this.authManager.getAccountIds();
+    if (accountIds.length === 0) {
+      return this.webSearchSingleAccount(request);
+    }
+    
+    const tried = new Set();
+    let lastError = null;
+    const maxAttempts = 2;
+    
+    for (let i = 0; i < maxAttempts; i++) {
+      const bestAccount = await this.getBestAccount(tried);
+      if (!bestAccount) {
+        break;
+      }
+      
+      try {
+        // Check if account is rate limited
+        if (this.isAccountRateLimited(bestAccount.accountId)) {
+          tried.add(bestAccount.accountId);
+          continue;
+        }
+        
+        try {
+          this.incrementAccountRequestCount(bestAccount.accountId);
+          return await this.processWebSearchWithAccount(request, bestAccount);
+        } finally {
+          // Account handling done in processWebSearchWithAccount
+        }
+      } catch (error) {
+        lastError = error;
+        await this.handleRequestError(error, bestAccount.accountId);
+        tried.add(bestAccount.accountId);
+        continue;
+      }
+    }
+    
+    if (lastError) throw lastError;
+    throw new Error('No healthy accounts available');
+  }
+
+  /**
+   * Get web search API endpoint (different from chat endpoint)
+   */
+  async getWebSearchEndpoint(credentials) {
+    // Check if credentials contain a custom endpoint
+    if (credentials && credentials.resource_url) {
+      let endpoint = credentials.resource_url;
+      // Ensure it has a scheme
+      if (!endpoint.startsWith('http')) {
+        endpoint = `https://${endpoint}`;
+      }
+      // Remove trailing slash if present
+      endpoint = endpoint.replace(/\/$/, '');
+      // For web search, we don't add /v1 suffix since the API path includes it
+      return endpoint;
+    } else {
+      // Use default endpoint for web search (without /v1 suffix)
+      return 'https://dashscope.aliyuncs.com/compatible-mode';
+    }
+  }
+
+  /**
+   * Process web search request with a specific account
+   */
+  async processWebSearchWithAccount(request, accountInfo) {
+    const { accountId, credentials } = accountInfo;
+    
+    // Get web search API endpoint
+    const webSearchBaseUrl = await this.getWebSearchEndpoint(credentials);
+    const webSearchUrl = `${webSearchBaseUrl}/api/v1/indices/plugin/web_search`;
+    
+    const payload = {
+      uq: request.query,
+      page: request.page || 1,
+      rows: request.rows || 10
+    };
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${credentials.access_token}`,
+    };
+
+    // Increment web search request count for successful request
+    await this.incrementWebSearchRequestCount(accountId);
+
+    // Log which account is being used with web search request number
+    console.log(`\x1b[32m[New Web Search Request] Using account ${accountId} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Web Search #${this.getWebSearchRequestCount(accountId)} today)\x1b[0m`);
+
+    const response = await axios.post(webSearchUrl, payload, { 
+      headers: headers,
+      timeout: 300000, // 5 minutes timeout
+      httpAgent,
+      httpsAgent
+    });
+    
+    // Reset auth error count on successful request
+    this.resetAuthErrorCount(accountId);
+    
+    // Track web search results returned
+    const resultCount = response.data?.data?.docs?.length || 0;
+    if (resultCount > 0) {
+      await this.incrementWebSearchResultCount(accountId, resultCount);
+    }
+    
+    console.log(`\x1b[32mWeb search completed successfully using account ${accountId}. Found ${response.data?.data?.total || 0} results, returned ${resultCount}.\x1b[0m`);
+    return response.data;
+  }
+
+  /**
+   * Web search for single account mode
+   */
+  async webSearchSingleAccount(request) {
+    // Get a valid access token (automatically refreshes if needed)
+    const accessToken = await this.authManager.getValidAccessToken();
+    const credentials = await this.authManager.loadCredentials();
+    const webSearchBaseUrl = await this.getWebSearchEndpoint(credentials);
+    const webSearchUrl = `${webSearchBaseUrl}/api/v1/indices/plugin/web_search`;
+    
+    const payload = {
+      uq: request.query,
+      page: request.page || 1,
+      rows: request.rows || 10
+    };
+    
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+
+    };
+    
+    try {
+      // Increment web search request count for successful request
+      await this.incrementWebSearchRequestCount('default');
+
+      // Log which account is being used with web search request number
+      console.log(`\x1b[32m[New Web Search Request] Using account ${'default'} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Web Search #${this.getWebSearchRequestCount('default')} today)\x1b[0m`);
+
+      const response = await axios.post(webSearchUrl, payload, { headers, timeout: 300000, httpAgent, httpsAgent });
+      
+      // Reset auth error count on successful request
+      this.resetAuthErrorCount('default');
+      
+      // Track web search results returned
+      const resultCount = response.data?.data?.docs?.length || 0;
+      if (resultCount > 0) {
+        await this.incrementWebSearchResultCount('default', resultCount);
+      }
+      
+      return response.data;
+    } catch (error) {
+      // Check if this is an authentication error that might benefit from a retry
+      if (isAuthError(error)) {
+        // Increment auth error count
+        const authErrorCount = this.incrementAuthErrorCount('default');
+        console.log(`\x1b[33mDetected auth error (${error.response?.status || 'N/A'}) (consecutive count: ${authErrorCount})\x1b[0m`);
+        
+        console.log('\x1b[33m%s\x1b[0m', `Attempting token refresh and retry...`);
+        try {
+          // Force refresh the token and retry once
+          await this.authManager.performTokenRefresh(credentials);
+          const newAccessToken = await this.authManager.getValidAccessToken();
+          
+          // Retry the request with the new token
+          console.log('\x1b[36m%s\x1b[0m', 'Retrying web search request with refreshed token...');
+          const retryHeaders = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${newAccessToken}`,
+      
+          };
+          
+          const retryResponse = await axios.post(webSearchUrl, payload, { headers: retryHeaders, timeout: 300000, httpAgent, httpsAgent });
+          console.log('\x1b[32m%s\x1b[0m', 'Web search request succeeded after token refresh');
+          // Reset auth error count on successful request
+          this.resetAuthErrorCount('default');
+          return retryResponse.data;
+        } catch (retryError) {
+          console.error('\x1b[31m%s\x1b[0m', 'Web search request failed even after token refresh');
+          // If retry fails, throw the original error with additional context
+          throw new Error(`Qwen web search API error (after token refresh attempt): ${error.response?.status || 'N/A'} ${JSON.stringify(error.response?.data || error.message)}`);
+        }
+      }
+      
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        throw new Error(`Qwen web search API error: ${error.response.status} ${JSON.stringify(error.response.data)}`);
+      } else if (error.request) {
+        // The request was made but no response was received
+        throw new Error(`Qwen web search API request failed: No response received`);
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        throw new Error(`Qwen web search API request failed: ${error.message}`);
+      }
+    }
   }
 }
 

@@ -93,6 +93,15 @@ docker-compose exec qwen-proxy npm run auth:remove <account-id>
   npm run auth:counts
   ```
 
+### Usage Tracking
+
+Monitor your API usage with detailed reports:
+
+```bash
+# Show comprehensive usage report (chat + web search)
+npm run usage
+```
+
 ### Account Usage Monitoring
 
 The proxy provides real-time feedback in the terminal:
@@ -249,8 +258,24 @@ The proxy supports the following Qwen models:
 ## Supported Endpoints
 
 *   `POST /v1/chat/completions` - Chat completions (streaming and non-streaming)
+*   `POST /v1/web/search` - Web search for real-time information
 *   `GET /v1/models` - List available models
 *   `GET /health` - Health check and status
+
+## Web Search API
+
+Free web search endpoint from Qwen - 2000 requests per day for free accounts.
+
+```bash
+curl -X POST http://localhost:8080/v1/web/search \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer fake-key" \
+  -d '{
+    "query": "latest AI developments",
+    "page": 1,
+    "rows": 5
+  }'
+```
 
 
 ## Tool Calling Support

@@ -392,6 +392,100 @@ class QwenOpenAIProxy {
       res.status(apiError.status).json(apiError.body);
     }
   }
+
+  async handleWebSearch(req, res) {
+    try {
+      // Validate request body
+      const { query, page, rows } = req.body;
+      
+      if (!query || typeof query !== 'string') {
+        const validationError = ErrorFormatter.openAIValidationError('Query parameter is required and must be a string');
+        return res.status(validationError.status).json(validationError.body);
+      }
+
+      if (page && (typeof page !== 'number' || page < 1)) {
+        const validationError = ErrorFormatter.openAIValidationError('Page must be a positive integer');
+        return res.status(validationError.status).json(validationError.body);
+      }
+
+      if (rows && (typeof rows !== 'number' || rows < 1 || rows > 100)) {
+        const validationError = ErrorFormatter.openAIValidationError('Rows must be a number between 1 and 100');
+        return res.status(validationError.status).json(validationError.body);
+      }
+
+      // Display search query in terminal
+      console.log('\x1b[36m%s\x1b[0m', `[Web Search] Query: "${query}" (Page: ${page || 1}, Rows: ${rows || 10})`);
+      
+      // Get account from header, query, or body
+      const accountId = req.headers['x-qwen-account'] || req.query.account || req.body.account;
+      
+      // Call Qwen Web Search API
+      const response = await qwenAPI.webSearch({
+        query: query,
+        page: page || 1,
+        rows: rows || 10,
+        accountId
+      });
+      
+      // Log the API call
+      const debugFileName = await debugLogger.logApiCall('/v1/web/search', req, response);
+      
+      // Display search results summary
+      const resultCount = response.data?.total || 0;
+      const returnedCount = response.data?.docs?.length || 0;
+      
+      // Print success message with debug file info in green
+      if (debugFileName) {
+        console.log('\x1b[32m%s\x1b[0m', `Web search completed successfully. Found ${resultCount} results, returned ${returnedCount}. Debug log saved to: ${debugFileName}`);
+      } else {
+        console.log('\x1b[32m%s\x1b[0m', `Web search completed successfully. Found ${resultCount} results, returned ${returnedCount}.`);
+      }
+      
+      res.json(response);
+    } catch (error) {
+      // Check if it's a validation error
+      if (error.message.includes('Validation error')) {
+        console.error('\x1b[31m%s\x1b[0m', `Validation error: ${error.message}`);
+        const validationError = ErrorFormatter.openAIValidationError(error.message);
+        return res.status(validationError.status).json(validationError.body);
+      }
+
+      // Log the API call with error
+      const debugFileName = await debugLogger.logApiCall('/v1/web/search', req, null, error);
+      
+      // Also log detailed error separately
+      await debugLogger.logError('/v1/web/search', error, 'error');
+      
+      // Print error message in red
+      if (debugFileName) {
+        console.error('\x1b[31m%s\x1b[0m', `Error processing web search request. Debug log saved to: ${debugFileName}`);
+      } else {
+        console.error('\x1b[31m%s\x1b[0m', 'Error processing web search request.');
+      }
+      
+      // Handle authentication errors
+      if (error.message.includes('Not authenticated') || error.message.includes('access token')) {
+        const authError = ErrorFormatter.openAIAuthError();
+        return res.status(authError.status).json(authError.body);
+      }
+      
+      // Handle quota exceeded errors
+      if (error.message.includes('quota') || error.message.includes('exceeded')) {
+        const quotaError = {
+          error: {
+            message: "Web search quota exceeded. Free accounts have 2000 requests per day.",
+            type: "quota_exceeded",
+            code: "quota_exceeded"
+          }
+        };
+        return res.status(429).json(quotaError);
+      }
+      
+      // Handle other errors
+      const apiError = ErrorFormatter.openAIApiError(error.message);
+      res.status(apiError.status).json(apiError.body);
+    }
+  }
 }
 
 // Initialize proxy
@@ -403,6 +497,7 @@ app.use("/auth/", validateApiKey);
 
 // Routes
 app.post('/v1/chat/completions', (req, res) => proxy.handleChatCompletion(req, res));
+app.post('/v1/web/search', (req, res) => proxy.handleWebSearch(req, res));
 app.get('/v1/models', (req, res) => proxy.handleModels(req, res));
 
 // Authentication routes
@@ -427,6 +522,7 @@ app.get('/health', async (req, res) => {
       const status = minutesLeft < 0 ? 'expired' : 'healthy';
       const expiresIn = Math.max(0, minutesLeft);
       const requestCount = qwenAPI.getRequestCount('default');
+      const webSearchCount = qwenAPI.getWebSearchRequestCount('default');
       totalRequestsToday += requestCount;
       
       accounts.push({
@@ -434,6 +530,7 @@ app.get('/health', async (req, res) => {
         status,
         expiresIn: expiresIn ? `${expiresIn.toFixed(1)} minutes` : null,
         requestCount: requestCount,
+        webSearchCount: webSearchCount,
         authErrorCount: qwenAPI.getAuthErrorCount('default')
       });
     }
@@ -458,6 +555,7 @@ app.get('/health', async (req, res) => {
       }
       
       const requestCount = qwenAPI.getRequestCount(accountId);
+      const webSearchCount = qwenAPI.getWebSearchRequestCount(accountId);
       totalRequestsToday += requestCount;
       
       accounts.push({
@@ -465,6 +563,7 @@ app.get('/health', async (req, res) => {
         status,
         expiresIn: expiresIn ? `${expiresIn.toFixed(1)} minutes` : null,
         requestCount: requestCount,
+        webSearchCount: webSearchCount,
         authErrorCount: qwenAPI.getAuthErrorCount(accountId)
       });
     }
