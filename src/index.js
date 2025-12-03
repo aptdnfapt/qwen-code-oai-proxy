@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const config = require('./config.js');
+const PORT = config.port;
+const HOST = config.host;
 const { QwenAPI } = require('./qwen/api.js');
 const { QwenAuthManager } = require('./qwen/auth.js');
 const { DebugLogger } = require('./utils/logger.js');
@@ -504,6 +506,11 @@ app.get('/v1/models', (req, res) => proxy.handleModels(req, res));
 app.post('/auth/initiate', (req, res) => proxy.handleAuthInitiate(req, res));
 app.post('/auth/poll', (req, res) => proxy.handleAuthPoll(req, res));
 
+// MCP endpoints
+const { mcpGetHandler, mcpPostHandler } = require('./mcp.js');
+app.get('/mcp', mcpGetHandler);
+app.post('/mcp', mcpPostHandler);
+
 // Health check endpoint
 app.get('/health', async (req, res) => {
   try {
@@ -511,9 +518,9 @@ app.get('/health', async (req, res) => {
     const defaultCredentials = await qwenAPI.authManager.loadCredentials();
     const accountIds = qwenAPI.authManager.getAccountIds();
     const healthyAccounts = qwenAPI.getHealthyAccounts(accountIds);
-    const failedAccounts = healthyAccounts.length === 0 ? 
+    const failedAccounts = healthyAccounts.length === 0 ?
       new Set(accountIds) : new Set(accountIds.filter(id => !healthyAccounts.includes(id)));
-    
+
     const accounts = [];
     let totalRequestsToday = 0;
 
@@ -524,7 +531,7 @@ app.get('/health', async (req, res) => {
       const requestCount = qwenAPI.getRequestCount('default');
       const webSearchCount = qwenAPI.getWebSearchRequestCount('default');
       totalRequestsToday += requestCount;
-      
+
       accounts.push({
         id: 'default',
         status,
@@ -534,12 +541,12 @@ app.get('/health', async (req, res) => {
         authErrorCount: qwenAPI.getAuthErrorCount('default')
       });
     }
-    
+
     for (const accountId of accountIds) {
       const credentials = qwenAPI.authManager.getAccountCredentials(accountId);
       let status = 'unknown';
       let expiresIn = null;
-      
+
       if (credentials) {
         const minutesLeft = (credentials.expiry_date - Date.now()) / 60000;
         if (failedAccounts.has(accountId)) {
@@ -553,11 +560,11 @@ app.get('/health', async (req, res) => {
         }
         expiresIn = Math.max(0, minutesLeft);
       }
-      
+
       const requestCount = qwenAPI.getRequestCount(accountId);
       const webSearchCount = qwenAPI.getWebSearchRequestCount(accountId);
       totalRequestsToday += requestCount;
-      
+
       accounts.push({
         id: accountId.substring(0, 5),
         status,
@@ -567,16 +574,16 @@ app.get('/health', async (req, res) => {
         authErrorCount: qwenAPI.getAuthErrorCount(accountId)
       });
     }
-    
+
     const healthyCount = accounts.filter(a => a.status === 'healthy').length;
     const failedCount = accounts.filter(a => a.status === 'failed').length;
     const expiringSoonCount = accounts.filter(a => a.status === 'expiring_soon').length;
     const expiredCount = accounts.filter(a => a.status === 'expired').length;
-    
+
     // Get token usage data
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
-    
+
     const today = new Date().toISOString().split('T')[0];
     for (const [accountId, usageData] of qwenAPI.tokenUsage.entries()) {
       const todayUsage = usageData.find(entry => entry.date === today);
@@ -585,7 +592,7 @@ app.get('/health', async (req, res) => {
         totalOutputTokens += todayUsage.outputTokens;
       }
     }
-    
+
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -617,6 +624,7 @@ app.get('/health', async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Health check error:', error.message);
     res.status(500).json({
       status: 'error',
       timestamp: new Date().toISOString(),
@@ -630,9 +638,6 @@ app.get('/health', async (req, res) => {
     });
   }
 });
-
-const PORT = config.port;
-const HOST = config.host;
 
 // Handle graceful shutdown to save pending data
 process.on('SIGINT', async () => {
@@ -678,6 +683,8 @@ process.on('SIGTERM', async () => {
 app.listen(PORT, HOST, async () => {
   console.log(`Qwen OpenAI Proxy listening on http://${HOST}:${PORT}`);
   console.log(`OpenAI-compatible endpoint: http://${HOST}:${PORT}/v1`);
+  console.log(`Web search endpoint: http://${HOST}:${PORT}/v1/web/search`);
+  console.log(`MCP endpoint: http://${HOST}:${PORT}/mcp`);
   console.log(`Authentication endpoint: http://${HOST}:${PORT}/auth/initiate`);
 
   // Init auth manager with Qwen API reference

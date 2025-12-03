@@ -260,6 +260,7 @@ The proxy supports the following Qwen models:
 *   `POST /v1/chat/completions` - Chat completions (streaming and non-streaming)
 *   `POST /v1/web/search` - Web search for real-time information
 *   `GET /v1/models` - List available models
+*   `GET/POST /mcp` - MCP server endpoint with SSE transport
 *   `GET /health` - Health check and status
 
 ## Web Search API
@@ -277,8 +278,40 @@ curl -X POST http://localhost:8080/v1/web/search \
   }'
 ```
 
+## MCP (Model Context Protocol) Support
 
-## Tool Calling Support
+The proxy includes built-in MCP server support, allowing it to be used as a remote MCP server with compatible clients like opencode.
+
+### opencode MCP Configuration
+
+To use the MCP server with opencode, add the following to your `~/.config/opencode/config.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "qwen-web-search": {
+      "type": "remote",
+      "url": "http://localhost:8080/mcp",
+      "headers": {
+        "Authorization": "Bearer your-api-key"
+      }
+    }
+  }
+}
+```
+
+Replace `your-api-key` with your configured API key if authentication is enabled. If no API key is set (common for local development), omit the `headers` field entirely. 
+
+This provides access to the `web_search` tool that uses Qwen's web search API with automatic account rotation. For other mcp clients programs / tools your need to find the proper json .
+
+### MCP Endpoint
+
+- `GET/POST /mcp` - MCP server endpoint supporting SSE transport
+
+The MCP server provides a `web_search` tool that allows searching the web using Qwen's infrastructure. It supports the same API key authentication as the main endpoints.
+
+## AI AGENT CONFIGS  
 
 This proxy server supports tool calling functionality, allowing you to use it with tools like opencode and crush roo cline kilo and etc . 
 
