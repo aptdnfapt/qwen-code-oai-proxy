@@ -9,6 +9,7 @@ const { DebugLogger } = require('./utils/logger.js');
 const { countTokens } = require('./utils/tokenCounter.js');
 const { ErrorFormatter } = require('./utils/errorFormatter.js');
 const { AccountRefreshScheduler } = require('./utils/accountRefreshScheduler.js');
+const { systemPromptTransformer } = require('./utils/systemPromptTransformer.js');
 
 const app = express();
 // Increase body parser limits for large requests
@@ -115,10 +116,17 @@ class QwenOpenAIProxy {
   async handleRegularChatCompletion(req, res) {
     try {
       const accountId = req.headers['x-qwen-account'] || req.query.account || req.body.account;
+      
+      // Apply system prompt transformation if enabled
+      const transformedMessages = systemPromptTransformer.transform(
+        req.body.messages,
+        req.body.model || config.defaultModel
+      );
+      
       // Call Qwen API through our integrated client
       const response = await qwenAPI.chatCompletions({
         model: req.body.model || config.defaultModel,
-        messages: req.body.messages,
+        messages: transformedMessages,
         tools: req.body.tools,
         tool_choice: req.body.tool_choice,
         temperature: req.body.temperature || config.defaultTemperature,
@@ -174,11 +182,17 @@ class QwenOpenAIProxy {
       res.setHeader('Connection', 'keep-alive');
       res.setHeader('Access-Control-Allow-Origin', '*');
       const accountId = req.headers['x-qwen-account'] || req.query.account || req.body.account;
-      
+
+      // Apply system prompt transformation if enabled
+      const transformedMessages = systemPromptTransformer.transform(
+        req.body.messages,
+        req.body.model || config.defaultModel
+      );
+
       // Call Qwen API streaming method
       const stream = await qwenAPI.streamChatCompletions({
         model: req.body.model || config.defaultModel,
-        messages: req.body.messages,
+        messages: transformedMessages,
         tools: req.body.tools,
         tool_choice: req.body.tool_choice,
         temperature: req.body.temperature || config.defaultTemperature,

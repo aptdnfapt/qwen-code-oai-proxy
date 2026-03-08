@@ -47,4 +47,16 @@ module.exports = {
   apiKey: process.env.API_KEY ?
     process.env.API_KEY.split(',').map(key => key.trim()).filter(key => key.length > 0) :
     null, // API key(s) for securing access (can be multiple, comma-separated)
+
+  // System Prompt configuration
+  systemPrompt: {
+    enabled: process.env.SYSTEM_PROMPT_ENABLED === 'true', // Enable/disable system prompt injection
+    prompt: process.env.SYSTEM_PROMPT_FILE ?
+      require('fs').readFileSync(process.env.SYSTEM_PROMPT_FILE, 'utf8') :
+      null, // Custom system prompt from file
+    appendMode: process.env.SYSTEM_PROMPT_MODE || 'prepend', // 'prepend' or 'append'
+    modelFilter: process.env.SYSTEM_PROMPT_MODELS ?
+      process.env.SYSTEM_PROMPT_MODELS.split(',').map(m => m.trim()) :
+      null // Comma-separated list of models to apply to (null = all models)
+  }
 };
