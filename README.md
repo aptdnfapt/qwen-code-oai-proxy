@@ -2,7 +2,7 @@
 
 A proxy server that exposes Qwen models through an OpenAI-compatible API endpoint. Has tool calling and streaming support.
 
-> New - Web search now available via both REST API (`/v1/web/search`) and MCP tool!
+> New - qwen 3,5 plus model 
 
 
 ## Important Notes
@@ -255,6 +255,7 @@ The proxy supports the following Qwen models:
 *   `qwen3-coder-plus` - Primary coding model with enhanced capabilities
 *   `qwen3-coder-flash` - Faster, lighter coding model for quick responses
 *   `vision-model` - Multimodal model with image processing capabilities
+*   `qwen3.5-plus` - Multimodal best qwen model right now 
 
 **Note**: Use the exact model name as shown above when configuring your client applications.
 
