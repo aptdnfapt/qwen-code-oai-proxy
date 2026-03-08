@@ -5,6 +5,7 @@ const { QwenAuthManager } = require('./auth.js');
 const { PassThrough } = require('stream');
 const path = require('path');
 const { promises: fs } = require('fs');
+const crypto = require('crypto');
 
 // Create HTTP agents with connection pooling
 const httpAgent = new http.Agent({
@@ -28,6 +29,61 @@ const httpsAgent = new https.Agent({
 // Default Qwen configuration
 const DEFAULT_QWEN_API_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
 const DEFAULT_MODEL = 'qwen3-coder-plus';
+const QWEN_CODE_VERSION = '0.12.0';
+
+// Model aliases - maps client-facing model names to actual Qwen model names
+const MODEL_ALIASES = {
+  'qwen3.5-plus': 'coder-model'
+};
+
+function resolveModelAlias(model) {
+  return MODEL_ALIASES[model] || model;
+}
+
+/**
+ * Generate User-Agent header matching qwen-code CLI format
+ * @returns {string} User-Agent string
+ */
+function generateUserAgent() {
+  const platform = process.platform;
+  const arch = process.arch;
+  return `QwenCode/${QWEN_CODE_VERSION} (${platform}; ${arch})`;
+}
+
+/**
+ * Generate unique request ID for tracing
+ * @returns {string} UUID v4
+ */
+function generateRequestId() {
+  return crypto.randomUUID();
+}
+
+/**
+ * Build standard headers for DashScope API requests
+ * @param {string} accessToken - The OAuth access token
+ * @param {boolean} isStreaming - Whether this is a streaming request
+ * @returns {Object} Headers object
+ */
+function buildDashScopeHeaders(accessToken, isStreaming = false) {
+  const userAgent = generateUserAgent();
+  const requestId = generateRequestId();
+  
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${accessToken}`,
+    'User-Agent': userAgent,
+    'X-DashScope-CacheControl': 'enable',
+    'X-DashScope-UserAgent': userAgent,
+    'X-DashScope-AuthType': 'qwen-oauth',
+    'x-request-id': requestId,
+  };
+  
+  if (isStreaming) {
+    headers['Accept'] = 'text/event-stream';
+  }
+  
+  return headers;
+}
 
 // List of known Qwen models
 const QWEN_MODELS = [
@@ -45,6 +101,12 @@ const QWEN_MODELS = [
   },
   {
     id: 'qwen3-coder-flash',
+    object: 'model',
+    created: 1754686206,
+    owned_by: 'qwen'
+  },
+  {
+    id: 'coder-model',
     object: 'model',
     created: 1754686206,
     owned_by: 'qwen'
@@ -720,7 +782,7 @@ class QwenAPI {
     
     // Make API call
     const url = `${apiEndpoint}/chat/completions`;
-    const model = request.model || DEFAULT_MODEL;
+    const model = resolveModelAlias(request.model) || DEFAULT_MODEL;
     
     // Process messages for vision model support
     const processedMessages = processMessagesForVision(request.messages, model);
@@ -739,10 +801,7 @@ class QwenAPI {
       stream: false
     };
 
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${credentials.access_token}`,
-    };
+    const headers = buildDashScopeHeaders(credentials.access_token, false);
 
     // Increment request count for successful request
     await this.incrementRequestCount(accountId);
@@ -825,7 +884,7 @@ class QwenAPI {
     
     // Make API call
     const url = `${apiEndpoint}/chat/completions`;
-    const model = request.model || DEFAULT_MODEL;
+    const model = resolveModelAlias(request.model) || DEFAULT_MODEL;
     
     // Process messages for vision model support
     const processedMessages = processMessagesForVision(request.messages, model);
@@ -843,11 +902,7 @@ class QwenAPI {
       reasoning: request.reasoning
     };
     
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${accessToken}`,
-
-    };
+    const headers = buildDashScopeHeaders(accessToken, false);
     
     try {
       // Increment request count for successful request
@@ -882,11 +937,7 @@ class QwenAPI {
           
           // Retry the request with the new token
           console.log('\x1b[36m%s\x1b[0m', 'Retrying request with refreshed token...');
-          const retryHeaders = {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${newAccessToken}`,
-      
-          };
+          const retryHeaders = buildDashScopeHeaders(newAccessToken, false);
           
           const retryResponse = await axios.post(url, payload, { headers: retryHeaders, timeout: 300000, httpAgent, httpsAgent });
           console.log('\x1b[32m%s\x1b[0m', 'Request succeeded after token refresh');
@@ -1018,7 +1069,7 @@ class QwenAPI {
       const model = request.model || DEFAULT_MODEL;
       const processedMessages = processMessagesForVision(request.messages, model);
       const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: request.max_tokens, top_p: request.top_p, top_k: request.top_k, repetition_penalty: request.repetition_penalty, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
-      const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${credentials.access_token}`, 'User-Agent': 'QwenOpenAIProxy/1.0.0 (linux; x64)', 'Accept': 'text/event-stream' };
+      const headers = buildDashScopeHeaders(credentials.access_token, true);
       
       // Increment request count for successful request
       await this.incrementRequestCount(forcedAccountId);
@@ -1038,10 +1089,10 @@ class QwenAPI {
       const credentials = await this.authManager.loadCredentials();
       const apiEndpoint = await this.getApiEndpoint(credentials);
       const url = `${apiEndpoint}/chat/completions`;
-      const model = request.model || DEFAULT_MODEL;
+      const model = resolveModelAlias(request.model) || DEFAULT_MODEL;
       const processedMessages = processMessagesForVision(request.messages, model);
       const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: request.max_tokens, top_p: request.top_p, top_k: request.top_k, repetition_penalty: request.repetition_penalty, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
-      const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'User-Agent': 'QwenOpenAIProxy/1.0.0 (linux; x64)', 'Accept': 'text/event-stream' };
+      const headers = buildDashScopeHeaders(accessToken, true);
       
       // Increment request count for successful request
       await this.incrementRequestCount('default');
@@ -1084,10 +1135,10 @@ class QwenAPI {
         try {
           const apiEndpoint = await this.getApiEndpoint(credentials);
           const url = `${apiEndpoint}/chat/completions`;
-          const model = request.model || DEFAULT_MODEL;
+          const model = resolveModelAlias(request.model) || DEFAULT_MODEL;
           const processedMessages = processMessagesForVision(request.messages, model);
           const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: request.max_tokens, top_p: request.top_p, top_k: request.top_k, repetition_penalty: request.repetition_penalty, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
-          const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${credentials.access_token}`, 'User-Agent': 'QwenOpenAIProxy/1.0.0 (linux; x64)', 'Accept': 'text/event-stream' };
+          const headers = buildDashScopeHeaders(credentials.access_token, true);
           const stream = new PassThrough();
           
           // Increment request count after acquiring lock but before processing
@@ -1220,10 +1271,7 @@ class QwenAPI {
       rows: request.rows || 10
     };
 
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${credentials.access_token}`,
-    };
+    const headers = buildDashScopeHeaders(credentials.access_token, false);
 
     // Increment web search request count for successful request
     await this.incrementWebSearchRequestCount(accountId);
@@ -1267,11 +1315,7 @@ class QwenAPI {
       rows: request.rows || 10
     };
     
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${accessToken}`,
-
-    };
+    const headers = buildDashScopeHeaders(accessToken, false);
     
     try {
       // Increment web search request count for successful request
@@ -1307,11 +1351,7 @@ class QwenAPI {
           
           // Retry the request with the new token
           console.log('\x1b[36m%s\x1b[0m', 'Retrying web search request with refreshed token...');
-          const retryHeaders = {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${newAccessToken}`,
-      
-          };
+          const retryHeaders = buildDashScopeHeaders(newAccessToken, false);
           
           const retryResponse = await axios.post(webSearchUrl, payload, { headers: retryHeaders, timeout: 300000, httpAgent, httpsAgent });
           console.log('\x1b[32m%s\x1b[0m', 'Web search request succeeded after token refresh');
