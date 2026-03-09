@@ -2,7 +2,7 @@
 
 A proxy server that exposes Qwen models through an OpenAI-compatible API endpoint. Has tool calling and streaming support.
 
-> New - qwen 3,5 plus model 
+> New - qwen 3,5 plus model (coder-model) is now the recommended default
 
 
 ## Important Notes
@@ -166,9 +166,7 @@ The proxy server can be configured using environment variables. Create a `.env` 
 *   `LOG_FILE_LIMIT`: Maximum number of debug log files to keep (default: 20)
 *   `DEBUG_LOG`: Set to `true` to enable debug logging (default: false)
 *   `API_KEY`: Set API key(s) for authentication (comma-separated for multiple keys)
-*   `DEFAULT_ACCOUNT`: Specify which account the proxy should use by default (when using multi-account setup)
-    *   Should match the name used when adding an account with `npm run auth add <name>`
-    *   If not set or invalid, the proxy will use the first available account
+*   `DEFAULT_ACCOUNT`: Specify which account the proxy should use by default
 
 Example `.env` file:
 ```bash
@@ -199,7 +197,7 @@ const openai = new OpenAI({
 
 async function main() {
   const response = await openai.chat.completions.create({
-    model: 'qwen-coder-plus',
+    model: 'coder-model', // Recommended model
     messages: [
       { "role": "user", "content": "Hello!" }
     ]
@@ -217,7 +215,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer fake-key" \
   -d '{
-    "model": "qwen3-coder-plus",
+    "model": "coder-model",
     "messages": [
       {
         "role": "user",
@@ -235,7 +233,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer fake-key" \
   -d '{
-    "model": "qwen3-coder-plus",
+    "model": "coder-model",
     "messages": [
       {
         "role": "user",
@@ -252,10 +250,14 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 The proxy supports the following Qwen models:
 
-*   `qwen3-coder-plus` - Primary coding model with enhanced capabilities
-*   `qwen3-coder-flash` - Faster, lighter coding model for quick responses
-*   `vision-model` - Multimodal model with image processing capabilities
-*   `qwen3.5-plus` - Multimodal best qwen model right now 
+| Model ID | Description | Max Tokens | Notes |
+|----------|-------------|------------|-------|
+| `coder-model` | **Recommended** - Qwen 3.5 Plus, best for coding | 65536 | Default model, excellent for code tasks |
+| `qwen3-coder-plus` | Qwen 3 Coder Plus | 65536 | Legacy coding model |
+| `qwen3-coder-flash` | Qwen 3 Coder Flash | 65536 | Faster, lighter model |
+| `vision-model` | Multimodal with image support | 32768 | For image processing (lower token limit) |
+
+**Important**: The `vision-model` has a max token limit of 32,768 (lower than other models). The proxy automatically clamps `max_tokens` for this model.
 
 **Note**: Use the exact model name as shown above when configuring your client applications.
 
@@ -327,23 +329,21 @@ To use with opencode, add the following to `~/.config/opencode/opencode.json`:
 {
   "$schema": "https://opencode.ai/config.json",
   "provider": {
-    "myprovider": {
+    "qwen": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "proxy",
       "options": {
         "baseURL": "http://localhost:8080/v1"
       },
       "models": {
-        "qwen3-coder-plus": {
-          "name": "qwen3"
+        "coder-model": {
+          "name": "qwen35"
         }
       }
     }
   }
 }
 ```
-
-
 
 ### crush Configuration
 
@@ -359,22 +359,20 @@ To use with crush, add the following to `~/.config/crush/crush.json`:
       "api_key": "",
       "models": [
         {
-          "id": "qwen3-coder-plus",
-          "name": "qwen3-coder-plus",
+          "id": "coder-model",
+          "name": "coder-model",
           "cost_per_1m_in": 0.0,
           "cost_per_1m_out": 0.0,
           "cost_per_1m_in_cached": 0,
           "cost_per_1m_out_cached": 0,
           "context_window": 150000,
-          "default_max_tokens": 64000
+          "default_max_tokens": 32768
         }
       ]
     }
   }
 }
 ```
-
-
 
 ### Claude code Router
 ```json
@@ -385,13 +383,13 @@ To use with crush, add the following to `~/.config/crush/crush.json`:
       "name": "qwen-code",
       "api_base_url": "http://localhost:8080/v1/chat/completions/",
       "api_key": "wdadwa-random-stuff",
-      "models": ["qwen3-coder-plus"],
+      "models": ["coder-model"],
       "transformer": {
         "use": [
           [
             "maxtoken",
             {
-              "max_tokens": 65536
+              "max_tokens": 32768
             }
           ],
           "enhancetool",
@@ -401,7 +399,7 @@ To use with crush, add the following to `~/.config/crush/crush.json`:
     }
   ],
   "Router": {
-    "default": "qwen-code,qwen3-coder-plus"
+    "default": "qwen-code,coder-model"
   }
 }
 ```
@@ -414,9 +412,9 @@ To use with Roo Code or Kilo Code or Cline :
 2. Choose the OpenAI compatible option
 3. Set the URL to: `http://localhost:8080/v1`
 4. Use a random API key (it doesn't matter)
-5. Type or choose the model name exactly as: `qwen3-coder-plus`
+5. Type or choose the model name exactly as: `coder-model`
 6. Disable streaming in the checkbox for Roo Code or Kilo Code
-7. Change the max output setting from -1 to 65000
+7. Change the max output setting from -1 to 32000
 8. You can change the context window size to around 300k or so but after 150k it gets slower so keep that in mind . 
 
 ## Token Counting
@@ -444,5 +442,3 @@ For more detailed documentation, see the `docs/` directory.
 For information about configuring a default account, see `docs/default-account.md`.
 
 ---
-
-

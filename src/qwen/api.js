@@ -92,6 +92,27 @@ function buildDashScopeHeaders(accessToken, isStreaming = false) {
   return headers;
 }
 
+// Model-specific limits
+const MODEL_LIMITS = {
+  'vision-model': { maxTokens: 32768 },
+  'qwen3-vl-plus': { maxTokens: 32768 },
+  'qwen3-vl-max': { maxTokens: 32768 },
+};
+
+/**
+ * Clamp max_tokens based on model limits
+ * @param {string} model - Model name
+ * @param {number} maxTokens - Requested max_tokens
+ * @returns {number} - Clamped max_tokens
+ */
+function clampMaxTokens(model, maxTokens) {
+  const limit = MODEL_LIMITS[model];
+  if (limit && maxTokens > limit.maxTokens) {
+    return limit.maxTokens;
+  }
+  return maxTokens;
+}
+
 // List of known Qwen models
 const QWEN_MODELS = [
   {
@@ -793,12 +814,13 @@ class QwenAPI {
     
     // Process messages for vision model support
     const processedMessages = processMessagesForVision(request.messages, model);
+    const maxTokens = clampMaxTokens(model, request.max_tokens);
     
     const payload = {
       model: model,
       messages: processedMessages,
       temperature: request.temperature,
-      max_tokens: request.max_tokens,
+      max_tokens: maxTokens,
       top_p: request.top_p,
       top_k: request.top_k,
       repetition_penalty: request.repetition_penalty,
@@ -895,12 +917,13 @@ class QwenAPI {
     
     // Process messages for vision model support
     const processedMessages = processMessagesForVision(request.messages, model);
+    const maxTokens = clampMaxTokens(model, request.max_tokens);
     
     const payload = {
       model: model,
       messages: processedMessages,
       temperature: request.temperature,
-      max_tokens: request.max_tokens,
+      max_tokens: maxTokens,
       top_p: request.top_p,
       top_k: request.top_k,
       repetition_penalty: request.repetition_penalty,
@@ -1075,7 +1098,8 @@ class QwenAPI {
       const url = `${apiEndpoint}/chat/completions`;
       const model = request.model || DEFAULT_MODEL;
       const processedMessages = processMessagesForVision(request.messages, model);
-      const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: request.max_tokens, top_p: request.top_p, top_k: request.top_k, repetition_penalty: request.repetition_penalty, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
+      const maxTokens = clampMaxTokens(model, request.max_tokens);
+      const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: maxTokens, top_p: request.top_p, top_k: request.top_k, repetition_penalty: request.repetition_penalty, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
       const headers = buildDashScopeHeaders(credentials.access_token, true);
       
       // Increment request count for successful request
@@ -1098,7 +1122,8 @@ class QwenAPI {
       const url = `${apiEndpoint}/chat/completions`;
       const model = resolveModelAlias(request.model) || DEFAULT_MODEL;
       const processedMessages = processMessagesForVision(request.messages, model);
-      const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: request.max_tokens, top_p: request.top_p, top_k: request.top_k, repetition_penalty: request.repetition_penalty, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
+      const maxTokens = clampMaxTokens(model, request.max_tokens);
+      const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: maxTokens, top_p: request.top_p, top_k: request.top_k, repetition_penalty: request.repetition_penalty, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
       const headers = buildDashScopeHeaders(accessToken, true);
       
       // Increment request count for successful request
@@ -1144,7 +1169,8 @@ class QwenAPI {
           const url = `${apiEndpoint}/chat/completions`;
           const model = resolveModelAlias(request.model) || DEFAULT_MODEL;
           const processedMessages = processMessagesForVision(request.messages, model);
-          const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: request.max_tokens, top_p: request.top_p, top_k: request.top_k, repetition_penalty: request.repetition_penalty, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
+          const maxTokens = clampMaxTokens(model, request.max_tokens);
+          const payload = { model, messages: processedMessages, temperature: request.temperature, max_tokens: maxTokens, top_p: request.top_p, top_k: request.top_k, repetition_penalty: request.repetition_penalty, tools: request.tools, tool_choice: request.tool_choice, reasoning: request.reasoning, stream: true, stream_options: { include_usage: true } };
           const headers = buildDashScopeHeaders(credentials.access_token, true);
           const stream = new PassThrough();
           
