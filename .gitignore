@@ -125,3 +125,6 @@ debug/
 
 # LLM managed files
 .llm/
+test.sh
+log
+test-proxy.sh

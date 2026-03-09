@@ -644,7 +644,6 @@ class QwenAPI {
     }
 
     // TODO: Check better log location for this for now im commenting this out
-    // console.log(`Available healthy accounts: ${healthyAccountIds.join(', ')}`);
 
     // Load credentials for all healthy accounts and find freshest
     const accountCredentials = [];
@@ -836,7 +835,6 @@ class QwenAPI {
     await this.incrementRequestCount(accountId);
 
     // Log which account is being used with Request number
-    console.log(`\x1b[32m[New Normal Request] Using account ${accountId} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Request #${this.getRequestCount(accountId)} today)\x1b[0m`);
 
     const response = await axios.post(url, payload, { 
       headers: headers,
@@ -857,7 +855,6 @@ class QwenAPI {
       );
     }
     
-    console.log(`\x1b[32mRequest completed successfully using account ${accountId}\x1b[0m`);
     return response.data;
   }
 
@@ -939,7 +936,6 @@ class QwenAPI {
       await this.incrementRequestCount('default');
 
       // Log which account is being used with Request number
-      console.log(`\x1b[32m[New Normal Request] Using account ${'default'} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Request #${this.getRequestCount('default')} today)\x1b[0m`);
 
       const response = await axios.post(url, payload, { headers, timeout: 300000, httpAgent, httpsAgent }); // 5 minute timeout
       // Reset auth error count on successful request (for consistency, even though we don't rotate)
@@ -1106,7 +1102,6 @@ class QwenAPI {
       await this.incrementRequestCount(forcedAccountId);
 
       // Log which account is being used with Request number
-      console.log(`\x1b[32m[New Streaming Request] Using account ${forcedAccountId} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Request #${this.getRequestCount(forcedAccountId)} today)\x1b[0m`);
       
       const stream = new PassThrough();
       const response = await axios.post(url, payload, { headers, timeout: 300000, responseType: 'stream', httpAgent, httpsAgent });
@@ -1130,7 +1125,6 @@ class QwenAPI {
       await this.incrementRequestCount('default');
 
       // Log which account is being used with Request number
-      console.log(`\x1b[32m[New Streaming Request] Using account ${'default'} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Request #${this.getRequestCount('default')} today)\x1b[0m`);
           
       
       const stream = new PassThrough();
@@ -1181,7 +1175,6 @@ class QwenAPI {
           await this.incrementRequestCount(accountId);
 
           // Log which account is being used with Request number
-          console.log(`\x1b[32m[New Streaming Request] Using account ${accountId} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Request #${this.getRequestCount(accountId)} today)\x1b[0m`);
           
           const response = await axios.post(url, payload, { headers, timeout: 300000, responseType: 'stream', httpAgent, httpsAgent });
           response.data.pipe(stream);
@@ -1310,7 +1303,6 @@ class QwenAPI {
     await this.incrementWebSearchRequestCount(accountId);
 
     // Log which account is being used with web search request number
-    console.log(`\x1b[32m[New Web Search Request] Using account ${accountId} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Web Search #${this.getWebSearchRequestCount(accountId)} today)\x1b[0m`);
 
     const response = await axios.post(webSearchUrl, payload, { 
       headers: headers,
@@ -1355,7 +1347,6 @@ class QwenAPI {
       await this.incrementWebSearchRequestCount('default');
 
       // Log which account is being used with web search request number
-      console.log(`\x1b[32m[New Web Search Request] Using account ${'default'} (${((credentials.expiry_date - Date.now()) / 60000).toFixed(1)} minutes left)) (Web Search #${this.getWebSearchRequestCount('default')} today)\x1b[0m`);
 
       const response = await axios.post(webSearchUrl, payload, { headers, timeout: 300000, httpAgent, httpsAgent });
       

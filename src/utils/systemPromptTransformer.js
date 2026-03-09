@@ -147,7 +147,6 @@ class SystemPromptTransformer {
         ]
       };
 
-      console.log('\x1b[36m%s\x1b[0m', `[System Prompt] Injected into existing system message (${this.appendMode} mode)`);
       return transformedMessages;
     } else {
       // No system message - add ours at the beginning
@@ -167,7 +166,6 @@ class SystemPromptTransformer {
         ...transformedMessages
       ];
 
-      console.log('\x1b[36m%s\x1b[0m', '[System Prompt] Added new system message');
       return newMessages;
     }
   }

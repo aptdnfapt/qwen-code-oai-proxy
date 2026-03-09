@@ -316,20 +316,10 @@ class QwenAuthManager {
 
       // Check if token is valid
       if (this.isTokenValid(credentials)) {
-        console.log(accountId ? 
-          `\x1b[32m%s\x1b[0m` : 
-          '\x1b[32m%s\x1b[0m', 
-          accountId ? 
-          `Using valid Qwen access token for account ${accountId}` : 
-          'Using valid Qwen access token');
+        // Token is valid, return it
         return credentials.access_token;
       } else {
-        console.log(accountId ? 
-          `\x1b[33m%s\x1b[0m` : 
-          '\x1b[33m%s\x1b[0m', 
-          accountId ? 
-          `Qwen access token for account ${accountId} expired or expiring soon, refreshing...` : 
-          'Qwen access token expired or expiring soon, refreshing...');
+        // Token needs refresh
       }
 
       // Token needs refresh, start refresh operation

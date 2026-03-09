@@ -39,9 +39,9 @@ module.exports = {
   // Set to false to disable using the default ~/.qwen/oauth_creds.json file
   qwenCodeAuthUse: process.env.QWEN_CODE_AUTH_USE !== 'false', // true by default
   
-  // Debug logging configuration
-  debugLog: process.env.DEBUG_LOG === 'true' ? true : false, // Enable/disable debug logging (disabled by default)
-  logFileLimit: parseInt(process.env.LOG_FILE_LIMIT) || 20, // Maximum number of log files to keep
+  // Logging configuration (handled in utils/fileLogger.js)
+  // LOG_LEVEL env var: off, error, error-debug, debug
+  // ERROR_LOG_MAX_MB, ERROR_LOG_MAX_DAYS, MAX_DEBUG_LOGS env vars
 
   // API Key configuration
   apiKey: process.env.API_KEY ?
