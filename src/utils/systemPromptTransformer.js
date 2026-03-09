@@ -58,24 +58,70 @@ class SystemPromptTransformer {
   }
 
   /**
-   * Transform messages by injecting the system prompt
+   * Add cache_control to a message content
+   * @param {Object} message - The message object
+   * @returns {Object} - Message with cache_control added
+   */
+  addCacheControl(message) {
+    // If content is a string, convert to array format with cache_control
+    if (typeof message.content === 'string') {
+      return {
+        ...message,
+        content: [
+          {
+            type: 'text',
+            text: message.content,
+            cache_control: {
+              type: 'ephemeral'
+            }
+          }
+        ]
+      };
+    }
+    
+    // If content is already an array, add cache_control to each text part
+    if (Array.isArray(message.content)) {
+      return {
+        ...message,
+        content: message.content.map(part => {
+          if (part.type === 'text' && !part.cache_control) {
+            return {
+              ...part,
+              cache_control: {
+                type: 'ephemeral'
+              }
+            };
+          }
+          return part;
+        })
+      };
+    }
+    
+    return message;
+  }
+
+  /**
+   * Transform messages by injecting the system prompt and adding cache_control
    * @param {Array} messages - Array of conversation messages
    * @param {string} model - The model name being used
-   * @returns {Array} - Transformed messages with system prompt injected
+   * @returns {Array} - Transformed messages with system prompt injected and cache_control added
    */
   transform(messages, model) {
+    // First, add cache_control to all existing messages
+    let transformedMessages = messages.map(msg => this.addCacheControl(msg));
+
     if (!this.shouldApplyToModel(model)) {
-      return messages;
+      return transformedMessages;
     }
 
     // Check if there's already a system message
-    const existingSystemMessageIndex = messages.findIndex(msg => msg.role === 'system');
+    const existingSystemMessageIndex = transformedMessages.findIndex(msg => msg.role === 'system');
 
     if (existingSystemMessageIndex !== -1) {
       // System message exists - handle based on appendMode
-      const existingSystemMessage = messages[existingSystemMessageIndex];
-      const existingContent = typeof existingSystemMessage.content === 'string'
-        ? existingSystemMessage.content
+      const existingSystemMessage = transformedMessages[existingSystemMessageIndex];
+      const existingContent = Array.isArray(existingSystemMessage.content)
+        ? existingSystemMessage.content.map(p => p.text).join('')
         : '';
 
       let newContent;
@@ -88,8 +134,7 @@ class SystemPromptTransformer {
       }
 
       // Create a new messages array with the updated system message
-      const newMessages = [...messages];
-      newMessages[existingSystemMessageIndex] = {
+      transformedMessages[existingSystemMessageIndex] = {
         ...existingSystemMessage,
         content: [
           {
@@ -103,7 +148,7 @@ class SystemPromptTransformer {
       };
 
       console.log('\x1b[36m%s\x1b[0m', `[System Prompt] Injected into existing system message (${this.appendMode} mode)`);
-      return newMessages;
+      return transformedMessages;
     } else {
       // No system message - add ours at the beginning
       const newMessages = [
@@ -119,7 +164,7 @@ class SystemPromptTransformer {
             }
           ]
         },
-        ...messages
+        ...transformedMessages
       ];
 
       console.log('\x1b[36m%s\x1b[0m', '[System Prompt] Added new system message');

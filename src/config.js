@@ -50,7 +50,7 @@ module.exports = {
 
   // System Prompt configuration
   systemPrompt: {
-    enabled: process.env.SYSTEM_PROMPT_ENABLED === 'true', // Enable/disable system prompt injection
+    enabled: process.env.SYSTEM_PROMPT_ENABLED !== 'false', // Enable/disable system prompt injection (enabled by default)
     prompt: process.env.SYSTEM_PROMPT_FILE ?
       require('fs').readFileSync(process.env.SYSTEM_PROMPT_FILE, 'utf8') :
       null, // Custom system prompt from file
