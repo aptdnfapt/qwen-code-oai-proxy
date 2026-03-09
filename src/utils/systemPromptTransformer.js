@@ -6,12 +6,23 @@
  */
 
 const config = require('../config.js');
+const fs = require('fs');
+const path = require('path');
 
 /**
- * Default Qwen Code system prompt
- * This is the core identity and behavioral instructions for the agent
+ * Read system prompt from sys-prompt.txt in current working directory
+ * @returns {string} - The system prompt text from the file
  */
-const DEFAULT_SYSTEM_PROMPT = `You are Qwen Code, an interactive CLI agent developed by Alibaba Group, specializing in software engineering tasks. Your primary goal is to help users safely and efficiently, adhering strictly to the following instructions and utilizing your available tools.\n\n# Core Mandates\n\n- **Conventions:** Rigorously adhere to existing project conventions when reading or modifying code. Analyze surrounding code, tests, and configuration first.\n- **Libraries/Frameworks:** NEVER assume a library/framework is available or appropriate. Verify its established usage within the project before employing it.\n- **Style & Structure:** Mimic the style, structure, framework choices, and architectural patterns of existing code in the project.\n- **Proactiveness:** Fulfill the user's request thoroughly.\n- **Path Construction:** Before using any file system tool, you must construct the full absolute path for the file_path argument.\n\n# Tool Usage\n- **File Paths:** Always use absolute paths.\n- **Parallelism:** Execute multiple independent tool calls in parallel.\n- **Command Execution:** Use the run_shell_command tool for running shell commands.\n\n# Available Tools\n- edit: Edit file\n- write_file: Create/write file  \n- read_file: Read file\n- grep_search: Search content\n- glob: Find files by pattern\n- run_shell_command: Execute shell commands\n- todo_write: Manage task list\n- save_memory: Remember user facts\n- task: Delegate to subagent\n- skill: Load specialized skill\n- exit_plan_mode: Exit planning mode\n- web_fetch: Fetch web content\n- web_search: Search the web\n- list_directory: List directory\n- lsp: Language server ops`;
+function readSystemPromptFromFile() {
+  try {
+    const filePath = path.join(process.cwd(), 'sys-prompt.txt');
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return content.trim();
+  } catch (error) {
+    console.warn('[System Prompt] Could not read sys-prompt.txt, using fallback');
+    return '';
+  }
+}
 
 class SystemPromptTransformer {
   constructor() {
@@ -20,8 +31,13 @@ class SystemPromptTransformer {
     this.appendMode = config.systemPrompt?.appendMode ?? 'prepend'; // 'prepend' or 'append'
     this.modelFilter = config.systemPrompt?.modelFilter || null; // Array of model names to apply to, or null for all
     
-    // Use custom prompt if provided, otherwise use default
-    this.systemPrompt = this.customPrompt || DEFAULT_SYSTEM_PROMPT;
+    // Use custom prompt if provided, otherwise read from sys-prompt.txt
+    this.systemPrompt = this.customPrompt || readSystemPromptFromFile();
+    
+    // Log if no system prompt is available
+    if (!this.systemPrompt && this.enabled) {
+      console.warn('[System Prompt] No system prompt loaded - please create sys-prompt.txt');
+    }
   }
 
   /**
@@ -58,8 +74,8 @@ class SystemPromptTransformer {
     if (existingSystemMessageIndex !== -1) {
       // System message exists - handle based on appendMode
       const existingSystemMessage = messages[existingSystemMessageIndex];
-      const existingContent = typeof existingSystemMessage.content === 'string' 
-        ? existingSystemMessage.content 
+      const existingContent = typeof existingSystemMessage.content === 'string'
+        ? existingSystemMessage.content
         : '';
 
       let newContent;
@@ -75,7 +91,15 @@ class SystemPromptTransformer {
       const newMessages = [...messages];
       newMessages[existingSystemMessageIndex] = {
         ...existingSystemMessage,
-        content: newContent
+        content: [
+          {
+            type: 'text',
+            text: newContent,
+            cache_control: {
+              type: 'ephemeral'
+            }
+          }
+        ]
       };
 
       console.log('\x1b[36m%s\x1b[0m', `[System Prompt] Injected into existing system message (${this.appendMode} mode)`);
@@ -85,7 +109,15 @@ class SystemPromptTransformer {
       const newMessages = [
         {
           role: 'system',
-          content: this.systemPrompt
+          content: [
+            {
+              type: 'text',
+              text: this.systemPrompt,
+              cache_control: {
+                type: 'ephemeral'
+              }
+            }
+          ]
         },
         ...messages
       ];
@@ -131,6 +163,5 @@ const systemPromptTransformer = new SystemPromptTransformer();
 
 module.exports = {
   SystemPromptTransformer,
-  systemPromptTransformer,
-  DEFAULT_SYSTEM_PROMPT
+  systemPromptTransformer
 };
