@@ -65,21 +65,28 @@ function generateRequestId() {
  * @returns {Object} Headers object
  */
 function buildDashScopeHeaders(accessToken, isStreaming = false) {
-  const userAgent = generateUserAgent();
-  const requestId = generateRequestId();
-  
   const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${accessToken}`,
-    'User-Agent': userAgent,
-    'X-DashScope-CacheControl': 'enable',
-    'X-DashScope-UserAgent': userAgent,
-    'X-DashScope-AuthType': 'qwen-oauth',
-    'x-request-id': requestId,
+    'connection': 'keep-alive',
+    'accept': 'application/json',
+    'authorization': `Bearer ${accessToken}`,
+    'content-type': 'application/json',
+    'user-agent': 'QwenCode/0.11.1 (linux; x64)',
+    'x-dashscope-authtype': 'qwen-oauth',
+    'x-dashscope-cachecontrol': 'enable',
+    'x-dashscope-useragent': 'QwenCode/0.11.1 (linux; x64)',
+    'x-stainless-arch': 'x64',
+    'x-stainless-lang': 'js',
+    'x-stainless-os': 'Linux',
+    'x-stainless-package-version': '5.11.0',
+    'x-stainless-retry-count': '1',
+    'x-stainless-runtime': 'node',
+    'x-stainless-runtime-version': 'v18.19.1',
+    'accept-language': '*',
+    'sec-fetch-mode': 'cors',
   };
   
   if (isStreaming) {
-    headers['Accept'] = 'text/event-stream';
+    headers['accept'] = 'text/event-stream';
   }
   
   return headers;
