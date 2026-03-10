@@ -25,6 +25,28 @@ const authManager = new QwenAuthManager();
 const debugLogger = new DebugLogger();
 const accountRefreshScheduler = new AccountRefreshScheduler(qwenAPI);
 
+// Retry helper for 500 and 429 errors
+async function withRetry(fn, maxRetries = config.maxRetries, delayMs = config.retryDelayMs, logger = null, requestId = null) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const status = error.response?.status;
+      const isRetryable = status === 500 || status === 429 || error.message?.includes('500') || error.message?.includes('429');
+      if (!isRetryable || attempt === maxRetries) {
+        throw error;
+      }
+      if (logger && requestId) {
+        logger.proxyError(requestId, status || 500, 'default', `Retry ${attempt}/${maxRetries}: ${error.message.substring(0, 50)}`);
+      }
+      await new Promise(resolve => setTimeout(resolve, delayMs * attempt));
+    }
+  }
+  throw lastError;
+}
+
 // API Key middleware
 const validateApiKey = (req, res, next) => {
   // If no API key is configured, skip validation
@@ -113,19 +135,27 @@ class QwenOpenAIProxy {
         req.body.model || config.defaultModel
       );
       
-      const response = await qwenAPI.chatCompletions({
-        model: req.body.model || config.defaultModel,
-        messages: transformedMessages,
-        tools: req.body.tools,
-        tool_choice: req.body.tool_choice,
-        temperature: req.body.temperature || config.defaultTemperature,
-        max_tokens: req.body.max_tokens || config.defaultMaxTokens,
-        top_p: req.body.top_p || config.defaultTopP,
-        top_k: req.body.top_k || config.defaultTopK,
-        repetition_penalty: req.body.repetition_penalty || config.defaultRepetitionPenalty,
-        reasoning: req.body.reasoning,
-        accountId: accountId
-      });
+      const response = await withRetry(
+        async () => {
+          return await qwenAPI.chatCompletions({
+            model: req.body.model || config.defaultModel,
+            messages: transformedMessages,
+            tools: req.body.tools,
+            tool_choice: req.body.tool_choice,
+            temperature: req.body.temperature || config.defaultTemperature,
+            max_tokens: req.body.max_tokens || config.defaultMaxTokens,
+            top_p: req.body.top_p || config.defaultTopP,
+            top_k: req.body.top_k || config.defaultTopK,
+            repetition_penalty: req.body.repetition_penalty || config.defaultRepetitionPenalty,
+            reasoning: req.body.reasoning,
+            accountId: accountId
+          });
+        },
+        config.maxRetries,
+        config.retryDelayMs,
+        liveLogger,
+        requestId
+      );
       
       const latency = Date.now() - startTime;
       const inputTokens = response?.usage?.prompt_tokens || 0;
@@ -171,19 +201,27 @@ class QwenOpenAIProxy {
         req.body.model || config.defaultModel
       );
 
-      const stream = await qwenAPI.streamChatCompletions({
-        model: req.body.model || config.defaultModel,
-        messages: transformedMessages,
-        tools: req.body.tools,
-        tool_choice: req.body.tool_choice,
-        temperature: req.body.temperature || config.defaultTemperature,
-        max_tokens: req.body.max_tokens || config.defaultMaxTokens,
-        top_p: req.body.top_p || config.defaultTopP,
-        top_k: req.body.top_k || config.defaultTopK,
-        repetition_penalty: req.body.repetition_penalty || config.defaultRepetitionPenalty,
-        reasoning: req.body.reasoning,
-        accountId: accountId
-      });
+      const stream = await withRetry(
+        async () => {
+          return await qwenAPI.streamChatCompletions({
+            model: req.body.model || config.defaultModel,
+            messages: transformedMessages,
+            tools: req.body.tools,
+            tool_choice: req.body.tool_choice,
+            temperature: req.body.temperature || config.defaultTemperature,
+            max_tokens: req.body.max_tokens || config.defaultMaxTokens,
+            top_p: req.body.top_p || config.defaultTopP,
+            top_k: req.body.top_k || config.defaultTopK,
+            repetition_penalty: req.body.repetition_penalty || config.defaultRepetitionPenalty,
+            reasoning: req.body.reasoning,
+            accountId: accountId
+          });
+        },
+        config.maxRetries,
+        config.retryDelayMs,
+        liveLogger,
+        requestId
+      );
       
       if (fileLogger.isDebugLogging) {
         const logContent = fileLogger.formatLogContent(requestId, req, { model, messages: transformedMessages }, 200, 0, { streaming: true });

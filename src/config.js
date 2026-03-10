@@ -43,6 +43,10 @@ module.exports = {
   // LOG_LEVEL env var: off, error, error-debug, debug
   // ERROR_LOG_MAX_MB, ERROR_LOG_MAX_DAYS, MAX_DEBUG_LOGS env vars
 
+  // Retry configuration
+  maxRetries: parseInt(process.env.MAX_RETRIES || '5'),
+  retryDelayMs: parseInt(process.env.RETRY_DELAY_MS || '1000'),
+
   // API Key configuration
   apiKey: process.env.API_KEY ?
     process.env.API_KEY.split(',').map(key => key.trim()).filter(key => key.length > 0) :
