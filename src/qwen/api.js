@@ -294,11 +294,6 @@ class QwenAPI {
     this.lastResetDate = new Date().toISOString().split('T')[0]; // Track last reset date (UTC)
     this.requestCountFile = path.join(this.authManager.qwenDir, 'request_counts.json');
     
-    // Smart account selection
-    this.failedAccountsFile = path.join(this.authManager.qwenDir, 'failed_accounts.json');
-    this.failedAccounts = new Set();
-    this.lastFailedReset = null;
-    
     // File I/O caching mechanism
     this.lastSaveTime = 0;
     this.saveInterval = 60000; // Save every 60 seconds
@@ -317,20 +312,6 @@ class QwenAPI {
     this.webSearchResultCounts = new Map(); // Track web search results returned per account per day
     
     this.loadRequestCounts();
-    this.loadFailedAccounts();
-  }
-
-  /**
-   * Reset failed accounts if we've crossed into a new UTC day
-   */
-  async resetFailedAccountsIfNeeded() {
-    const today = new Date().toISOString().split('T')[0];
-    if (this.lastFailedReset !== today) {
-      this.failedAccounts.clear();
-      this.lastFailedReset = today;
-      await this.saveFailedAccounts();
-      console.log('Resetting failed accounts for new UTC day');
-    }
   }
 
   /**
@@ -476,66 +457,6 @@ class QwenAPI {
   }
 
   /**
-   * Load failed accounts from local JSON file
-   */
-  async loadFailedAccounts() {
-    try {
-      const data = await fs.readFile(this.failedAccountsFile, 'utf8');
-      const failed = JSON.parse(data);
-      
-      // Reset failed accounts if it's a new UTC day
-      const today = new Date().toISOString().split('T')[0];
-      if (failed.lastReset !== today) {
-        console.log('Resetting failed accounts for new UTC day');
-        this.failedAccounts.clear();
-        this.lastFailedReset = today;
-        await this.saveFailedAccounts();
-      } else {
-        this.failedAccounts = new Set(failed.accounts || []);
-        this.lastFailedReset = failed.lastReset;
-      }
-    } catch (error) {
-      // File doesn't exist or is invalid, start with empty failed accounts
-      this.failedAccounts.clear();
-      this.lastFailedReset = new Date().toISOString().split('T')[0];
-      this.saveFailedAccounts();
-    }
-  }
-
-  /**
-   * Save failed accounts to local JSON file
-   */
-  async saveFailedAccounts() {
-    try {
-      const data = {
-        accounts: Array.from(this.failedAccounts),
-        lastReset: this.lastFailedReset
-      };
-      await fs.writeFile(this.failedAccountsFile, JSON.stringify(data, null, 2));
-    } catch (error) {
-      console.warn('Failed to save failed accounts:', error.message);
-    }
-  }
-
-  /**
-   * Mark an account as failed
-   */
-  async markAccountAsFailed(accountId) {
-    if (!this.failedAccounts.has(accountId)) {
-      this.failedAccounts.add(accountId);
-      console.log(`Marked account ${accountId} as failed`);
-      await this.saveFailedAccounts();
-    }
-  }
-
-  /**
-   * Get list of healthy accounts (not in failed list)
-   */
-  getHealthyAccounts(allAccountIds) {
-    return allAccountIds.filter(id => !this.failedAccounts.has(id));
-  }
-
-  /**
    * Increment request count for an account
    * @param {string} accountId - The account ID
    */
@@ -633,9 +554,9 @@ class QwenAPI {
   async getBestAccount(exclude = new Set()) {
     // Get all available accounts
     const accountIds = this.authManager.getAccountIds();
-    let healthyAccountIds = this.getHealthyAccounts(accountIds);
+    let availableAccountIds = accountIds;
     if (exclude && exclude.size) {
-      healthyAccountIds = healthyAccountIds.filter(id => !exclude.has(id));
+      availableAccountIds = availableAccountIds.filter(id => !exclude.has(id));
     }
 
     if (healthyAccountIds.length === 0) {
@@ -661,7 +582,7 @@ class QwenAPI {
     }
 
     if (accountCredentials.length === 0) {
-      console.log('No valid credentials found for any healthy account');
+      console.log('No valid credentials found for any available account');
       return null;
     }
 
@@ -727,8 +648,6 @@ class QwenAPI {
   }
 
   async chatCompletions(request) {
-    // Reset daily state and load accounts
-    await this.resetFailedAccountsIfNeeded();
     await this.authManager.loadAllAccounts();
     const forcedAccountId = request.accountId;
     if (forcedAccountId) {
@@ -788,7 +707,6 @@ class QwenAPI {
         }
       } catch (error) {
         lastError = error;
-        await this.handleRequestError(error, bestAccount.accountId);
         tried.add(bestAccount.accountId);
         continue;
       }
@@ -856,47 +774,6 @@ class QwenAPI {
     }
     
     return response.data;
-  }
-
-  /**
-   * Handle request errors with smart account management
-   */
-  async handleRequestError(error, accountId) {
-    if (!error.response) {
-      // Network or other non-API errors - don't mark account as failed
-      return;
-    }
-
-    const status = error.response.status;
-    const errorData = error.response.data || {};
-    
-    // Mark account as failed for specific error types
-    if (status === 429 || // Rate limit/quota exceeded
-        (status === 401 && errorData.error?.message?.includes('Invalid access token')) ||
-        (status === 400 && errorData.error?.message?.includes('quota'))) {
-      
-      console.log(`\x1b[33mMarking account ${accountId} as failed due to ${status} error\x1b[0m`);
-      await this.markAccountAsFailed(accountId);
-    } else if (status === 401) {
-      // Try to refresh token for other 401 errors
-      try {
-        console.log(`\x1b[33mAttempting token refresh for account ${accountId}\x1b[0m`);
-        const credentials = this.authManager.getAccountCredentials(accountId);
-        if (credentials) {
-          await this.authManager.performTokenRefresh(credentials, accountId);
-          console.log(`\x1b[32mSuccessfully refreshed token for account ${accountId}\x1b[0m`);
-        }
-      } catch (refreshError) {
-        console.log(`\x1b[31mToken refresh failed for account ${accountId}, marking as failed\x1b[0m`);
-        await this.markAccountAsFailed(accountId);
-      }
-    } else {
-      // Other errors - log but don't mark as failed also log error details like error message
-      console.log(`\x1b[33mReceived ${status} error for account ${accountId}, not marking as failed\x1b[0m`);
-      console.log(`\x1b[33mError details: ${JSON.stringify(errorData)}\x1b[0m`);
-    }
-    
-    // For 500/502/504 errors, don't mark account as failed (temporary server issues)
   }
 
   /**
@@ -1077,8 +954,6 @@ class QwenAPI {
    * @returns {Promise<Stream>} - A stream of SSE events
    */
   async streamChatCompletions(request) {
-    // Reset daily state and load accounts
-    await this.resetFailedAccountsIfNeeded();
     await this.authManager.loadAllAccounts();
     const forcedAccountId = request.accountId;
     const accountIds = this.authManager.getAccountIds();
@@ -1185,8 +1060,7 @@ class QwenAPI {
         }
       } catch (error) {
         lastError = error;
-        await this.handleRequestError(error, accountId);
-        tried.add(accountId);
+        tried.add(bestAccount.accountId);
         continue;
       }
     }
@@ -1200,8 +1074,6 @@ class QwenAPI {
    * @returns {Promise<Object>} - Web search results
    */
   async webSearch(request) {
-    // Reset daily state and load accounts
-    await this.resetFailedAccountsIfNeeded();
     await this.authManager.loadAllAccounts();
     const forcedAccountId = request.accountId;
     
@@ -1250,14 +1122,13 @@ class QwenAPI {
         }
       } catch (error) {
         lastError = error;
-        await this.handleRequestError(error, bestAccount.accountId);
         tried.add(bestAccount.accountId);
         continue;
       }
     }
     
     if (lastError) throw lastError;
-    throw new Error('No healthy accounts available');
+    throw new Error('No accounts available');
   }
 
   /**
