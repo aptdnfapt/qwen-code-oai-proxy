@@ -5,7 +5,8 @@ class AccountRefreshScheduler {
   constructor(qwenAPI) {
     this.qwenAPI = qwenAPI;
     this.refreshInterval = null;
-    this.isRefreshing = false; // Flag to prevent concurrent refresh processes
+    this.isRefreshing = false;
+    this.refreshThresholds = new Map(); // Flag to prevent concurrent refresh processes
   }
 
   /**
@@ -79,43 +80,41 @@ class AccountRefreshScheduler {
       const accountsToRefresh = [];
       let expiredAccountsFound = false;
 
-      const total = refreshTargets.length;
-      console.log(`\x1b[33m○\x1b[0m Refresh | \x1b[33mcheck\x1b[0m | ${total} accounts`);
-
       for (const target of refreshTargets) {
         const { accountId, credentials } = target;
 
         if (!credentials) {
-          console.log(`\x1b[31m%s\x1b[0m`, `No credentials found for account ${accountId}`);
           continue;
         }
 
-        // Check if the account token is actually expired (past expiry date)
         const isExpired = credentials.expiry_date <= Date.now();
-        const minutesLeft = (credentials.expiry_date - Date.now()) / 60000; // Convert to minutes
+        const minutesLeft = (credentials.expiry_date - Date.now()) / 60000;
 
-          if (isExpired) {
-            expiredAccountsFound = true;
-            accountsToRefresh.push(target);
-            console.log(`\x1b[31m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[31mexpired\x1b[0m`);
-          } else if (minutesLeft <= 10) {
-            expiredAccountsFound = true;
-            accountsToRefresh.push(target);
-            console.log(`\x1b[33m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[33mexpiring soon\x1b[0m | ${minutesLeft.toFixed(0)}m`);
-          } else {
-            const refreshThresholdMinutes = Math.floor(Math.random() * 21) + 10;
-
-            if (minutesLeft <= refreshThresholdMinutes) {
-              expiredAccountsFound = true;
-              accountsToRefresh.push(target);
-              console.log(`\x1b[35m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[35mexpiring\x1b[0m | ${minutesLeft.toFixed(0)}m`);
-            }
+        if (isExpired) {
+          expiredAccountsFound = true;
+          accountsToRefresh.push(target);
+          console.log(`\x1b[31m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[31mexpired\x1b[0m`);
+        } else if (minutesLeft <= 10) {
+          expiredAccountsFound = true;
+          accountsToRefresh.push(target);
+          console.log(`\x1b[33m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[33mexpiring\x1b[0m | ${minutesLeft.toFixed(0)}m`);
+        } else {
+          let threshold = this.refreshThresholds.get(accountId);
+          if (!threshold) {
+            threshold = Math.floor(Math.random() * 21) + 10;
+            this.refreshThresholds.set(accountId, threshold);
           }
+
+          if (minutesLeft <= threshold) {
+            expiredAccountsFound = true;
+            accountsToRefresh.push(target);
+            console.log(`\x1b[35m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[35mexpiring\x1b[0m | ${minutesLeft.toFixed(0)}m`);
+          }
+        }
       }
 
       if (!expiredAccountsFound) {
-        const total = refreshTargets.length;
-        console.log(`\x1b[32m●\x1b[0m Refresh | \x1b[32midle\x1b[0m | ${total} accounts`);
+        console.log(`\x1b[32m●\x1b[0m Refresh | \x1b[32midle\x1b[0m | ${refreshTargets.length} accounts`);
         return;
       }
 
@@ -142,6 +141,7 @@ class AccountRefreshScheduler {
               credentials,
               isDefault ? null : accountId
             );
+            this.refreshThresholds.delete(accountId);
             console.log(`\x1b[32m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[32mrefreshed\x1b[0m`);
           } catch (refreshError) {
             console.warn(`\x1b[31m✗\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[31mfailed\x1b[0m: ${refreshError.message.substring(0, 30)}`);
@@ -160,10 +160,7 @@ class AccountRefreshScheduler {
   }
 
   async forceRefreshAllAccounts() {
-    
-    // Load all accounts
     await this.qwenAPI.authManager.loadAllAccounts();
-    
     const accountIds = this.qwenAPI.authManager.getAccountIds();
     const defaultCredentials = await this.qwenAPI.authManager.loadCredentials();
     const refreshTargets = [];
@@ -185,7 +182,7 @@ class AccountRefreshScheduler {
     }
 
     if (refreshTargets.length === 0) {
-      console.log('\x1b[33m%s\x1b[0m', 'No accounts configured');
+      console.log(`\x1b[33m○\x1b[0m Refresh | \x1b[33mnone\x1b[0m | no accounts`);
       return;
     }
 
@@ -197,38 +194,27 @@ class AccountRefreshScheduler {
       const credentials = isDefault
         ? await this.qwenAPI.authManager.loadCredentials()
         : this.qwenAPI.authManager.getAccountCredentials(accountId);
-      
+
       if (!credentials) {
-        console.log(`\x1b[31m%s\x1b[0m`, `No credentials found for account ${accountId}`);
         failCount++;
         continue;
       }
 
-      // Use account lock to prevent conflicts during refresh
-      const lockAcquired = await this.qwenAPI.acquireAccountLock(accountId);
-      if (lockAcquired) {
-        try {
-          // Force refresh regardless of expiration status
-          const refreshedCredentials = await this.qwenAPI.authManager.performTokenRefresh(
-            credentials,
-            isDefault ? null : accountId
-          );
-          console.log(`\x1b[32m%s\x1b[0m`, `Successfully refreshed token for account ${accountId}. New expiry: ${new Date(refreshedCredentials.expiry_date).toISOString()}`);
-          successCount++;
-        } catch (refreshError) {
-          console.log(`\x1b[31m%s\x1b[0m`, `Failed to refresh token for account ${accountId}: ${refreshError.message}`);
-          failCount++;
-        } finally {
-          // Always release the lock after refresh attempt
-          this.qwenAPI.releaseAccountLock(accountId);
-        }
-      } else {
-        console.log(`\x1b[33m%s\x1b[0m`, `Account ${accountId} is currently in use, skipping refresh`);
+      try {
+        await this.qwenAPI.authManager.performTokenRefresh(
+          credentials,
+          isDefault ? null : accountId
+        );
+        this.refreshThresholds.delete(accountId);
+        console.log(`\x1b[32m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[32mforced\x1b[0m`);
+        successCount++;
+      } catch (refreshError) {
+        console.warn(`\x1b[31m✗\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[31mfailed\x1b[0m: ${refreshError.message.substring(0, 30)}`);
         failCount++;
       }
     }
 
-
+    console.log(`\x1b[36m●\x1b[0m Refresh | \x1b[36mforced\x1b[0m | ${successCount} ok, ${failCount} fail`);
   }
 }
 
