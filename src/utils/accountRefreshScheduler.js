@@ -71,8 +71,26 @@ class AccountRefreshScheduler {
       await this.qwenAPI.authManager.loadAllAccounts();
 
       const accountIds = this.qwenAPI.authManager.getAccountIds();
+      const defaultCredentials = await this.qwenAPI.authManager.loadCredentials();
+      const refreshTargets = [];
 
-      if (accountIds.length === 0) {
+      if (defaultCredentials) {
+        refreshTargets.push({
+          accountId: 'default',
+          credentials: defaultCredentials,
+          isDefault: true,
+        });
+      }
+
+      for (const accountId of accountIds) {
+        refreshTargets.push({
+          accountId,
+          credentials: this.qwenAPI.authManager.getAccountCredentials(accountId),
+          isDefault: false,
+        });
+      }
+
+      if (refreshTargets.length === 0) {
         console.log('\x1b[33m%s\x1b[0m', 'No accounts configured, skipping refresh check');
         return;
       }
@@ -81,8 +99,8 @@ class AccountRefreshScheduler {
       const accountsToRefresh = [];
       let expiredAccountsFound = false;
 
-      for (const accountId of accountIds) {
-        const credentials = this.qwenAPI.authManager.getAccountCredentials(accountId);
+      for (const target of refreshTargets) {
+        const { accountId, credentials } = target;
 
         if (!credentials) {
           console.log(`\x1b[31m%s\x1b[0m`, `No credentials found for account ${accountId}`);
@@ -95,12 +113,12 @@ class AccountRefreshScheduler {
 
         if (isExpired) {
           expiredAccountsFound = true;
-          accountsToRefresh.push(accountId);
+           accountsToRefresh.push(target);
           console.log(`\x1b[33m%s\x1b[0m`, `Account ${accountId} is expired (was valid until ${new Date(credentials.expiry_date).toISOString()})`);
         } else if (minutesLeft <= 10) {
           // Always include accounts expiring within 10 minutes
           expiredAccountsFound = true;
-          accountsToRefresh.push(accountId);
+           accountsToRefresh.push(target);
           console.log(`\x1b[33m%s\x1b[0m`, `Account ${accountId} expires in ${minutesLeft.toFixed(1)} minutes (within 10 minute threshold), including for proactive refresh`);
         } else {
           // Generate a random threshold (1-30 minutes) for proactive refresh for each account
@@ -109,7 +127,7 @@ class AccountRefreshScheduler {
           if (minutesLeft <= refreshThresholdMinutes) {
             // Include accounts that will expire soon (within the random threshold)
             expiredAccountsFound = true;
-            accountsToRefresh.push(accountId);
+             accountsToRefresh.push(target);
             console.log(`\x1b[33m%s\x1b[0m`, `Account ${accountId} expires in ${minutesLeft.toFixed(1)} minutes (less than ${refreshThresholdMinutes} minute threshold), including for proactive refresh`);
           } else if (minutesLeft < 60) { // Warn if expiring within the next hour but not included for refresh
             console.log(`\x1b[33m%s\x1b[0m`, `Account ${accountId} token expires in ${minutesLeft.toFixed(1)} minutes`);
@@ -130,8 +148,11 @@ class AccountRefreshScheduler {
         const batch = accountsToRefresh.slice(i, i + batchSize);
 
         // Process the current batch in parallel
-        const batchPromises = batch.map(async (accountId) => {
-          const credentials = this.qwenAPI.authManager.getAccountCredentials(accountId);
+        const batchPromises = batch.map(async (target) => {
+          const { accountId, isDefault } = target;
+          const credentials = isDefault
+            ? await this.qwenAPI.authManager.loadCredentials()
+            : this.qwenAPI.authManager.getAccountCredentials(accountId);
 
           if (!credentials) {
             console.log(`\x1b[31m%s\x1b[0m`, `No credentials found for account ${accountId}`);
@@ -140,7 +161,10 @@ class AccountRefreshScheduler {
 
           try {
             // Attempt to refresh the token
-            const refreshedCredentials = await this.qwenAPI.authManager.performTokenRefresh(credentials, accountId);
+            const refreshedCredentials = await this.qwenAPI.authManager.performTokenRefresh(
+              credentials,
+              isDefault ? null : accountId
+            );
             console.log(`\x1b[32m%s\x1b[0m`, `Successfully refreshed token for account ${accountId}. New expiry: ${new Date(refreshedCredentials.expiry_date).toISOString()}`);
           } catch (refreshError) {
             console.log(`\x1b[31m%s\x1b[0m`, `Failed to refresh token for account ${accountId}: ${refreshError.message}`);
@@ -171,8 +195,26 @@ class AccountRefreshScheduler {
     await this.qwenAPI.authManager.loadAllAccounts();
     
     const accountIds = this.qwenAPI.authManager.getAccountIds();
-    
-    if (accountIds.length === 0) {
+    const defaultCredentials = await this.qwenAPI.authManager.loadCredentials();
+    const refreshTargets = [];
+
+    if (defaultCredentials) {
+      refreshTargets.push({
+        accountId: 'default',
+        credentials: defaultCredentials,
+        isDefault: true,
+      });
+    }
+
+    for (const accountId of accountIds) {
+      refreshTargets.push({
+        accountId,
+        credentials: this.qwenAPI.authManager.getAccountCredentials(accountId),
+        isDefault: false,
+      });
+    }
+
+    if (refreshTargets.length === 0) {
       console.log('\x1b[33m%s\x1b[0m', 'No accounts configured');
       return;
     }
@@ -180,8 +222,11 @@ class AccountRefreshScheduler {
     let successCount = 0;
     let failCount = 0;
 
-    for (const accountId of accountIds) {
-      const credentials = this.qwenAPI.authManager.getAccountCredentials(accountId);
+    for (const target of refreshTargets) {
+      const { accountId, isDefault } = target;
+      const credentials = isDefault
+        ? await this.qwenAPI.authManager.loadCredentials()
+        : this.qwenAPI.authManager.getAccountCredentials(accountId);
       
       if (!credentials) {
         console.log(`\x1b[31m%s\x1b[0m`, `No credentials found for account ${accountId}`);
@@ -194,7 +239,10 @@ class AccountRefreshScheduler {
       if (lockAcquired) {
         try {
           // Force refresh regardless of expiration status
-          const refreshedCredentials = await this.qwenAPI.authManager.performTokenRefresh(credentials, accountId);
+          const refreshedCredentials = await this.qwenAPI.authManager.performTokenRefresh(
+            credentials,
+            isDefault ? null : accountId
+          );
           console.log(`\x1b[32m%s\x1b[0m`, `Successfully refreshed token for account ${accountId}. New expiry: ${new Date(refreshedCredentials.expiry_date).toISOString()}`);
           successCount++;
         } catch (refreshError) {

@@ -14,50 +14,22 @@ const liveLogger = require('./utils/liveLogger.js');
 const fileLogger = require('./utils/fileLogger.js');
 
 const app = express();
-// Increase body parser limits for large requests
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(cors());
 
-// Initialize Qwen API client
 const qwenAPI = new QwenAPI();
 const authManager = new QwenAuthManager();
 const debugLogger = new DebugLogger();
 const accountRefreshScheduler = new AccountRefreshScheduler(qwenAPI);
 
-// Retry helper for 500 and 429 errors
-async function withRetry(fn, maxRetries = config.maxRetries, delayMs = config.retryDelayMs, logger = null, requestId = null) {
-  let lastError = null;
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error;
-      const status = error.response?.status;
-      const isRetryable = status === 500 || status === 429 || error.message?.includes('500') || error.message?.includes('429');
-      if (!isRetryable || attempt === maxRetries) {
-        throw error;
-      }
-      if (logger && requestId) {
-        logger.proxyError(requestId, status || 500, 'default', `Retry ${attempt}/${maxRetries}: ${error.message.substring(0, 50)}`);
-      }
-      await new Promise(resolve => setTimeout(resolve, delayMs * attempt));
-    }
-  }
-  throw lastError;
-}
-
-// API Key middleware
 const validateApiKey = (req, res, next) => {
-  // If no API key is configured, skip validation
   if (!config.apiKey) {
     return next();
   }
 
-  // Check for API key in header
   const apiKey = req.headers["x-api-key"] || req.headers["authorization"];
 
-  // Handle both "Bearer <token>" and direct API key formats
   let cleanApiKey = null;
   if (apiKey && typeof apiKey === "string") {
     if (apiKey.startsWith("Bearer ")) {
@@ -67,12 +39,8 @@ const validateApiKey = (req, res, next) => {
     }
   }
 
-  // Check if the provided API key matches any of the configured keys
   if (!cleanApiKey || !config.apiKey?.includes(cleanApiKey)) {
-    console.error(
-      "\x1b[31m%s\x1b[0m",
-      "Unauthorized request - Invalid or missing API key",
-    );
+    console.error("\x1b[31m%s\x1b[0m", "Unauthorized request - Invalid or missing API key");
     return res.status(401).json({
       error: {
         message: "Invalid or missing API key",
@@ -135,27 +103,19 @@ class QwenOpenAIProxy {
         req.body.model || config.defaultModel
       );
       
-      const response = await withRetry(
-        async () => {
-          return await qwenAPI.chatCompletions({
-            model: req.body.model || config.defaultModel,
-            messages: transformedMessages,
-            tools: req.body.tools,
-            tool_choice: req.body.tool_choice,
-            temperature: req.body.temperature || config.defaultTemperature,
-            max_tokens: req.body.max_tokens || config.defaultMaxTokens,
-            top_p: req.body.top_p || config.defaultTopP,
-            top_k: req.body.top_k || config.defaultTopK,
-            repetition_penalty: req.body.repetition_penalty || config.defaultRepetitionPenalty,
-            reasoning: req.body.reasoning,
-            accountId: accountId
-          });
-        },
-        config.maxRetries,
-        config.retryDelayMs,
-        liveLogger,
-        requestId
-      );
+      const response = await qwenAPI.chatCompletions({
+        model: req.body.model || config.defaultModel,
+        messages: transformedMessages,
+        tools: req.body.tools,
+        tool_choice: req.body.tool_choice,
+        temperature: req.body.temperature || config.defaultTemperature,
+        max_tokens: req.body.max_tokens || config.defaultMaxTokens,
+        top_p: req.body.top_p || config.defaultTopP,
+        top_k: req.body.top_k || config.defaultTopK,
+        repetition_penalty: req.body.repetition_penalty || config.defaultRepetitionPenalty,
+        reasoning: req.body.reasoning,
+        accountId: accountId
+      });
       
       const latency = Date.now() - startTime;
       const inputTokens = response?.usage?.prompt_tokens || 0;
@@ -201,27 +161,19 @@ class QwenOpenAIProxy {
         req.body.model || config.defaultModel
       );
 
-      const stream = await withRetry(
-        async () => {
-          return await qwenAPI.streamChatCompletions({
-            model: req.body.model || config.defaultModel,
-            messages: transformedMessages,
-            tools: req.body.tools,
-            tool_choice: req.body.tool_choice,
-            temperature: req.body.temperature || config.defaultTemperature,
-            max_tokens: req.body.max_tokens || config.defaultMaxTokens,
-            top_p: req.body.top_p || config.defaultTopP,
-            top_k: req.body.top_k || config.defaultTopK,
-            repetition_penalty: req.body.repetition_penalty || config.defaultRepetitionPenalty,
-            reasoning: req.body.reasoning,
-            accountId: accountId
-          });
-        },
-        config.maxRetries,
-        config.retryDelayMs,
-        liveLogger,
-        requestId
-      );
+      const stream = await qwenAPI.streamChatCompletions({
+        model: req.body.model || config.defaultModel,
+        messages: transformedMessages,
+        tools: req.body.tools,
+        tool_choice: req.body.tool_choice,
+        temperature: req.body.temperature || config.defaultTemperature,
+        max_tokens: req.body.max_tokens || config.defaultMaxTokens,
+        top_p: req.body.top_p || config.defaultTopP,
+        top_k: req.body.top_k || config.defaultTopK,
+        repetition_penalty: req.body.repetition_penalty || config.defaultRepetitionPenalty,
+        reasoning: req.body.reasoning,
+        accountId: accountId
+      });
       
       if (fileLogger.isDebugLogging) {
         const logContent = fileLogger.formatLogContent(requestId, req, { model, messages: transformedMessages }, 200, 0, { streaming: true });
@@ -508,11 +460,9 @@ app.post('/mcp', mcpPostHandler);
 app.get('/health', async (req, res) => {
   try {
     await qwenAPI.authManager.loadAllAccounts();
+    await qwenAPI.healthManager.ready;
     const defaultCredentials = await qwenAPI.authManager.loadCredentials();
     const accountIds = qwenAPI.authManager.getAccountIds();
-    const healthyAccounts = qwenAPI.getHealthyAccounts(accountIds);
-    const failedAccounts = healthyAccounts.length === 0 ?
-      new Set(accountIds) : new Set(accountIds.filter(id => !healthyAccounts.includes(id)));
 
     const accounts = [];
     let totalRequestsToday = 0;
@@ -530,10 +480,11 @@ app.get('/health', async (req, res) => {
         status,
         expiresIn: expiresIn ? `${expiresIn.toFixed(1)} minutes` : null,
         requestCount: requestCount,
-        webSearchCount: webSearchCount,
-        authErrorCount: qwenAPI.getAuthErrorCount('default')
+        webSearchCount: webSearchCount
       });
     }
+
+    const healthStatus = qwenAPI.healthManager.getStatus();
 
     for (const accountId of accountIds) {
       const credentials = qwenAPI.authManager.getAccountCredentials(accountId);
@@ -542,8 +493,10 @@ app.get('/health', async (req, res) => {
 
       if (credentials) {
         const minutesLeft = (credentials.expiry_date - Date.now()) / 60000;
-        if (failedAccounts.has(accountId)) {
-          status = 'failed';
+        const isBlocked = qwenAPI.healthManager.isBlocked(accountId);
+        
+        if (isBlocked) {
+          status = 'blocked';
         } else if (minutesLeft < 0) {
           status = 'expired';
         } else if (minutesLeft < 30) {
@@ -556,6 +509,7 @@ app.get('/health', async (req, res) => {
 
       const requestCount = qwenAPI.getRequestCount(accountId);
       const webSearchCount = qwenAPI.getWebSearchRequestCount(accountId);
+      const strikes = qwenAPI.healthManager.getStrikes(accountId);
       totalRequestsToday += requestCount;
 
       accounts.push({
@@ -564,16 +518,15 @@ app.get('/health', async (req, res) => {
         expiresIn: expiresIn ? `${expiresIn.toFixed(1)} minutes` : null,
         requestCount: requestCount,
         webSearchCount: webSearchCount,
-        authErrorCount: qwenAPI.getAuthErrorCount(accountId)
+        strikes: strikes
       });
     }
 
     const healthyCount = accounts.filter(a => a.status === 'healthy').length;
-    const failedCount = accounts.filter(a => a.status === 'failed').length;
+    const blockedCount = accounts.filter(a => a.status === 'blocked').length;
     const expiringSoonCount = accounts.filter(a => a.status === 'expiring_soon').length;
     const expiredCount = accounts.filter(a => a.status === 'expired').length;
 
-    // Get token usage data
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
 
@@ -592,11 +545,11 @@ app.get('/health', async (req, res) => {
       summary: {
         total: accounts.length,
         healthy: healthyCount,
-        failed: failedCount,
+        blocked: blockedCount,
         expiring_soon: expiringSoonCount,
         expired: expiredCount,
         total_requests_today: totalRequestsToday,
-        lastReset: qwenAPI.lastFailedReset
+        lastReset: qwenAPI.lastResetDate
       },
       token_usage: {
         input_tokens_today: totalInputTokens,
@@ -604,6 +557,7 @@ app.get('/health', async (req, res) => {
         total_tokens_today: totalInputTokens + totalOutputTokens
       },
       accounts,
+      health: healthStatus,
       server_info: {
         uptime: process.uptime(),
         memory: process.memoryUsage(),
