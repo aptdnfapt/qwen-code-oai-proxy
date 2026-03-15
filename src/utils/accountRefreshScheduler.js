@@ -18,35 +18,22 @@ class AccountRefreshScheduler {
     await this.startScheduler();
   }
 
-  /**
-   * Start the hourly refresh scheduler
-   */
   async startScheduler() {
-    // Clear any existing interval
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
     }
 
-    // Run the check immediately when starting
     await this.checkAndRefreshExpiredAccounts();
-    
-    // Then run every hour (60 * 60 * 1000 milliseconds = 1 hour)
-    this.refreshInterval = setInterval(async () => {
-      console.log('\x1b[36m%s\x1b[0m', 'Running background account refresh check...');
-      await this.checkAndRefreshExpiredAccounts();
-    }, 5 * 60 * 1000); // Changed to every 5 minutes for more frequent checks
 
-    console.log('\x1b[32m%s\x1b[0m', 'Account refresh scheduler started - will run in background every 5 minutes');
+    this.refreshInterval = setInterval(() => {
+      this.checkAndRefreshExpiredAccounts();
+    }, 5 * 60 * 1000);
   }
 
-  /**
-   * Stop the refresh scheduler
-   */
   stopScheduler() {
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
       this.refreshInterval = null;
-      console.log('\x1b[33m%s\x1b[0m', 'Account refresh scheduler stopped');
     }
   }
 
@@ -65,7 +52,6 @@ class AccountRefreshScheduler {
     this.isRefreshing = true;
 
     try {
-      console.log('\x1b[36m%s\x1b[0m', 'Checking for expired accounts...');
 
       // Load all accounts (in case new ones were added)
       await this.qwenAPI.authManager.loadAllAccounts();
@@ -90,14 +76,11 @@ class AccountRefreshScheduler {
         });
       }
 
-      if (refreshTargets.length === 0) {
-        console.log('\x1b[33m%s\x1b[0m', 'No accounts configured, skipping refresh check');
-        return;
-      }
-
-      // Separate accounts that need refresh (expired or expiring soon) for processing
       const accountsToRefresh = [];
       let expiredAccountsFound = false;
+
+      const total = refreshTargets.length;
+      console.log(`\x1b[33m○\x1b[0m Refresh | \x1b[33mcheck\x1b[0m | ${total} accounts`);
 
       for (const target of refreshTargets) {
         const { accountId, credentials } = target;
@@ -111,34 +94,28 @@ class AccountRefreshScheduler {
         const isExpired = credentials.expiry_date <= Date.now();
         const minutesLeft = (credentials.expiry_date - Date.now()) / 60000; // Convert to minutes
 
-        if (isExpired) {
-          expiredAccountsFound = true;
-           accountsToRefresh.push(target);
-          console.log(`\x1b[33m%s\x1b[0m`, `Account ${accountId} is expired (was valid until ${new Date(credentials.expiry_date).toISOString()})`);
-        } else if (minutesLeft <= 10) {
-          // Always include accounts expiring within 10 minutes
-          expiredAccountsFound = true;
-           accountsToRefresh.push(target);
-          console.log(`\x1b[33m%s\x1b[0m`, `Account ${accountId} expires in ${minutesLeft.toFixed(1)} minutes (within 10 minute threshold), including for proactive refresh`);
-        } else {
-          // Generate a random threshold (1-30 minutes) for proactive refresh for each account
-          const refreshThresholdMinutes = Math.floor(Math.random() * 21) + 10; // Random between 10 and 30 minutes
-
-          if (minutesLeft <= refreshThresholdMinutes) {
-            // Include accounts that will expire soon (within the random threshold)
+          if (isExpired) {
             expiredAccountsFound = true;
-             accountsToRefresh.push(target);
-            console.log(`\x1b[33m%s\x1b[0m`, `Account ${accountId} expires in ${minutesLeft.toFixed(1)} minutes (less than ${refreshThresholdMinutes} minute threshold), including for proactive refresh`);
-          } else if (minutesLeft < 60) { // Warn if expiring within the next hour but not included for refresh
-            console.log(`\x1b[33m%s\x1b[0m`, `Account ${accountId} token expires in ${minutesLeft.toFixed(1)} minutes`);
+            accountsToRefresh.push(target);
+            console.log(`\x1b[31m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[31mexpired\x1b[0m`);
+          } else if (minutesLeft <= 10) {
+            expiredAccountsFound = true;
+            accountsToRefresh.push(target);
+            console.log(`\x1b[33m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[33mexpiring soon\x1b[0m | ${minutesLeft.toFixed(0)}m`);
           } else {
-            console.log(`\x1b[32m%s\x1b[0m`, `Account ${accountId} token is valid for ${minutesLeft.toFixed(1)} more minutes`);
+            const refreshThresholdMinutes = Math.floor(Math.random() * 21) + 10;
+
+            if (minutesLeft <= refreshThresholdMinutes) {
+              expiredAccountsFound = true;
+              accountsToRefresh.push(target);
+              console.log(`\x1b[35m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[35mexpiring\x1b[0m | ${minutesLeft.toFixed(0)}m`);
+            }
           }
-        }
       }
 
       if (!expiredAccountsFound) {
-        console.log('\x1b[32m%s\x1b[0m', 'No accounts need refresh (no expired or soon-to-expire accounts)');
+        const total = refreshTargets.length;
+        console.log(`\x1b[32m●\x1b[0m Refresh | \x1b[32midle\x1b[0m | ${total} accounts`);
         return;
       }
 
@@ -161,35 +138,28 @@ class AccountRefreshScheduler {
 
           try {
             // Attempt to refresh the token
-            const refreshedCredentials = await this.qwenAPI.authManager.performTokenRefresh(
+            await this.qwenAPI.authManager.performTokenRefresh(
               credentials,
               isDefault ? null : accountId
             );
-            console.log(`\x1b[32m%s\x1b[0m`, `Successfully refreshed token for account ${accountId}. New expiry: ${new Date(refreshedCredentials.expiry_date).toISOString()}`);
+            console.log(`\x1b[32m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[32mrefreshed\x1b[0m`);
           } catch (refreshError) {
-            console.log(`\x1b[31m%s\x1b[0m`, `Failed to refresh token for account ${accountId}: ${refreshError.message}`);
+            console.warn(`\x1b[31m✗\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[31mfailed\x1b[0m: ${refreshError.message.substring(0, 30)}`);
           }
 
         });
 
-        // Wait for all promises in the current batch to complete
         await Promise.allSettled(batchPromises);
       }
-
-      console.log('\x1b[32m%s\x1b[0m', 'Expired account refresh check completed');
     } catch (error) {
-      console.log(`\x1b[31m%s\x1b[0m`, `Error during account refresh check: ${error.message}`);
+      console.warn(`\x1b[31m!\x1b[0m Refresh | \x1b[31merror\x1b[0m: ${error.message.substring(0, 30)}`);
     } finally {
       // Reset the flag to indicate the refresh process is complete
       this.isRefreshing = false;
     }
   }
 
-  /**
-   * Force a refresh of all accounts (not just expired ones)
-   */
   async forceRefreshAllAccounts() {
-    console.log('\x1b[36m%s\x1b[0m', 'Forcing refresh of all accounts...');
     
     // Load all accounts
     await this.qwenAPI.authManager.loadAllAccounts();
@@ -258,7 +228,7 @@ class AccountRefreshScheduler {
       }
     }
 
-    console.log(`\x1b[36m%s\x1b[0m`, `Force refresh completed: ${successCount} successful, ${failCount} skipped or failed`);
+
   }
 }
 
