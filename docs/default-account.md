@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Qwen OpenAI Proxy supports configuring a default account to be used when multiple accounts are available. This feature allows you to specify which account should be used first before rotating to others when quota limits are reached.
+The Qwen OpenAI Proxy supports configuring a default account to be used when multiple accounts are available. This feature allows you to specify which account should be used first before rotating to others when retries need another account.
 
 ## Configuration
 
@@ -19,7 +19,7 @@ DEFAULT_ACCOUNT=my-primary-account
 1. When the proxy starts, it checks if a `DEFAULT_ACCOUNT` is configured
 2. If a default account is set and it exists in the list of available accounts, it will be used first
 3. If no default account is set or the specified account doesn't exist, the proxy will use the first available account
-4. When quota limits are reached and account rotation occurs, the proxy will rotate to the next account in the list
+4. When the current account hits a retryable upstream failure, the proxy will rotate to the next account in the list
 5. On subsequent server restarts, the default account will again be used first
 
 ## Benefits
@@ -74,9 +74,10 @@ The proxy provides clear feedback about account usage:
 - In the account list, it marks which account is the default
 - During request processing, it shows which account is being used
 - When account rotation occurs, it indicates which account will be tried next
+- Tokens are refreshed ahead of expiry using a per-account pre-expiry window before the proxy sends requests
 
 ## Notes
 
 - The `DEFAULT_ACCOUNT` value must match exactly the name used when adding the account with `npm run auth add <name>`
 - If the specified default account doesn't exist or is invalid, the proxy will fall back to using the first available account
-- The default account feature only affects the initial account selection; rotation behavior remains the same when quotas are reached
+- The default account feature only affects the initial account selection; rotation behavior remains the same when a retry needs another account

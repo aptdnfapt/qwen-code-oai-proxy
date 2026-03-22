@@ -1,12 +1,8 @@
-const { QwenAuthManager } = require('../qwen/auth.js');
-const { DebugLogger } = require('./logger.js');
-
 class AccountRefreshScheduler {
   constructor(qwenAPI) {
     this.qwenAPI = qwenAPI;
     this.refreshInterval = null;
     this.isRefreshing = false;
-    this.refreshThresholds = new Map(); // Flag to prevent concurrent refresh processes
   }
 
   /**
@@ -78,10 +74,9 @@ class AccountRefreshScheduler {
       }
 
       const accountsToRefresh = [];
-      let expiredAccountsFound = false;
 
       for (const target of refreshTargets) {
-        const { accountId, credentials } = target;
+        const { accountId, credentials, isDefault } = target;
 
         if (!credentials) {
           continue;
@@ -89,31 +84,21 @@ class AccountRefreshScheduler {
 
         const isExpired = credentials.expiry_date <= Date.now();
         const minutesLeft = (credentials.expiry_date - Date.now()) / 60000;
+        const refreshAccountId = isDefault ? null : accountId;
 
-        if (isExpired) {
-          expiredAccountsFound = true;
+        if (this.qwenAPI.authManager.shouldRefreshToken(credentials, refreshAccountId)) {
           accountsToRefresh.push(target);
-          console.log(`\x1b[31m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[31mexpired\x1b[0m`);
-        } else if (minutesLeft <= 10) {
-          expiredAccountsFound = true;
-          accountsToRefresh.push(target);
-          console.log(`\x1b[33m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[33mexpiring\x1b[0m | ${minutesLeft.toFixed(0)}m`);
-        } else {
-          let threshold = this.refreshThresholds.get(accountId);
-          if (!threshold) {
-            threshold = Math.floor(Math.random() * 21) + 10;
-            this.refreshThresholds.set(accountId, threshold);
-          }
 
-          if (minutesLeft <= threshold) {
-            expiredAccountsFound = true;
-            accountsToRefresh.push(target);
-            console.log(`\x1b[35m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[35mexpiring\x1b[0m | ${minutesLeft.toFixed(0)}m`);
+          if (isExpired) {
+            console.log(`\x1b[31m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[31mexpired\x1b[0m`);
+          } else {
+            const thresholdMinutes = this.qwenAPI.authManager.getRefreshThresholdMinutes(refreshAccountId);
+            console.log(`\x1b[35m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[35mexpiring\x1b[0m | ${minutesLeft.toFixed(0)}m <= ${thresholdMinutes}m`);
           }
         }
       }
 
-      if (!expiredAccountsFound) {
+      if (accountsToRefresh.length === 0) {
         console.log(`\x1b[32m●\x1b[0m Refresh | \x1b[32midle\x1b[0m | ${refreshTargets.length} accounts`);
         return;
       }
@@ -136,12 +121,10 @@ class AccountRefreshScheduler {
           }
 
           try {
-            // Attempt to refresh the token
-            await this.qwenAPI.authManager.performTokenRefresh(
+            await this.qwenAPI.authManager.refreshCredentialsIfNeeded(
               credentials,
               isDefault ? null : accountId
             );
-            this.refreshThresholds.delete(accountId);
             console.log(`\x1b[32m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[32mrefreshed\x1b[0m`);
           } catch (refreshError) {
             console.warn(`\x1b[31m✗\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[31mfailed\x1b[0m: ${refreshError.message.substring(0, 30)}`);
@@ -201,11 +184,11 @@ class AccountRefreshScheduler {
       }
 
       try {
-        await this.qwenAPI.authManager.performTokenRefresh(
+        await this.qwenAPI.authManager.refreshCredentialsIfNeeded(
           credentials,
-          isDefault ? null : accountId
+          isDefault ? null : accountId,
+          { force: true }
         );
-        this.refreshThresholds.delete(accountId);
         console.log(`\x1b[32m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[32mforced\x1b[0m`);
         successCount++;
       } catch (refreshError) {

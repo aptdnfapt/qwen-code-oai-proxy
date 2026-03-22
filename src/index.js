@@ -460,20 +460,25 @@ app.post('/mcp', mcpPostHandler);
 app.get('/health', async (req, res) => {
   try {
     await qwenAPI.authManager.loadAllAccounts();
-    await qwenAPI.healthManager.ready;
     const defaultCredentials = await qwenAPI.authManager.loadCredentials();
     const accountIds = qwenAPI.authManager.getAccountIds();
 
     const accounts = [];
+    const accountsNeedingRefresh = [];
     let totalRequestsToday = 0;
 
     if (defaultCredentials) {
       const minutesLeft = (defaultCredentials.expiry_date - Date.now()) / 60000;
-      const status = minutesLeft < 0 ? 'expired' : 'healthy';
+      const needsRefresh = qwenAPI.authManager.shouldRefreshToken(defaultCredentials, null);
+      const status = minutesLeft < 0 ? 'expired' : (needsRefresh ? 'expiring_soon' : 'healthy');
       const expiresIn = Math.max(0, minutesLeft);
       const requestCount = qwenAPI.getRequestCount('default');
       const webSearchCount = qwenAPI.getWebSearchRequestCount('default');
       totalRequestsToday += requestCount;
+
+      if (needsRefresh) {
+        accountsNeedingRefresh.push('default');
+      }
 
       accounts.push({
         id: 'default',
@@ -484,8 +489,6 @@ app.get('/health', async (req, res) => {
       });
     }
 
-    const healthStatus = qwenAPI.healthManager.getStatus();
-
     for (const accountId of accountIds) {
       const credentials = qwenAPI.authManager.getAccountCredentials(accountId);
       let status = 'unknown';
@@ -493,23 +496,25 @@ app.get('/health', async (req, res) => {
 
       if (credentials) {
         const minutesLeft = (credentials.expiry_date - Date.now()) / 60000;
-        const isBlocked = qwenAPI.healthManager.isBlocked(accountId);
-        
-        if (isBlocked) {
-          status = 'blocked';
-        } else if (minutesLeft < 0) {
+        const needsRefresh = qwenAPI.authManager.shouldRefreshToken(credentials, accountId);
+
+        if (minutesLeft < 0) {
           status = 'expired';
-        } else if (minutesLeft < 30) {
+        } else if (needsRefresh) {
           status = 'expiring_soon';
         } else {
           status = 'healthy';
         }
+
+        if (needsRefresh) {
+          accountsNeedingRefresh.push(accountId);
+        }
+
         expiresIn = Math.max(0, minutesLeft);
       }
 
       const requestCount = qwenAPI.getRequestCount(accountId);
       const webSearchCount = qwenAPI.getWebSearchRequestCount(accountId);
-      const strikes = qwenAPI.healthManager.getStrikes(accountId);
       totalRequestsToday += requestCount;
 
       accounts.push({
@@ -517,13 +522,11 @@ app.get('/health', async (req, res) => {
         status,
         expiresIn: expiresIn ? `${expiresIn.toFixed(1)} minutes` : null,
         requestCount: requestCount,
-        webSearchCount: webSearchCount,
-        strikes: strikes
+        webSearchCount: webSearchCount
       });
     }
 
     const healthyCount = accounts.filter(a => a.status === 'healthy').length;
-    const blockedCount = accounts.filter(a => a.status === 'blocked').length;
     const expiringSoonCount = accounts.filter(a => a.status === 'expiring_soon').length;
     const expiredCount = accounts.filter(a => a.status === 'expired').length;
 
@@ -545,7 +548,6 @@ app.get('/health', async (req, res) => {
       summary: {
         total: accounts.length,
         healthy: healthyCount,
-        blocked: blockedCount,
         expiring_soon: expiringSoonCount,
         expired: expiredCount,
         total_requests_today: totalRequestsToday,
@@ -557,7 +559,12 @@ app.get('/health', async (req, res) => {
         total_tokens_today: totalInputTokens + totalOutputTokens
       },
       accounts,
-      health: healthStatus,
+      health: {
+        rotation: 'round_robin',
+        persistentCooldowns: false,
+        preemptiveRefreshWindowMinutes: '10-30',
+        accountsNeedingRefresh,
+      },
       server_info: {
         uptime: process.uptime(),
         memory: process.memoryUsage(),

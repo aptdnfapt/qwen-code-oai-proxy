@@ -55,7 +55,7 @@ Users might face errors or 504 Gateway Timeout issues when using contexts with 1
 
 ## Multi-Account Support
 
-The proxy supports multiple Qwen accounts to overcome the 2,000 requests per day limit per account. Accounts are automatically rotated when quota limits are reached.
+The proxy supports multiple Qwen accounts and rotates requests across them with round-robin selection. Tokens are refreshed ahead of expiry, while transient upstream failures move the request to the next account without long-lived account blocking.
 
 ### Setting Up Multiple Accounts
 
@@ -86,9 +86,11 @@ docker-compose exec qwen-proxy npm run auth:remove <account-id>
 ### How Account Rotation Works
 
 - When you have multiple accounts configured, the proxy will automatically rotate between them
-- Each account has a 2,000 request per day limit
-- When an account reaches its limit, Qwen's API will return a quota exceeded error
-- The proxy detects these quota errors and automatically switches to the next available account
+- Before using an account, the proxy refreshes its token inside a per-account 10-30 minute pre-expiry window
+- Refresh work is deduplicated per account so concurrent requests do not spam refresh calls
+- Clear auth failures trigger one refresh on the same account, then the proxy moves to the next account if auth still fails
+- Transient upstream failures such as `429`, `500`, and timeouts move the request to the next account without persistent cooldowns or strike-based blocking
+- Client-side request errors such as invalid payloads are returned immediately instead of rotating across all accounts
 - If a DEFAULT_ACCOUNT is configured, the proxy will use that account first before rotating to others
 - Request counts are tracked locally and reset daily at UTC midnight
 - You can check request counts for all accounts with:
@@ -110,7 +112,7 @@ npm run usage
 The proxy provides real-time feedback in the terminal:
 - Shows which account is being used for each request
 - Displays current request count for each account
-- Notifies when an account is rotated due to quota limits
+- Notifies when an account is rotated to retry a transient failure on another account
 - Indicates which account will be tried next during rotation
 - Shows which account is configured as the default account on server startup
 - Marks the default account in the account list display

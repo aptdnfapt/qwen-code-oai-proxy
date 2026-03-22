@@ -133,7 +133,8 @@ Specifies files and directories to exclude from version control:
 Qwen API client implementation that:
 - Handles multi-account management and rotation
 - Implements request counting and quota management
-- Manages authentication error detection and retry logic
+- Uses round-robin request routing with per-request failover
+- Separates authentication refresh retries from transient upstream retries
 - Supports both regular and streaming API calls
 
 - Implements model listing (mock implementation)
@@ -142,7 +143,7 @@ Qwen API client implementation that:
 Authentication manager that:
 - Handles OAuth 2.0 Device Authorization Flow with PKCE
 - Manages credential storage and retrieval
-- Implements token refresh logic
+- Implements token refresh logic with per-account deduplication
 - Supports multi-account credential management
 - Provides account validation and rotation logic
 
@@ -212,8 +213,9 @@ Main chat completion endpoint:
 - Handles model selection
 - Implements temperature, max_tokens, and top_p parameters
 - Supports tools and tool_choice parameters
-- Implements multi-account rotation on quota errors
-- Provides automatic token refresh on authentication errors
+- Refreshes tokens before expiry using a per-account 10-30 minute refresh window
+- Retries clear authentication failures once on the same account, then rotates to the next account
+- Rotates across accounts for transient upstream failures such as `429`, `5xx`, and timeouts
 
 
 
@@ -242,11 +244,11 @@ The Qwen OpenAI-Compatible Proxy follows a layered architecture:
 
 1. **Request Reception**: Express.js receives HTTP request on defined routes
 2. **Authentication Check**: QwenAuthManager verifies valid credentials exist
-3. **Token Validation**: Access token validity is checked with automatic refresh
+3. **Token Validation**: Access token validity is checked with pre-expiry refresh and deduplicated refresh work per account
 4. **API Call**: Request is forwarded to Qwen API with proper authentication
 5. **Response Processing**: Response is formatted to OpenAI-compatible format
 6. **Quota Management**: Request counts are tracked for multi-account rotation
-7. **Error Handling**: Authentication and quota errors are handled with appropriate retries
+7. **Error Handling**: Authentication failures refresh once on the same account, transient upstream failures rotate to the next account, and client errors fail fast
 8. **Response Return**: Formatted response is sent back to client
 
 ### Key Design Patterns Used

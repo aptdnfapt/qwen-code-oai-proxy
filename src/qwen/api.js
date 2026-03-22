@@ -6,7 +6,6 @@ const { PassThrough } = require('stream');
 const path = require('path');
 const { promises: fs } = require('fs');
 const crypto = require('crypto');
-const { AccountHealthManager } = require('../utils/accountHealthManager.js');
 
 // Create HTTP agents with connection pooling
 const httpAgent = new http.Agent({
@@ -235,17 +234,13 @@ function processMessagesForVision(messages, model) {
 function isAuthError(error) {
   if (!error) return false;
 
-  const errorMessage = 
-    error instanceof Error 
-      ? error.message.toLowerCase() 
-      : String(error).toLowerCase();
+  const errorMessage = error instanceof Error
+    ? error.message.toLowerCase()
+    : String(error).toLowerCase();
 
-  // Define a type for errors that might have status or code properties
-  const errorWithCode = error;
-  const errorCode = errorWithCode?.response?.status || errorWithCode?.code;
+  const errorCode = error?.response?.status || error?.status || error?.statusCode;
 
   return (
-    errorCode === 400 ||
     errorCode === 401 ||
     errorCode === 403 ||
     errorMessage.includes('unauthorized') ||
@@ -255,35 +250,86 @@ function isAuthError(error) {
     errorMessage.includes('token expired') ||
     errorMessage.includes('authentication') ||
     errorMessage.includes('access denied') ||
-    (errorMessage.includes('token') && errorMessage.includes('expired')) ||
-    // Also check for 504 errors which might be related to auth issues
-    errorCode === 504 ||
-    errorMessage.includes('504') ||
-    errorMessage.includes('gateway timeout')
+    errorMessage.includes('not authenticated') ||
+    (errorMessage.includes('token') && errorMessage.includes('expired'))
   );
 }
 
-/**
- * Check if an error is related to quota limits
- */
-function isQuotaExceededError(error) {
+function isClientRequestError(error) {
   if (!error) return false;
 
-  const errorMessage = 
-    error instanceof Error 
-      ? error.message.toLowerCase() 
-      : String(error).toLowerCase();
+  const errorMessage = error instanceof Error
+    ? error.message.toLowerCase()
+    : String(error).toLowerCase();
 
-  // Define a type for errors that might have status or code properties
-  const errorWithCode = error;
-  const errorCode = errorWithCode?.response?.status || errorWithCode?.code;
+  const statusCode = error?.response?.status || error?.status || error?.statusCode;
 
   return (
-    errorMessage.includes('insufficient_quota') ||
-    errorMessage.includes('free allocated quota exceeded') ||
-    (errorMessage.includes('quota') && errorMessage.includes('exceeded')) ||
-    errorCode === 429
+    statusCode === 400 ||
+    statusCode === 404 ||
+    statusCode === 409 ||
+    statusCode === 413 ||
+    statusCode === 422 ||
+    errorMessage.includes('validation error') ||
+    errorMessage.includes('invalid json') ||
+    errorMessage.includes('unexpected token') ||
+    errorMessage.includes('context length') ||
+    errorMessage.includes('maximum context length') ||
+    errorMessage.includes('unsupported parameter') ||
+    errorMessage.includes('unsupported value') ||
+    errorMessage.includes('invalid_request_error')
   );
+}
+
+function isRetryableRequestError(error) {
+  if (!error) return false;
+
+  const errorMessage = error instanceof Error
+    ? error.message.toLowerCase()
+    : String(error).toLowerCase();
+
+  const statusCode = error?.response?.status || error?.status || error?.statusCode;
+  const errorCode = error?.code;
+
+  if (statusCode === 429 || statusCode >= 500) {
+    return true;
+  }
+
+  return (
+    errorCode === 'ECONNABORTED' ||
+    errorCode === 'ECONNRESET' ||
+    errorCode === 'ETIMEDOUT' ||
+    errorCode === 'EAI_AGAIN' ||
+    errorCode === 'ECONNREFUSED' ||
+    errorMessage.includes('timeout') ||
+    errorMessage.includes('socket hang up') ||
+    errorMessage.includes('network error') ||
+    errorMessage.includes('gateway timeout') ||
+    errorMessage.includes('free allocated quota exceeded') ||
+    errorMessage.includes('insufficient_quota') ||
+    (errorMessage.includes('quota') && errorMessage.includes('exceeded'))
+  );
+}
+
+function classifyRequestError(error) {
+  if (isAuthError(error)) {
+    return 'auth';
+  }
+
+  if (isClientRequestError(error)) {
+    return 'client';
+  }
+
+  if (isRetryableRequestError(error)) {
+    return 'retryable';
+  }
+
+  const statusCode = error?.response?.status || error?.status || error?.statusCode;
+  if (statusCode >= 400 && statusCode < 500) {
+    return 'client';
+  }
+
+  return 'retryable';
 }
 
 class QwenAPI {
@@ -303,9 +349,7 @@ class QwenAPI {
     
     this.webSearchRequestCounts = new Map();
     this.webSearchResultCounts = new Map();
-    
-    this.healthManager = new AccountHealthManager(this.authManager.qwenDir);
-    
+
     this.loadRequestCounts();
   }
 
@@ -528,86 +572,40 @@ class QwenAPI {
   }
 
   async refreshCredentialsForAccount(accountId, credentials) {
-    return await this.authManager.performTokenRefresh(
+    return await this.authManager.refreshCredentialsIfNeeded(
       credentials,
       accountId === 'default' ? null : accountId
     );
   }
 
-  async prepareAccountCandidate(accountId, options = {}) {
-    const { ignoreBlocked = false, ignoreRateLimit = false } = options;
-
-    await this.healthManager.ready;
-
-    if (!ignoreBlocked && this.healthManager.isBlocked(accountId)) {
-      return null;
-    }
-
-    if (!ignoreRateLimit && this.healthManager.isRateLimited(accountId)) {
-      return null;
-    }
-
+  async prepareAccountCandidate(accountId) {
     let credentials = await this.loadCredentialsForAccount(accountId);
     if (!credentials) {
       return null;
     }
 
-    if (!this.authManager.isTokenValid(credentials)) {
-      console.log(`\x1b[33mAccount ${accountId} expired, refreshing...\x1b[0m`);
-      try {
-        credentials = await this.refreshCredentialsForAccount(accountId, credentials);
-        console.log(`\x1b[32mAccount ${accountId} refreshed successfully\x1b[0m`);
-      } catch (refreshError) {
-        console.log(`\x1b[31mFailed to refresh ${accountId}: ${refreshError.message}\x1b[0m`);
-        return null;
-      }
+    if (this.authManager.shouldRefreshToken(credentials, accountId === 'default' ? null : accountId)) {
+      const minutesLeft = ((credentials.expiry_date || 0) - Date.now()) / 60000;
+      console.log(`\x1b[33mAccount ${accountId} needs refresh before request (${minutesLeft.toFixed(0)}m left)\x1b[0m`);
+      credentials = await this.refreshCredentialsForAccount(accountId, credentials);
+      console.log(`\x1b[32mAccount ${accountId} refreshed successfully\x1b[0m`);
     }
 
     return {
       accountId,
       credentials,
-      strikes: this.healthManager.getStrikes(accountId),
-      minutesLeft: (credentials.expiry_date - Date.now()) / 60000,
     };
   }
 
-  async getPreparedAccounts(accountIds, options = {}) {
-    const prepared = [];
-
-    for (const accountId of accountIds) {
-      const candidate = await this.prepareAccountCandidate(accountId, options);
-      if (candidate) {
-        prepared.push(candidate);
-      }
+  getRotationOrder(accountIds) {
+    if (accountIds.length <= 1) {
+      return [...accountIds];
     }
 
-    prepared.sort((a, b) => {
-      if (a.strikes !== b.strikes) {
-        return a.strikes - b.strikes;
-      }
+    const startIndex = this.authManager.currentAccountIndex % accountIds.length;
+    this.authManager.currentAccountIndex = (startIndex + 1) % accountIds.length;
 
-      return b.minutesLeft - a.minutesLeft;
-    });
-
-    return prepared;
-  }
-
-  async getCandidatePool(accountIds, attemptsByAccount = new Map()) {
-    const untriedIds = accountIds.filter((accountId) => !attemptsByAccount.has(accountId));
-    let candidates = await this.getPreparedAccounts(untriedIds);
-
-    if (candidates.length > 0) {
-      return candidates;
-    }
-
-    const singleAccountFallback = accountIds.length === 1;
-
-    candidates = await this.getPreparedAccounts(accountIds, {
-      ignoreBlocked: singleAccountFallback,
-      ignoreRateLimit: singleAccountFallback,
-    });
-
-    return candidates;
+    return accountIds.slice(startIndex).concat(accountIds.slice(0, startIndex));
   }
 
   async executeAttemptWithLock(accountInfo, executeAttempt) {
@@ -619,7 +617,6 @@ class QwenAPI {
     }
 
     try {
-      this.healthManager.incrementRateLimit(accountInfo.accountId);
       return await executeAttempt(accountInfo);
     } finally {
       this.releaseAccountLock(accountInfo.accountId);
@@ -631,20 +628,30 @@ class QwenAPI {
       return await this.executeAttemptWithLock(accountInfo, executeAttempt);
     } catch (error) {
       if (error.code === 'ACCOUNT_LOCKED') {
-        throw { error, countStrike: false, locked: true };
+        throw { error, rotate: true, locked: true };
       }
 
-      if (!isAuthError(error)) {
-        throw { error, countStrike: true, locked: false };
+      const errorType = classifyRequestError(error);
+
+      if (errorType !== 'auth') {
+        throw {
+          error,
+          rotate: errorType !== 'client',
+          locked: false,
+        };
       }
 
       console.log(`\x1b[33mAuth error for ${accountInfo.accountId}, attempting refresh...\x1b[0m`);
 
       let refreshedCredentials;
       try {
-        refreshedCredentials = await this.refreshCredentialsForAccount(accountInfo.accountId, accountInfo.credentials);
+        refreshedCredentials = await this.authManager.refreshCredentialsIfNeeded(
+          accountInfo.credentials,
+          accountInfo.accountId === 'default' ? null : accountInfo.accountId,
+          { force: true }
+        );
       } catch (refreshError) {
-        throw { error: refreshError, countStrike: false, locked: false };
+        throw { error: refreshError, rotate: true, locked: false };
       }
 
       try {
@@ -657,12 +664,13 @@ class QwenAPI {
         );
       } catch (retryError) {
         if (retryError.code === 'ACCOUNT_LOCKED') {
-          throw { error: retryError, countStrike: false, locked: true };
+          throw { error: retryError, rotate: true, locked: true };
         }
 
+        const retryErrorType = classifyRequestError(retryError);
         throw {
           error: retryError,
-          countStrike: !isAuthError(retryError),
+          rotate: retryErrorType !== 'client',
           locked: false,
         };
       }
@@ -670,58 +678,33 @@ class QwenAPI {
   }
 
   async executeWithAccountRotation(accountIds, executeAttempt, onSuccess) {
-    await this.healthManager.ready;
-
-    const attemptsByAccount = new Map();
-    let attemptsUsed = 0;
     let lastError = null;
-    const maxAttempts = this.healthManager.getMaxAttempts();
+    const rotationOrder = this.getRotationOrder(accountIds);
 
-    while (attemptsUsed < maxAttempts) {
-      const candidates = await this.getCandidatePool(accountIds, attemptsByAccount);
+    for (const accountId of rotationOrder) {
+      let candidate;
 
-      if (candidates.length === 0) {
-        break;
+      try {
+        candidate = await this.prepareAccountCandidate(accountId);
+      } catch (prepareError) {
+        lastError = prepareError;
+        continue;
       }
 
-      let attemptedRequest = false;
+      if (!candidate) {
+        continue;
+      }
 
-      for (const candidate of candidates) {
-        try {
-          attemptsUsed += 1;
-          attemptsByAccount.set(candidate.accountId, (attemptsByAccount.get(candidate.accountId) || 0) + 1);
+      try {
+        const result = await this.executeOperationWithAccount(candidate, executeAttempt);
+        await onSuccess(candidate.accountId, result);
+        return result;
+      } catch (outcome) {
+        lastError = outcome.error || outcome;
 
-          const result = await this.executeOperationWithAccount(candidate, executeAttempt);
-          attemptedRequest = true;
-          await onSuccess(candidate.accountId, result);
-          this.healthManager.resetStrikes(candidate.accountId);
-          return result;
-        } catch (outcome) {
-          if (outcome.locked) {
-            attemptsUsed -= 1;
-            const currentAttempts = (attemptsByAccount.get(candidate.accountId) || 1) - 1;
-            if (currentAttempts > 0) {
-              attemptsByAccount.set(candidate.accountId, currentAttempts);
-            } else {
-              attemptsByAccount.delete(candidate.accountId);
-            }
-            continue;
-          }
-
-          attemptedRequest = true;
-          lastError = outcome.error || outcome;
-
-          if (outcome.countStrike) {
-            this.healthManager.addStrike(candidate.accountId);
-          }
-
-          break;
+        if (outcome.rotate === false) {
+          throw lastError;
         }
-      }
-
-      if (!attemptedRequest) {
-        lastError = lastError || new Error('All candidate accounts are currently in use');
-        break;
       }
     }
 
@@ -729,7 +712,7 @@ class QwenAPI {
       throw lastError;
     }
 
-    throw new Error('No available accounts after exhausting all attempts');
+    throw new Error('No available accounts after exhausting all configured accounts');
   }
 
   async getApiEndpoint(credentials) {

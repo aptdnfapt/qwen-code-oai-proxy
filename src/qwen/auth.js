@@ -54,7 +54,8 @@ class QwenAuthManager {
     this.qwenDir = path.join(process.env.HOME || process.env.USERPROFILE, QWEN_DIR);
     this.credentialsPath = path.join(this.qwenDir, QWEN_CREDENTIAL_FILENAME);
     this.credentials = null;
-    this.refreshPromise = null;
+    this.refreshPromises = new Map();
+    this.refreshThresholdMinutes = new Map();
     this.accounts = new Map(); // For multi-account support
     this.currentAccountIndex = 0; // For round-robin account selection
   }
@@ -95,11 +96,13 @@ class QwenAuthManager {
       const files = await fs.readdir(this.qwenDir);
       
       // Filter for multi-account credential files
-      const accountFiles = files.filter(file => 
-        file.startsWith(QWEN_MULTI_ACCOUNT_PREFIX) && 
-        file.endsWith(QWEN_MULTI_ACCOUNT_SUFFIX) &&
-        file !== QWEN_CREDENTIAL_FILENAME
-      );
+      const accountFiles = files
+        .filter(file => 
+          file.startsWith(QWEN_MULTI_ACCOUNT_PREFIX) && 
+          file.endsWith(QWEN_MULTI_ACCOUNT_SUFFIX) &&
+          file !== QWEN_CREDENTIAL_FILENAME
+        )
+        .sort();
       
       // Check for conflicting auth files and show warning if needed
       const config = require('../config.js');
@@ -185,6 +188,34 @@ class QwenAuthManager {
     
     // Check if token is expired or expiring soon
     return Date.now() < credentials.expiry_date - TOKEN_REFRESH_BUFFER_MS;
+  }
+
+  normalizeAccountKey(accountId = null) {
+    return accountId || 'default';
+  }
+
+  getRefreshThresholdMinutes(accountId = null) {
+    const accountKey = this.normalizeAccountKey(accountId);
+
+    if (!this.refreshThresholdMinutes.has(accountKey)) {
+      this.refreshThresholdMinutes.set(accountKey, Math.floor(Math.random() * 21) + 10);
+    }
+
+    return this.refreshThresholdMinutes.get(accountKey);
+  }
+
+  shouldRefreshToken(credentials, accountId = null) {
+    if (!credentials || !credentials.access_token || !credentials.expiry_date) {
+      return true;
+    }
+
+    const expiryDate = Number(credentials.expiry_date);
+    if (Number.isNaN(expiryDate) || expiryDate <= 0) {
+      return true;
+    }
+
+    const refreshThresholdMs = this.getRefreshThresholdMinutes(accountId) * 60 * 1000;
+    return Date.now() >= expiryDate - refreshThresholdMs;
   }
 
   /**
@@ -273,7 +304,6 @@ class QwenAuthManager {
         expiry_date: Date.now() + tokenData.expires_in * 1000,
       }
 
-      await this.saveCredentials(newCredentials);
       console.log('\x1b[32m%s\x1b[0m', 'Qwen access token refreshed successfully');
       return newCredentials;
     } catch (error) {
@@ -284,57 +314,62 @@ class QwenAuthManager {
   }
 
   async getValidAccessToken(accountId = null) {
-    // If there's already a refresh in progress, wait for it
-    if (this.refreshPromise) {
-      console.log('\x1b[36m%s\x1b[0m', 'Waiting for ongoing token refresh...');
-      return this.refreshPromise;
-    }
+    let credentials;
 
-    try {
-      let credentials;
-      
-      if (accountId) {
-        // Get credentials for specific account
-        credentials = this.getAccountCredentials(accountId);
-        if (!credentials) {
-          // Load all accounts if not already loaded
-          await this.loadAllAccounts();
-          credentials = this.getAccountCredentials(accountId);
-        }
-      } else {
-        // Use default credentials
-        credentials = await this.loadCredentials();
-      }
-
+    if (accountId) {
+      credentials = this.getAccountCredentials(accountId);
       if (!credentials) {
-        if (accountId) {
-          throw new Error(`No credentials found for account ${accountId}. Please authenticate this account first.`);
-        } else {
-          throw new Error('No credentials found. Please authenticate with Qwen CLI first.');
-        }
+        await this.loadAllAccounts();
+        credentials = this.getAccountCredentials(accountId);
       }
-
-      // Check if token is valid
-      if (this.isTokenValid(credentials)) {
-        // Token is valid, return it
-        return credentials.access_token;
-      } else {
-        // Token needs refresh
-      }
-
-      // Token needs refresh, start refresh operation
-      this.refreshPromise = this.performTokenRefresh(credentials, accountId);
-      
-      try {
-        const newCredentials = await this.refreshPromise;
-        return newCredentials.access_token;
-      } finally {
-        this.refreshPromise = null;
-      }
-    } catch (error) {
-      this.refreshPromise = null;
-      throw error;
+    } else {
+      credentials = await this.loadCredentials();
     }
+
+    if (!credentials) {
+      if (accountId) {
+        throw new Error(`No credentials found for account ${accountId}. Please authenticate this account first.`);
+      }
+
+      throw new Error('No credentials found. Please authenticate with Qwen CLI first.');
+    }
+
+    if (!this.shouldRefreshToken(credentials, accountId)) {
+      return credentials.access_token;
+    }
+
+    const refreshedCredentials = await this.refreshCredentialsIfNeeded(credentials, accountId);
+    return refreshedCredentials.access_token;
+  }
+
+  async refreshCredentialsIfNeeded(credentials, accountId = null, options = {}) {
+    const { force = false } = options;
+    const accountKey = this.normalizeAccountKey(accountId);
+
+    if (!credentials) {
+      throw new Error(`No credentials found for account ${accountKey}. Please authenticate this account first.`);
+    }
+
+    if (!force && !this.shouldRefreshToken(credentials, accountId)) {
+      return credentials;
+    }
+
+    if (this.refreshPromises.has(accountKey)) {
+      console.log('\x1b[36m%s\x1b[0m', `Waiting for ongoing token refresh for ${accountKey}...`);
+      return this.refreshPromises.get(accountKey);
+    }
+
+    const refreshPromise = this.performTokenRefresh(credentials, accountId)
+      .then((newCredentials) => {
+        this.refreshThresholdMinutes.delete(accountKey);
+        return newCredentials;
+      })
+      .finally(() => {
+        this.refreshPromises.delete(accountKey);
+      });
+
+    this.refreshPromises.set(accountKey, refreshPromise);
+    return refreshPromise;
   }
 
   async performTokenRefresh(credentials, accountId = null) {

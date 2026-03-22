@@ -145,13 +145,13 @@ This is why the proxy constructs URLs differently for each endpoint type.
 
 ### Rate Limiting Behavior
 - When limits are exceeded, the API will return appropriate error responses
-- The proxy automatically handles account rotation for multi-account setups
-- Failed accounts are temporarily marked to prevent repeated failures
+- The proxy automatically handles round-robin account rotation for multi-account setups
+- Tokens are refreshed ahead of expiry, while transient `429`/`5xx` failures move the request to the next account without persistent cooldowns
 
 ### Multi-Account Support
 The proxy supports multiple Qwen accounts for web search:
-- Automatic rotation between accounts when limits are reached
-- Failed account handling with automatic recovery
+- Automatic rotation between accounts for retryable upstream failures
+- One auth refresh retry on the same account before falling through to the next account
 - Per-account request tracking
 
 ## Usage Examples

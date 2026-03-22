@@ -39,19 +39,19 @@ Track the number of requests made per account and manage quota limits.
 ## Feature 3: Automatic Account Rotation
 
 ### Goal
-Automatically switch between accounts when quota limits are reached.
+Automatically switch between accounts when retryable upstream failures occur.
 
 ### Requirements
-- Detect quota exceeded errors
+- Detect retryable upstream errors such as `429`, `5xx`, and timeouts
 - Automatically switch to the next available account
-- Maintain a priority order for account selection
+- Maintain a stable round-robin order for account selection
 - Handle concurrent requests safely
 
 ### Implementation Plan
-- Implement quota error detection using existing patterns
-- Create account rotation logic with round-robin or priority-based selection
+- Refresh tokens ahead of expiry with per-account deduplication
+- Create account rotation logic with round-robin selection
+- Retry clear auth failures once on the same account before switching
 - Ensure thread-safe account switching
-- Integrate with the API client to use the current active account
 
 ## Future Considerations
 
