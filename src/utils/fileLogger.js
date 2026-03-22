@@ -2,7 +2,7 @@ const fs = require('fs');
 const fsPromises = require('fs').promises;
 const path = require('path');
 
-const LOG_LEVEL = String(process.env.LOG_LEVEL || 'error').toLowerCase();
+const LOG_LEVEL = String(process.env.LOG_LEVEL || 'error-debug').toLowerCase();
 const validLevels = ['off', 'error', 'error-debug', 'debug'];
 const logLevel = validLevels.includes(LOG_LEVEL) ? LOG_LEVEL : 'off';
 
