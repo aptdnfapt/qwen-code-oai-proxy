@@ -80,7 +80,7 @@ class QwenOpenAIProxy {
         return res.status(validationError.status).json(validationError.body);
       }
 
-      fileLogger.logError(requestId, displayAccount, 500, error.message);
+      fileLogger.logError(requestId, displayAccount, 500, error);
       
       liveLogger.proxyError(requestId, 500, displayAccount, error.message);
       
@@ -134,7 +134,7 @@ class QwenOpenAIProxy {
       const latency = Date.now() - startTime;
       const statusCode = error.response?.status || 500;
       
-      fileLogger.logError(requestId, displayAccount, statusCode, error.message);
+      fileLogger.logError(requestId, displayAccount, statusCode, error);
       
       liveLogger.proxyError(requestId, statusCode, displayAccount, error.message);
       
@@ -213,6 +213,7 @@ class QwenOpenAIProxy {
       });
       
       stream.on('error', (error) => {
+        fileLogger.logError(requestId, displayAccount, 500, error);
         liveLogger.proxyError(requestId, 500, displayAccount, error.message);
         if (!res.headersSent) {
           const apiError = ErrorFormatter.openAIApiError(error.message, 'streaming_error');
@@ -229,7 +230,7 @@ class QwenOpenAIProxy {
       const latency = Date.now() - startTime;
       const statusCode = error.response?.status || 500;
       
-      fileLogger.logError(requestId, displayAccount, statusCode, error.message);
+      fileLogger.logError(requestId, displayAccount, statusCode, error);
       
       liveLogger.proxyError(requestId, statusCode, displayAccount, error.message);
       
@@ -265,7 +266,7 @@ class QwenOpenAIProxy {
       const latency = Date.now() - startTime;
       liveLogger.proxyError(requestId, 500, 'system', error.message);
       
-      fileLogger.logError(requestId, 'system', 500, error.message);
+      fileLogger.logError(requestId, 'system', 500, error);
       
       if (error.message.includes('Not authenticated') || error.message.includes('access token')) {
         return res.status(401).json({
@@ -304,7 +305,7 @@ class QwenOpenAIProxy {
       
       res.json(response);
     } catch (error) {
-      fileLogger.logError(requestId, 'auth', 500, error.message);
+      fileLogger.logError(requestId, 'auth', 500, error);
       liveLogger.proxyError(requestId, 500, 'auth', error.message);
       
       res.status(500).json({
@@ -351,7 +352,7 @@ class QwenOpenAIProxy {
         return res.status(validationError.status).json(validationError.body);
       }
       
-      fileLogger.logError(requestId, 'auth', 500, error.message);
+      fileLogger.logError(requestId, 'auth', 500, error);
       liveLogger.proxyError(requestId, 500, 'auth', error.message);
       
       const apiError = ErrorFormatter.openAIApiError(error.message, 'authentication_error');
@@ -410,7 +411,7 @@ class QwenOpenAIProxy {
         return res.status(validationError.status).json(validationError.body);
       }
 
-      fileLogger.logError(requestId, 'web', 500, error.message);
+      fileLogger.logError(requestId, 'web', 500, error);
       liveLogger.proxyError(requestId, 500, 'web', error.message);
       
       if (error.message.includes('Not authenticated') || error.message.includes('access token')) {

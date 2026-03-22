@@ -332,6 +332,78 @@ function classifyRequestError(error) {
   return 'retryable';
 }
 
+function isReadableStream(value) {
+  return value && typeof value.on === 'function' && typeof value.pipe === 'function';
+}
+
+function normalizeRawResponseBody(value) {
+  if (Buffer.isBuffer(value)) {
+    return value.toString('utf8');
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (value === undefined || value === null) {
+    return '';
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch (err) {
+    return String(value);
+  }
+}
+
+async function readErrorResponseStream(stream) {
+  return await new Promise((resolve) => {
+    const chunks = [];
+
+    stream.on('data', (chunk) => {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+    });
+
+    stream.on('end', () => {
+      resolve(Buffer.concat(chunks).toString('utf8'));
+    });
+
+    stream.on('error', (error) => {
+      resolve(`[failed to read upstream error stream: ${error.message}]`);
+    });
+  });
+}
+
+async function attachUpstreamErrorDetails(error) {
+  if (!error || !error.response) {
+    return error;
+  }
+
+  let responseData = error.response.data;
+
+  if (isReadableStream(responseData)) {
+    responseData = await readErrorResponseStream(responseData);
+  }
+
+  error.upstreamErrorDetails = {
+    status: error.response.status,
+    statusText: error.response.statusText,
+    rawBody: normalizeRawResponseBody(responseData)
+  };
+
+  return error;
+}
+
+function parseJsonResponseBody(rawBody, context) {
+  const normalizedBody = normalizeRawResponseBody(rawBody);
+
+  try {
+    return JSON.parse(normalizedBody);
+  } catch (error) {
+    throw new Error(`Invalid JSON response from ${context}: ${error.message}. Raw response: ${normalizedBody}`);
+  }
+}
+
 class QwenAPI {
   constructor() {
     this.authManager = new QwenAuthManager();
@@ -787,14 +859,22 @@ class QwenAPI {
 
     const headers = buildDashScopeHeaders(credentials.access_token, false);
 
-    const response = await axios.post(url, payload, {
-      headers: headers,
-      timeout: 300000,
-      httpAgent,
-      httpsAgent
-    });
+    let response;
 
-    return response.data;
+    try {
+      response = await axios.post(url, payload, {
+        headers: headers,
+        responseType: 'text',
+        transformResponse: [(data) => data],
+        timeout: 300000,
+        httpAgent,
+        httpsAgent
+      });
+    } catch (error) {
+      throw await attachUpstreamErrorDetails(error);
+    }
+
+    return parseJsonResponseBody(response.data, 'chat completions upstream');
   }
 
   async chatCompletionsSingleAccount(request) {
@@ -861,13 +941,19 @@ class QwenAPI {
     };
     const headers = buildDashScopeHeaders(credentials.access_token, true);
     const stream = new PassThrough();
-    const response = await axios.post(url, payload, {
-      headers,
-      timeout: 300000,
-      responseType: 'stream',
-      httpAgent,
-      httpsAgent
-    });
+    let response;
+
+    try {
+      response = await axios.post(url, payload, {
+        headers,
+        timeout: 300000,
+        responseType: 'stream',
+        httpAgent,
+        httpsAgent
+      });
+    } catch (error) {
+      throw await attachUpstreamErrorDetails(error);
+    }
 
     response.data.pipe(stream);
     return stream;
@@ -951,15 +1037,24 @@ class QwenAPI {
 
     const headers = buildDashScopeHeaders(credentials.access_token, false);
 
-    const response = await axios.post(webSearchUrl, payload, {
-      headers: headers,
-      timeout: 300000,
-      httpAgent,
-      httpsAgent
-    });
+    let response;
 
-    console.log(`\x1b[32mWeb search completed using ${accountId}. Found ${response.data?.data?.total || 0} results.\x1b[0m`);
-    return response.data;
+    try {
+      response = await axios.post(webSearchUrl, payload, {
+        headers: headers,
+        responseType: 'text',
+        transformResponse: [(data) => data],
+        timeout: 300000,
+        httpAgent,
+        httpsAgent
+      });
+    } catch (error) {
+      throw await attachUpstreamErrorDetails(error);
+    }
+
+    const responseData = parseJsonResponseBody(response.data, 'web search upstream');
+    console.log(`\x1b[32mWeb search completed using ${accountId}. Found ${responseData?.data?.total || 0} results.\x1b[0m`);
+    return responseData;
   }
 
   /**

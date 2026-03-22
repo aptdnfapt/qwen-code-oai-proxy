@@ -41,17 +41,105 @@ function maskSensitiveHeaders(headers) {
   return masked;
 }
 
-function logError(requestId, accountId, statusCode, errorMessage, responseData) {
+function formatLogValue(value) {
+  if (value === undefined) return '';
+  if (typeof value === 'string') return value;
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch (err) {
+    return String(value);
+  }
+}
+
+function formatRawResponseBody(value) {
+  if (value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (Buffer.isBuffer(value)) return value.toString('utf8');
+
+  try {
+    return JSON.stringify(value);
+  } catch (err) {
+    return String(value);
+  }
+}
+
+function getErrorMessage(errorOrMessage) {
+  if (errorOrMessage instanceof Error) return errorOrMessage.message;
+  if (errorOrMessage && typeof errorOrMessage === 'object' && typeof errorOrMessage.message === 'string') {
+    return errorOrMessage.message;
+  }
+  return String(errorOrMessage);
+}
+
+function getErrorResponseData(errorOrMessage, responseData) {
+  if (responseData !== undefined) return responseData;
+  if (!isErrorDebugLogging) return undefined;
+  if (!errorOrMessage || typeof errorOrMessage !== 'object') return undefined;
+
+  if (errorOrMessage.upstreamErrorDetails && Object.prototype.hasOwnProperty.call(errorOrMessage.upstreamErrorDetails, 'rawBody')) {
+    return errorOrMessage.upstreamErrorDetails.rawBody;
+  }
+
+  const upstreamResponseData = errorOrMessage.response && errorOrMessage.response.data;
+  if (upstreamResponseData && typeof upstreamResponseData.pipe === 'function') {
+    return '[stream response body captured separately]';
+  }
+
+  return upstreamResponseData;
+}
+
+function getErrorDebugDetails(errorOrMessage, statusCode) {
+  if (!isErrorDebugLogging || !errorOrMessage || typeof errorOrMessage !== 'object') return null;
+
+  const details = {
+    status: statusCode
+  };
+
+  if (errorOrMessage.code) {
+    details.code = errorOrMessage.code;
+  }
+
+  if (errorOrMessage.response && errorOrMessage.response.statusText) {
+    details.statusText = errorOrMessage.response.statusText;
+  }
+
+  if (errorOrMessage.upstreamErrorDetails) {
+    details.upstream = {
+      status: errorOrMessage.upstreamErrorDetails.status,
+      statusText: errorOrMessage.upstreamErrorDetails.statusText
+    };
+  } else if (errorOrMessage.response) {
+    details.upstream = {
+      status: errorOrMessage.response && errorOrMessage.response.status,
+      statusText: errorOrMessage.response && errorOrMessage.response.statusText
+    };
+  }
+
+  if (errorOrMessage.stack) {
+    details.stack = errorOrMessage.stack;
+  }
+
+  return Object.keys(details).length > 1 ? details : null;
+}
+
+function logError(requestId, accountId, statusCode, errorOrMessage, responseData) {
   if (!isErrorLogging) return;
   
   const errorLogPath = path.join(LOG_DIR, 'error.log');
   const timestamp = new Date().toISOString();
   const id = accountId ? accountId.substring(0, 8) : 'default';
+  const errorMessage = getErrorMessage(errorOrMessage);
+  const resolvedResponseData = getErrorResponseData(errorOrMessage, responseData);
+  const errorDebugDetails = getErrorDebugDetails(errorOrMessage, statusCode);
   
   let logEntry = `[${timestamp}] STATUS=${statusCode} ACCOUNT=${id} REQUEST_ID=${requestId}\n`;
   logEntry += `Error: ${errorMessage}\n`;
-  if (responseData) {
-    logEntry += `Response: ${typeof responseData === 'string' ? responseData : JSON.stringify(responseData)}\n`;
+  if (resolvedResponseData !== undefined) {
+    logEntry += `Response:\n${formatRawResponseBody(resolvedResponseData)}\n`;
+  }
+  if (errorDebugDetails) {
+    logEntry += `Details: ${formatLogValue(errorDebugDetails)}\n`;
   }
   logEntry += '='.repeat(80) + '\n\n';
   
