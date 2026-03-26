@@ -6,6 +6,14 @@ Build a typed core first, then expose it through a stable CLI/headless package b
 
 This keeps the product useful even before the TUI lands.
 
+Important:
+
+- **Phase 1 = typed foundation**
+- **Phase 2 = usable CLI/headless transitional product**
+- **Phase 3 = actual full runtime TS migration**
+
+Do not confuse Phase 1 or 2 with "the runtime is now fully TypeScript".
+
 ## Rewrite Order
 
 ### Step 1 — Extract core service boundaries
@@ -34,6 +42,12 @@ Before the TUI, the package should already support:
 
 The exact command surface can evolve, but a clean headless path must exist.
 
+### Step 3 — Finish the real runtime migration before TUI
+
+The actual runtime used by operators must move to TS before any real TUI implementation begins.
+
+This migration must cover the heavy remaining runtime paths, not only contracts.
+
 ## Target Module Shape
 
 Suggested target structure:
@@ -61,6 +75,7 @@ src/
 - CLI depends on core
 - headless server depends on core
 - core does not depend on TUI
+- TUI starts only after the real runtime path is TS-backed
 
 ## CLI / Headless Product Rules
 
@@ -132,6 +147,30 @@ Not the goal before TS port:
 
 - re-architect every feature in JS first
 
+## Explicit Runtime Migration Scope
+
+These areas must be fully migrated before the TUI phase starts:
+
+- runtime/server entry and lifecycle
+- proxy controller / route handling
+- Qwen API runtime
+- Qwen auth runtime
+- logging runtime
+- runtime config wiring
+- CLI runtime entry used by operators
+
+Current examples of high-priority migration targets:
+
+- `src/qwen/api.js`
+- `src/qwen/auth.js`
+- `src/server/headless-runtime.js`
+- `src/server/proxy-controller.js`
+- `src/server/lifecycle.js`
+- `src/utils/fileLogger.js`
+- `src/utils/liveLogger.js`
+- `src/config.js`
+- `src/cli/qwen-proxy.js`
+
 ## Phase Deliverables
 
 ### Phase 0 deliverables
@@ -145,11 +184,26 @@ Not the goal before TS port:
 - typed logging contracts
 - typed auth/account/usage service boundaries
 
+Important note:
+
+- this phase alone does **not** mean the runtime is fully migrated to TS
+
 ### Phase 2 deliverables
 
 - package command entry
 - headless serving mode
 - CLI utility commands
+
+Important note:
+
+- this phase can still be backed by mixed JS/TS internals and is still transitional
+
+### Phase 3 deliverables
+
+- major runtime JS files migrated to TS
+- runtime no longer described as "JavaScript-first"
+- typed runtime becomes the primary runtime path
+- TUI gate cleared
 
 ## Acceptance Rules
 
@@ -158,3 +212,4 @@ This area is complete when:
 - the package is useful without the TUI
 - the TUI can later consume the same core services without special hacks
 - feature parity with the current CLI/headless flows is maintained
+- before TUI starts, the real runtime path has been migrated to TS rather than merely wrapped

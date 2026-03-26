@@ -50,6 +50,30 @@ It must:
 
 This is a product requirement, not optional polish.
 
+### HARD RULE 5 — DO NOT START REAL TUI IMPLEMENTATION WHILE THE APP RUNTIME IS STILL JS-FIRST
+
+Before the TUI phase starts, the runtime that actually powers the product must already be migrated to TypeScript.
+
+This includes the major first-party runtime areas such as:
+
+- server/bootstrap/runtime entrypoints
+- proxy controller and route handling
+- Qwen API/auth runtime
+- logging/runtime-config wiring
+- CLI entry that operators actually run
+
+In practical terms:
+
+- `src/qwen/api.js`
+- `src/qwen/auth.js`
+- `src/server/*.js`
+- `src/utils/fileLogger.js`
+- `src/utils/liveLogger.js`
+- `src/config.js`
+- `src/cli/qwen-proxy.js`
+
+must be migrated, replaced, or explicitly retired before real TUI implementation begins.
+
 ## Rewrite Operating Model
 
 ### Rule: rewrite in slices, not in blind bulk
@@ -63,6 +87,17 @@ We move in slices:
 3. rewrite module-by-module
 4. verify parity
 5. wire TUI last
+
+### Rule: a phase is not "done" if it only added scaffolding
+
+If a phase is meant to migrate runtime behavior to TypeScript, then it is not complete just because:
+
+- interfaces were added
+- contracts were added
+- a bridge was added
+- TypeScript compiles in isolation
+
+It is only complete when the real runtime path used by operators has actually moved.
 
 ### Rule: large-file rewrites require explicit parity review
 
@@ -196,6 +231,7 @@ Each phase is only done when:
 - the hard rules were respected
 - affected docs/specs are still accurate
 - `git diff` has been reviewed for feature loss risk
+- the phase name still honestly describes the real runtime state
 
 ## Non-Goals During Rewrite
 

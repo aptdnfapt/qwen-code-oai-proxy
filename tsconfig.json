@@ -9,11 +9,20 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "rootDir": "src",
+    "rootDir": ".",
     "outDir": "dist",
     "declaration": true
   },
   "include": [
-    "src/core/**/*.ts"
+    "src/**/*.ts",
+    "scripts/**/*.ts",
+    "authenticate.ts",
+    "usage.ts",
+    "test-all-accounts.ts"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules",
+    "qwen-code"
   ]
 }

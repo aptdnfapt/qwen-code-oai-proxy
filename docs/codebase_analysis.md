@@ -20,7 +20,7 @@ API Proxy Server / Middleware
 Client-Server API Proxy Architecture with middleware pattern for request handling.
 
 ### Languages and Versions
-- JavaScript (Node.js)
+- TypeScript + JavaScript (Node.js)
 - Python (for testing utilities)
 
 ## 2. Detailed Directory Structure Analysis
@@ -29,8 +29,8 @@ Client-Server API Proxy Architecture with middleware pattern for request handlin
 /home/idc/proj/qwen-code-oai-proxy/
 ├── .env.example                 # Environment configuration example
 ├── .gitignore                   # Git ignore patterns
-├── authenticate.js              # Authentication CLI tool (legacy + reusable command module)
-├── usage.js                     # Usage reporting CLI tool (legacy + reusable command module)
+├── authenticate.ts              # Authentication CLI tool
+├── usage.ts                     # Usage reporting CLI tool
 ├── package.json                 # Project metadata and dependencies
 ├── README.md                    # Project documentation
 ├── scripts/                     # Validation and helper scripts
@@ -39,17 +39,17 @@ Client-Server API Proxy Architecture with middleware pattern for request handlin
 ├── node_modules/                # Dependencies (git-ignored)
 ├── qwen-code/                   # Qwen code directory (git-ignored)
 ├── src/                         # Main source code
-│   ├── config.js                # Configuration management
-│   ├── index.js                 # Runtime compatibility bootstrap
-│   ├── cli/                     # Package CLI command entry (`qwen-proxy`)
-│   ├── server/                  # Controllers/middleware/lifecycle
+│   ├── config.ts                # TS runtime config
+│   ├── index.ts                 # TS runtime entry
+│   ├── cli/                     # TS CLI entry (`qwen-proxy`)
+│   ├── server/                  # TS runtime controllers/lifecycle
 │   ├── core/                    # Typed core rewrite foundation
 │   ├── qwen/                    # Qwen-specific modules
-│   │   ├── api.js               # Qwen API client implementation
-│   │   └── auth.js              # Authentication management
+│   │   ├── api.ts               # TS Qwen API runtime
+│   │   └── auth.ts              # TS auth runtime
 │   └── utils/                   # Utility modules
-│       ├── logger.js            # Debug logging utility
-│       └── tokenCounter.js      # Token counting utility
+│       ├── logger.ts            # Debug logging utility
+│       └── tokenCounter.ts      # Token counting utility
 ```
 
 ### Directory Roles
@@ -58,17 +58,17 @@ Client-Server API Proxy Architecture with middleware pattern for request handlin
 Contains configuration files, documentation, and entry points for the application. Key files include:
 - `package.json`: Defines dependencies, scripts, and project metadata
 - `README.md`: Main documentation
-- `authenticate.js`: CLI tool for managing Qwen authentication
-- `usage.js`: CLI tool for usage reporting
+- `authenticate.ts`: CLI tool for managing Qwen authentication
+- `usage.ts`: CLI tool for usage reporting
 - package `bin` command: `qwen-proxy`
 - `.env.example`: Example environment configuration
 
 #### src/ Directory
 Contains the main application source code, organized into logical modules:
-- `config.js`: Centralized configuration management
-- `index.js`: Compatibility entry that delegates to headless runtime bootstrap
-- `cli/`: Package CLI command entrypoint and command routing
-- `server/`: Request controllers, middleware, health, and lifecycle handlers
+- `config.ts`: Centralized runtime configuration implementation compiled to `dist/src/config.js`
+- `index.ts`: TS runtime entry compiled to `dist/src/index.js`
+- `cli/`: TS package CLI command entrypoint compiled to `dist/src/cli/`
+- `server/`: TS runtime controllers/lifecycle compiled to `dist/src/server/`
 - `core/`: TypeScript core contracts/services for rewrite foundation
 - `qwen/`: Qwen-specific functionality including API client and authentication
 - `utils/`: Shared utility functions
@@ -88,26 +88,26 @@ Stores debug log files when debugging is enabled, helping with troubleshooting.
 
 ### Core Application Files
 
-#### src/index.js
-The main entry point of the application that:
-- Delegates runtime startup to `src/server/headless-runtime.js`
-- Preserves backward compatibility for `node src/index.js`
+#### src/index.ts
+The main entry point of the application now:
+- Starts the compiled TS headless runtime
+- Runs from `dist/src/index.js` after build
 
-#### src/cli/qwen-proxy.js
+#### src/cli/qwen-proxy.ts
 Package CLI command entry that:
 - Provides `qwen-proxy serve --headless`
 - Routes auth/account commands to reusable auth command runner
 - Routes usage/tokens commands to reusable usage command runner
 - Supports `help` and `version` command output
 
-#### src/server/headless-runtime.js
+#### src/server/headless-runtime.ts
 Headless runtime bootstrap that:
 - Owns Express app wiring and middleware setup
 - Registers API/auth/health/mcp routes
 - Initializes lifecycle startup and shutdown behavior
 - Starts the server for CLI/headless mode
 
-#### src/config.js
+#### src/config.ts
 Centralized configuration management that:
 - Loads environment variables using dotenv
 - Defines default values for all configuration options
@@ -116,7 +116,7 @@ Centralized configuration management that:
 - Manages Qwen OAuth settings
 - Controls debug logging parameters
 
-#### authenticate.js
+#### authenticate.ts
 CLI tool for managing Qwen authentication that:
 - Implements OAuth 2.0 Device Authorization Flow
 - Supports multi-account management (list, add, remove accounts)
@@ -147,7 +147,7 @@ Specifies files and directories to exclude from version control:
 
 ### Data Layer
 
-#### src/qwen/api.js
+#### src/qwen/api.ts
 Qwen API client implementation that:
 - Handles multi-account management and rotation
 - Implements request counting and quota management
@@ -157,7 +157,7 @@ Qwen API client implementation that:
 
 - Implements model listing (mock implementation)
 
-#### src/qwen/auth.js
+#### src/qwen/auth.ts
 Authentication manager that:
 - Handles OAuth 2.0 Device Authorization Flow with PKCE
 - Manages credential storage and retrieval
@@ -170,17 +170,13 @@ No frontend/UI components - this is a pure API proxy server.
 
 ### Testing
 
-#### scripts/validate-runtime.js
+#### scripts/validate-runtime.ts
 Tracked runtime validation utility:
 - Loads key runtime modules to catch syntax/import regressions
 - Used by npm scripts: `test`, `test:simple`, and `test:proxy`
 
 #### tmp-test/*
-Ad-hoc exploratory scripts:
-- direct qwen checks
-- logger/debug probes
-- large request and temperature behavior checks
-- not part of primary npm test entrypoints
+Scratch probes were removed during the TS-only cleanup and are no longer part of the maintained tree.
 
 ### Documentation
 
@@ -279,19 +275,19 @@ The Qwen OpenAI-Compatible Proxy follows a layered architecture:
 ### Dependencies Between Modules
 
 ```
-src/index.js
-├── src/config.js
+src/index.ts
+├── src/config.ts
 ├── src/server/*
-│   ├── proxy-controller.js
-│   ├── health-handler.js
-│   ├── lifecycle.js
-│   └── middleware/api-key.js
+│   ├── proxy-controller.ts
+│   ├── health-handler.ts
+│   ├── lifecycle.ts
+│   └── middleware/api-key.ts
 ├── src/core/* (typed services, build output in dist/)
-├── src/qwen/api.js
-│   └── src/qwen/auth.js
-├── src/utils/fileLogger.js
-├── src/utils/liveLogger.js
-└── src/utils/tokenCounter.js
+├── src/qwen/api.ts
+│   └── src/qwen/auth.ts
+├── src/utils/fileLogger.ts
+├── src/utils/liveLogger.ts
+└── src/utils/tokenCounter.ts
 ```
 
 ## 6. Environment & Setup Analysis
@@ -320,17 +316,17 @@ src/index.js
 2. Run `npm install` to install dependencies
 3. Run `npm run auth` to authenticate with Qwen
 4. Optionally configure environment variables in a `.env` file
-5. Run `npm start` to start the proxy server
+5. Run `npm start` to build and start the proxy server
 
 ### Development Workflow
 
-- `npm start`: Run the proxy server in headless mode (`qwen-proxy serve --headless`)
+- `npm start`: Build the TS runtime and run the proxy server in headless mode (`qwen-proxy serve --headless`)
 - `npm run serve:headless`: Run the headless server command explicitly
 - `qwen-proxy serve --headless`: Package CLI headless entry
 - `qwen-proxy auth list|add|remove|counts`: Package CLI auth/account commands
 - `qwen-proxy usage`: Package CLI usage reporting command
-- `npm run auth`: Authenticate with Qwen
-- `npm run auth:list`: List all configured accounts
+- `npm run auth`: Build the TS runtime and authenticate with Qwen
+- `npm run auth:list`: Build the TS runtime and list all configured accounts
 - `npm run auth:add <account-id>`: Add a new account
 - `npm run auth:remove <account-id>`: Remove an account
 - `npm run auth:counts`: Check request counts for all accounts
@@ -341,7 +337,7 @@ The proxy server can be deployed as a standalone Node.js application:
 1. Ensure Node.js runtime is available
 2. Install dependencies with `npm install --production`
 3. Set appropriate environment variables
-4. Run with `npm start` or `node src/index.js`
+4. Run with `npm start` or `node dist/src/index.js`
 5. Configure reverse proxy (nginx, etc.) for production use
 
 ## 7. Technology Stack Breakdown
@@ -474,7 +470,7 @@ Areas for improvement:
 3. **Documentation Updates**: Keep documentation in sync with code changes
 4. **Dependency Updates**: Regularly update dependencies to latest secure versions
 5. **Code Comments**: Add more inline comments for complex logic
-6. **Type Safety**: Consider migrating to TypeScript for better type safety
+6. **Type Safety**: Continue migrating remaining secondary helpers and future TUI work onto the TS runtime
 
 ## Conclusion
 

@@ -46,6 +46,18 @@ That gives:
 - easier keyboard wiring
 - cleaner control over screen state
 
+## Phase Gate Before TUI Work
+
+Real TUI implementation must not start until the runtime is no longer JavaScript-first.
+
+That means the heavy runtime paths must already be migrated to TS, not merely wrapped by a CLI or bridge.
+
+The TUI phase assumes:
+
+- typed runtime/server exists
+- typed logging/runtime-control path exists or is being finalized on typed internals
+- the operator-facing runtime path is no longer primarily JS
+
 ## Hard UI Requirements
 
 ### 1. Full-screen quality

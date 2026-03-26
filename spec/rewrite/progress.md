@@ -5,9 +5,10 @@
 - Phase 0: complete
 - Phase 1: complete
 - Phase 2: complete
-- Phase 3: not started
+- Phase 3: complete
 - Phase 4: not started
 - Phase 5: not started
+- Phase 6: not started
 
 ## Phase 0 — Safety Cleanup (complete)
 
@@ -76,6 +77,51 @@ Acceptance check:
 - `serve --headless` -> yes
 - auth/usage/account CLI fallbacks -> yes
 
+Important note:
+
+- this phase delivered a usable transitional CLI/headless product
+- it did **not** mean the real runtime was fully migrated to TS
+
+## Phase 3 — Full Runtime TS Migration (complete)
+
+Done:
+
+- migrated the main operator-facing runtime to TS:
+  - `src/config.ts`
+  - `src/qwen/auth.ts`
+  - `src/qwen/api.ts`
+  - `src/utils/fileLogger.ts`
+  - `src/utils/liveLogger.ts`
+  - `src/server/proxy-controller.ts`
+  - `src/server/lifecycle.ts`
+  - `src/server/headless-runtime.ts`
+  - `src/cli/qwen-proxy.ts`
+  - `src/index.ts`
+- reduced the old JS files at those paths to compatibility wrappers that forward to `dist/`
+- expanded build output from core-only TS to the operator runtime TS surface
+- added helper-copy step (`scripts/copy-runtime-js.js`) so remaining JS helper modules still land in `dist/`
+- updated npm scripts so runtime validation, auth, and usage flows build the TS runtime first
+
+Acceptance check:
+
+- major runtime JS files migrated -> yes
+- runtime no longer JS-first for operator path -> yes
+- typed runtime is primary runtime path -> yes
+- TUI gate cleared -> yes
+
+Clarification:
+
+- some secondary helper modules still remain JS
+- the operator-facing boot/auth/api/logging/server path now builds from TS and runs from `dist/`
+
+## Phase 4 — Logging / Runtime Controls (not started)
+
+Target:
+
+- one central logging service
+- runtime log-level switching
+- persistent operator choices applied to the real typed runtime
+
 ## Validation Log
 
 - `npm test` -> pass
@@ -83,11 +129,11 @@ Acceptance check:
 - `npm run test:proxy` -> pass
 - `npm run typecheck` -> pass
 - `npm run build:core` -> pass
-- `node src/cli/qwen-proxy.js help` -> pass
-- `node src/cli/qwen-proxy.js serve --headless --help` -> pass
-- `node src/cli/qwen-proxy.js auth --help` -> pass
-- `node src/cli/qwen-proxy.js usage --help` -> pass
+- `node dist/src/cli/qwen-proxy.js help` -> pass
+- `node dist/src/cli/qwen-proxy.js serve --headless --help` -> pass
+- `node dist/authenticate.js --help` -> pass
+- `node dist/usage.js --help` -> pass
 
 ## Next Phase
 
-Phase 3: logging/runtime controls (central logging service, runtime log-level switching, persistent operator choices).
+Phase 4: logging/runtime controls.

@@ -71,6 +71,8 @@ qwen-proxy auth counts
 qwen-proxy usage
 ```
 
+The operator-facing runtime behind these commands is now fully source-authored in TypeScript and emitted to `dist/` for execution.
+
 ## Multi-Account Support
 
 The proxy supports multiple Qwen accounts and rotates requests across them with round-robin selection. Tokens are refreshed ahead of expiry, while transient upstream failures move the request to the next account without long-lived account blocking.

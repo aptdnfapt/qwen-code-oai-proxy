@@ -21,6 +21,7 @@ These are non-negotiable unless explicitly changed later.
 2. **KEEP LIVE LOG STYLE AND `error.log` STYLE**
 3. **USE GLOBAL PERSISTENT STORAGE FOR RUNTIME SETTINGS**
 4. **THE TUI MUST LOOK GOOD, SCALE WELL, AND SUPPORT THEMES**
+5. **NO REAL TUI WORK BEFORE THE APP RUNTIME IS FULLY MIGRATED TO TYPESCRIPT**
 
 The detailed rules live in `spec/rewrite/safety-and-lifecycle.md`.
 
@@ -30,8 +31,10 @@ The product will evolve in this order:
 
 1. cleanup current JS safely
 2. extract and rewrite the core into TS
-3. ship a clean CLI/headless package first
-4. build the TUI on top of the same core services
+3. ship a clean CLI/headless package first as a transitional product
+4. finish migrating the remaining app runtime from JS to TS
+5. add logging/runtime controls on the typed runtime
+6. build the TUI on top of the typed core services
 
 The TUI will not be the only interface.
 The final product should support both:
@@ -43,13 +46,13 @@ The final product should support both:
 
 ### Current proxy source to preserve behavior from
 
-- `/home/idc/proj/qwen-code-oai-proxy/src/index.js`
-- `/home/idc/proj/qwen-code-oai-proxy/src/qwen/api.js`
-- `/home/idc/proj/qwen-code-oai-proxy/src/qwen/auth.js`
-- `/home/idc/proj/qwen-code-oai-proxy/src/utils/liveLogger.js`
-- `/home/idc/proj/qwen-code-oai-proxy/src/utils/fileLogger.js`
-- `/home/idc/proj/qwen-code-oai-proxy/authenticate.js`
-- `/home/idc/proj/qwen-code-oai-proxy/usage.js`
+- `/home/idc/proj/qwen-code-oai-proxy/src/index.ts`
+- `/home/idc/proj/qwen-code-oai-proxy/src/qwen/api.ts`
+- `/home/idc/proj/qwen-code-oai-proxy/src/qwen/auth.ts`
+- `/home/idc/proj/qwen-code-oai-proxy/src/utils/liveLogger.ts`
+- `/home/idc/proj/qwen-code-oai-proxy/src/utils/fileLogger.ts`
+- `/home/idc/proj/qwen-code-oai-proxy/authenticate.ts`
+- `/home/idc/proj/qwen-code-oai-proxy/usage.ts`
 
 ### Rezi references for TUI guidance
 
@@ -108,6 +111,7 @@ Goal:
 
 - ship the package in a stable non-TUI form first
 - keep it script-friendly and Docker-friendly
+- accept that this phase is transitional and may still run on mixed JS/TS internals
 
 Main outputs:
 
@@ -115,7 +119,30 @@ Main outputs:
 - `serve --headless`
 - auth/usage/account commands as CLI fallbacks
 
-### Phase 3 — Logging + Runtime Controls
+Important limitation:
+
+- **Phase 2 does NOT mean the runtime is fully migrated to TS yet**
+
+### Phase 3 — Full Runtime TS Migration
+
+Goal:
+
+- migrate the remaining first-party app runtime from JS to TS
+- remove the "JavaScript-first runtime" state
+- make the typed runtime the real runtime, not only a foundation/bridge
+
+Main outputs:
+
+- runtime/server/auth/logging/config/account/usage source migrated to TS
+- CLI/runtime entrypoints migrated to TS
+- legacy JS runtime shims removed or reduced to temporary boot wrappers only
+- no major app/runtime source under `src/` remains JS before TUI begins
+
+Phase 3 is the answer to: **when should the core runtime actually become TypeScript?**
+
+Answer: **before TUI work starts, in Phase 3.**
+
+### Phase 4 — Logging + Runtime Controls
 
 Goal:
 
@@ -129,7 +156,7 @@ Main outputs:
 - preserved live log formatting
 - preserved `error.log` and request-log directory layout
 
-### Phase 4 — TUI Product Layer
+### Phase 5 — TUI Product Layer
 
 Goal:
 
@@ -142,7 +169,7 @@ Main outputs:
 - Logs / Accounts / Usage / Server / Help screens
 - runtime controls from UI
 
-### Phase 5 — Hardening + Release Readiness
+### Phase 6 — Hardening + Release Readiness
 
 Goal:
 
@@ -169,6 +196,7 @@ Main outputs:
 The rewrite is successful when:
 
 - current proxy features still exist unless explicitly removed
+- the app runtime is no longer JavaScript-first before TUI work begins
 - logs still feel like the current app
 - runtime log level can be changed safely while the app is running
 - packaged installs use stable global storage

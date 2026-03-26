@@ -1,13 +1,13 @@
-function formatAccountStatus(credentials, needsRefresh) {
+function formatAccountStatus(credentials: any, needsRefresh: boolean): { status: string; expiresIn: number | null } {
   if (!credentials || !credentials.expiry_date) {
     return {
-      status: 'unknown',
+      status: "unknown",
       expiresIn: null,
     };
   }
 
   const minutesLeft = (credentials.expiry_date - Date.now()) / 60000;
-  const status = minutesLeft < 0 ? 'expired' : (needsRefresh ? 'expiring_soon' : 'healthy');
+  const status = minutesLeft < 0 ? "expired" : (needsRefresh ? "expiring_soon" : "healthy");
 
   return {
     status,
@@ -15,14 +15,14 @@ function formatAccountStatus(credentials, needsRefresh) {
   };
 }
 
-async function loadAuthSnapshot(authManager, authService) {
+async function loadAuthSnapshot(authManager: any, authService: any): Promise<any> {
   if (authService) {
     await authService.loadAccounts();
     return {
       defaultCredentials: await authService.loadDefaultCredentials(),
       accountIds: authService.listAccountIds(),
-      getAccountCredentials: (accountId) => authService.getAccountCredentials(accountId),
-      shouldRefreshToken: (credentials, accountId) => authService.shouldRefreshToken(credentials, accountId),
+      getAccountCredentials: (accountId: string) => authService.getAccountCredentials(accountId),
+      shouldRefreshToken: (credentials: any, accountId: string | null) => authService.shouldRefreshToken(credentials, accountId),
     };
   }
 
@@ -30,34 +30,34 @@ async function loadAuthSnapshot(authManager, authService) {
   return {
     defaultCredentials: await authManager.loadCredentials(),
     accountIds: authManager.getAccountIds(),
-    getAccountCredentials: (accountId) => authManager.getAccountCredentials(accountId),
-    shouldRefreshToken: (credentials, accountId) => authManager.shouldRefreshToken(credentials, accountId),
+    getAccountCredentials: (accountId: string) => authManager.getAccountCredentials(accountId),
+    shouldRefreshToken: (credentials: any, accountId: string | null) => authManager.shouldRefreshToken(credentials, accountId),
   };
 }
 
-function createHealthHandler({ qwenAPI, authService }) {
-  return async (req, res) => {
+export function createHealthHandler({ qwenAPI, authService }: { qwenAPI: any; authService: any }) {
+  return async (req: any, res: any): Promise<void> => {
     try {
       const authSnapshot = await loadAuthSnapshot(qwenAPI.authManager, authService);
       const { defaultCredentials, accountIds, getAccountCredentials, shouldRefreshToken } = authSnapshot;
 
-      const accounts = [];
-      const accountsNeedingRefresh = [];
+      const accounts: any[] = [];
+      const accountsNeedingRefresh: string[] = [];
       let totalRequestsToday = 0;
 
       if (defaultCredentials) {
         const needsRefresh = shouldRefreshToken(defaultCredentials, null);
         const accountStatus = formatAccountStatus(defaultCredentials, needsRefresh);
-        const requestCount = qwenAPI.getRequestCount('default');
-        const webSearchCount = qwenAPI.getWebSearchRequestCount('default');
+        const requestCount = qwenAPI.getRequestCount("default");
+        const webSearchCount = qwenAPI.getWebSearchRequestCount("default");
         totalRequestsToday += requestCount;
 
         if (needsRefresh) {
-          accountsNeedingRefresh.push('default');
+          accountsNeedingRefresh.push("default");
         }
 
         accounts.push({
-          id: 'default',
+          id: "default",
           status: accountStatus.status,
           expiresIn: accountStatus.expiresIn ? `${accountStatus.expiresIn.toFixed(1)} minutes` : null,
           requestCount,
@@ -87,16 +87,15 @@ function createHealthHandler({ qwenAPI, authService }) {
         });
       }
 
-      const healthyCount = accounts.filter((entry) => entry.status === 'healthy').length;
-      const expiringSoonCount = accounts.filter((entry) => entry.status === 'expiring_soon').length;
-      const expiredCount = accounts.filter((entry) => entry.status === 'expired').length;
+      const healthyCount = accounts.filter((entry) => entry.status === "healthy").length;
+      const expiringSoonCount = accounts.filter((entry) => entry.status === "expiring_soon").length;
+      const expiredCount = accounts.filter((entry) => entry.status === "expired").length;
 
       let totalInputTokens = 0;
       let totalOutputTokens = 0;
-
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toISOString().split("T")[0];
       for (const usageData of qwenAPI.tokenUsage.values()) {
-        const todayUsage = usageData.find((entry) => entry.date === today);
+        const todayUsage = usageData.find((entry: any) => entry.date === today);
         if (todayUsage) {
           totalInputTokens += todayUsage.inputTokens;
           totalOutputTokens += todayUsage.outputTokens;
@@ -104,7 +103,7 @@ function createHealthHandler({ qwenAPI, authService }) {
       }
 
       res.json({
-        status: 'ok',
+        status: "ok",
         timestamp: new Date().toISOString(),
         summary: {
           total: accounts.length,
@@ -121,9 +120,9 @@ function createHealthHandler({ qwenAPI, authService }) {
         },
         accounts,
         health: {
-          rotation: 'round_robin',
+          rotation: "round_robin",
           persistentCooldowns: false,
-          preemptiveRefreshWindowMinutes: '10-30',
+          preemptiveRefreshWindowMinutes: "10-30",
           accountsNeedingRefresh,
         },
         server_info: {
@@ -134,14 +133,14 @@ function createHealthHandler({ qwenAPI, authService }) {
           arch: process.arch,
         },
         endpoints: {
-          openai: `${req.protocol}://${req.get('host')}/v1`,
-          health: `${req.protocol}://${req.get('host')}/health`,
+          openai: `${req.protocol}://${req.get("host")}/v1`,
+          health: `${req.protocol}://${req.get("host")}/health`,
         },
       });
-    } catch (error) {
-      console.error('Health check error:', error.message);
+    } catch (error: any) {
+      console.error("Health check error:", error.message);
       res.status(500).json({
-        status: 'error',
+        status: "error",
         timestamp: new Date().toISOString(),
         error: error.message,
         server_info: {
@@ -154,7 +153,3 @@ function createHealthHandler({ qwenAPI, authService }) {
     }
   };
 }
-
-module.exports = {
-  createHealthHandler,
-};

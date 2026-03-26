@@ -44,7 +44,7 @@ OpenAI Format      Translation Layer      Qwen Models
 
 ## Supported Endpoints
 
-Based on the implementation in `src/index.js`, the proxy supports the following endpoints:
+Based on the runtime implemented from `src/index.ts` and executed from `dist/src/index.js`, the proxy supports the following endpoints:
 - `POST /v1/chat/completions` - Chat completions with streaming support and full temperature control
 - `GET /v1/models` - List available models (returns mock data)
 - `GET /health` - Health check endpoint
@@ -116,3 +116,4 @@ The proxy now displays token counts in the terminal for each request, showing bo
 
 - Phase 1 foundation notes: `docs/typescript-core-foundation.md`
 - Phase 2 CLI/headless notes: `docs/cli-headless-phase2.md`
+- Phase 3 runtime migration notes: `docs/typescript-runtime-phase3.md`

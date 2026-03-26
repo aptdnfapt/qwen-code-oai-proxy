@@ -1,12 +1,12 @@
-function loadTypedCore() {
+function loadTypedCore(): any {
   try {
-    return require('../../dist/core/index.js');
+    return require("../core/index.js");
   } catch {
     return null;
   }
 }
 
-function createTypedCoreServices(authManager) {
+export function createTypedCoreServices(authManager: any): { runtimeConfigStore: any; authService: any } {
   const typedCore = loadTypedCore();
   if (!typedCore) {
     return {
@@ -15,7 +15,7 @@ function createTypedCoreServices(authManager) {
     };
   }
 
-  const mode = process.env.NODE_ENV === 'development' ? 'development' : 'packaged';
+  const mode = process.env.NODE_ENV === "development" ? "development" : "packaged";
   const runtimeConfigStore = new typedCore.RuntimeConfigStore({ mode });
   const authService = new typedCore.LegacyQwenAuthService(authManager);
 
@@ -24,7 +24,3 @@ function createTypedCoreServices(authManager) {
     authService,
   };
 }
-
-module.exports = {
-  createTypedCoreServices,
-};
