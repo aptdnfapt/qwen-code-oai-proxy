@@ -165,18 +165,23 @@ Response includes:
 
 The proxy server can be configured using environment variables. Create a `.env` file in the project root or set the variables directly in your environment.
 
-*   `LOG_FILE_LIMIT`: Maximum number of debug log files to keep (default: 20)
-*   `DEBUG_LOG`: Set to `true` to enable debug logging (default: false)
+*   `LOG_LEVEL`: Logging mode (`off`, `error`, `error-debug`, `debug`)
+*   `MAX_DEBUG_LOGS`: Maximum number of request debug directories to keep (default: 20)
+*   `ERROR_LOG_MAX_MB`: Rotate `error.log` when it reaches this size in MB (default: 10)
+*   `ERROR_LOG_MAX_DAYS`: Keep rotated error logs for this many days (default: 30)
 *   `API_KEY`: Set API key(s) for authentication (comma-separated for multiple keys)
 *   `DEFAULT_ACCOUNT`: Specify which account the proxy should use by default
 
+Compatibility aliases are still accepted:
+
+*   `DEBUG_LOG=true` maps to `LOG_LEVEL=debug`
+*   `LOG_FILE_LIMIT` maps to `MAX_DEBUG_LOGS`
+
 Example `.env` file:
 ```bash
-# Keep only the 10 most recent log files
-LOG_FILE_LIMIT=10
-
-# Enable debug logging (log files will be created)
-DEBUG_LOG=true
+# Log everything and keep only the 10 most recent request-debug folders
+LOG_LEVEL=debug
+MAX_DEBUG_LOGS=10
 
 # API key for authentication (comma-separated for multiple keys)
 API_KEY=your-secret-key-here

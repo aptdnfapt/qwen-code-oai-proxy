@@ -16,7 +16,11 @@ The TUI must help the operator:
 
 ### Use these local references during implementation
 
+- `/home/idc/proj/qwen-code-oai-proxy/Rezi/AGENTS.md`
+- `/home/idc/proj/qwen-code-oai-proxy/Rezi/CLAUDE.md`
 - `/home/idc/proj/qwen-code-oai-proxy/Rezi/README.md`
+- `/home/idc/proj/qwen-code-oai-proxy/Rezi/docs/design-system.md`
+- `/home/idc/proj/qwen-code-oai-proxy/Rezi/docs/dev/live-pty-debugging.md`
 - `/home/idc/proj/qwen-code-oai-proxy/Rezi/packages/create-rezi/templates/cli-tool/src/main.ts`
 - `/home/idc/proj/qwen-code-oai-proxy/Rezi/packages/create-rezi/templates/cli-tool/src/screens/shell.ts`
 - `/home/idc/proj/qwen-code-oai-proxy/Rezi/packages/create-rezi/templates/cli-tool/src/screens/logs.ts`
@@ -42,6 +46,49 @@ That gives:
 - easier keyboard wiring
 - cleaner control over screen state
 
+## Hard UI Requirements
+
+### 1. Full-screen quality
+
+The TUI must make good use of the full terminal.
+
+It should not feel like a tiny centered widget or a half-used canvas.
+
+### 2. Responsive resizing
+
+The layout must adapt when terminal size changes.
+
+This includes:
+
+- shrinking cleanly on smaller terminals
+- expanding to use wider terminals
+- avoiding broken overlaps or awkward dead space
+- preserving useful content hierarchy at different sizes
+
+### 3. Theme support
+
+The TUI must support multiple themes.
+
+Minimum expectation for v1:
+
+- at least one good dark theme
+- at least one good light theme
+
+Nice-to-have later:
+
+- extra Rezi built-in themes such as Nord or Dracula
+
+### 4. Visual coherence
+
+Text, panels, status bars, badges, tables, and logs must feel like one product.
+
+This means:
+
+- no random isolated background colors
+- no text color that clashes with panel surfaces
+- no elements that feel visually detached from nearby surfaces
+- use semantic design tokens and Rezi design-system guidance
+
 ## Main TUI Shell
 
 ```text
@@ -61,6 +108,14 @@ That gives:
 │ F1 Logs   F2 Accounts   F3 Usage   F4 Server   F5 Help   L log level   Q quit              │
 └──────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+## Layout Rules
+
+- root layout should use the whole screen
+- header, screen body, and footer must remain visible and balanced
+- screen body should be the main space consumer
+- wide terminals should expose more useful detail, not just more padding
+- narrow terminals should degrade gracefully with compact layouts where needed
 
 ## Screen Set
 
@@ -215,6 +270,43 @@ Preferred Rezi widgets:
 
 Use tab-like styling for top navigation, but route-based screen ownership under the hood.
 
+## Theme and Color Rules
+
+Follow Rezi design-system guidance from:
+
+- `/home/idc/proj/qwen-code-oai-proxy/Rezi/docs/design-system.md`
+- `/home/idc/proj/qwen-code-oai-proxy/Rezi/CLAUDE.md`
+
+Rules:
+
+- prefer semantic theme tokens over hardcoded colors
+- use adjacent surface/elevation levels for nearby panels
+- keep focus states readable in both dark and light themes
+- logs, tables, badges, and status bars should inherit a coherent palette
+
+## Testing Rules for the TUI
+
+Follow Rezi best-practice testing guidance.
+
+### Required validation types
+
+1. state/reducer/keybinding tests where logic exists
+2. focused screen/render tests where practical
+3. live PTY validation for UI regressions
+4. theme checks in at least one dark theme and one light theme
+
+### PTY validation reference
+
+- `/home/idc/proj/qwen-code-oai-proxy/Rezi/docs/dev/live-pty-debugging.md`
+
+Use PTY checks especially when touching:
+
+- layout
+- theme switching
+- tables
+- logs console
+- route/screen composition
+
 ## TUI Vibe Rules
 
 The UI should be:
@@ -224,3 +316,4 @@ The UI should be:
 - operator-focused
 - not over-designed
 - consistent with the current logging personality of the app
+- visually polished enough to feel intentional in daily use

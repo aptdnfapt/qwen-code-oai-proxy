@@ -41,7 +41,7 @@ module.exports = {
   
   // Logging configuration (handled in utils/fileLogger.js)
   // LOG_LEVEL env var: off, error, error-debug, debug
-  // ERROR_LOG_MAX_MB, ERROR_LOG_MAX_DAYS, MAX_DEBUG_LOGS env vars
+  // ERROR_LOG_MAX_MB, ERROR_LOG_MAX_DAYS, MAX_DEBUG_LOGS env vars (legacy aliases: DEBUG_LOG, LOG_FILE_LIMIT)
 
   // Retry configuration
   maxRetries: parseInt(process.env.MAX_RETRIES || '5'),

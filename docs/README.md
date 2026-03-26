@@ -87,13 +87,20 @@ Based on the implementation in `src/index.js`, the proxy supports the following 
 
 The proxy server can be configured using environment variables. Create a `.env` file in the project root or set the variables directly in your environment.
 
-- `LOG_FILE_LIMIT`: Maximum number of debug log files to keep (default: 20)
-- `DEBUG_LOG`: Set to `true` to enable debug logging (default: false)
+- `LOG_LEVEL`: Logging mode (`off`, `error`, `error-debug`, `debug`)
+- `MAX_DEBUG_LOGS`: Maximum number of request debug directories to keep (default: 20)
+- `ERROR_LOG_MAX_MB`: Rotate `error.log` when it reaches this size in MB (default: 10)
+- `ERROR_LOG_MAX_DAYS`: Keep rotated error logs for this many days (default: 30)
 - `HOST`: Server host (default: localhost)
 - `PORT`: Server port (default: 8080)
 - `DEFAULT_ACCOUNT`: Specify which account the proxy should use by default (when using multi-account setup)
     - Should match the name used when adding an account with `npm run auth add <name>`
     - If not set or invalid, the proxy will use the first available account
+
+Compatibility aliases:
+
+- `DEBUG_LOG=true` maps to `LOG_LEVEL=debug`
+- `LOG_FILE_LIMIT` maps to `MAX_DEBUG_LOGS`
 
 For information about temperature settings and other model parameters, see `temperature-settings.md`.
 

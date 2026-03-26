@@ -36,6 +36,20 @@ Default base path:
 
 - `~/.local/share/qwen-proxy`
 
+### HARD RULE 4 — THE TUI MUST LOOK GOOD, USE THE FULL SCREEN WELL, AND SUPPORT THEMES
+
+The TUI is not allowed to feel like a broken debug panel.
+
+It must:
+
+- use the available terminal space well
+- resize cleanly with terminal size changes
+- look visually intentional in both dark and light themes
+- keep text/background/surface colors semantically consistent
+- avoid panels or text blocks that feel visually out of place
+
+This is a product requirement, not optional polish.
+
 ## Rewrite Operating Model
 
 ### Rule: rewrite in slices, not in blind bulk
@@ -136,6 +150,34 @@ If a change touches logging:
 - preserve the block layout of `error.log`
 - preserve request-log directory names and file names unless explicitly migrated with compatibility notes
 - do not rename core operator concepts casually
+
+## TUI Quality Protection Rules
+
+If a change touches the TUI:
+
+- it must remain responsive to terminal size changes
+- it must use semantic theme/surface tokens rather than random ad-hoc colors
+- it must support at least one strong dark theme and one strong light theme in v1
+- text backgrounds and surrounding panel backgrounds must feel visually coherent
+- the screen should make good use of full-screen layout instead of looking tiny or centered awkwardly
+
+## Rezi Testing Protection Rules
+
+If a change touches the TUI, use Rezi best-practice validation as part of the workflow.
+
+Important reference paths:
+
+- `/home/idc/proj/qwen-code-oai-proxy/Rezi/AGENTS.md`
+- `/home/idc/proj/qwen-code-oai-proxy/Rezi/CLAUDE.md`
+- `/home/idc/proj/qwen-code-oai-proxy/Rezi/docs/dev/live-pty-debugging.md`
+- `/home/idc/proj/qwen-code-oai-proxy/Rezi/docs/design-system.md`
+
+Expected testing categories:
+
+- unit tests for reducers/state/keybindings where relevant
+- focused screen/render tests where practical
+- live PTY validation for layout/theme/render regressions
+- theme checks in both dark and light modes
 
 ## Runtime Config Protection Rules
 

@@ -26,21 +26,23 @@ Client-Server API Proxy Architecture with middleware pattern for request handlin
 ## 2. Detailed Directory Structure Analysis
 
 ```
-/home/vscode/proj/qwen-openai-proxy/
+/home/idc/proj/qwen-code-oai-proxy/
 ├── .env.example                 # Environment configuration example
 ├── .gitignore                   # Git ignore patterns
 ├── authenticate.js              # Authentication CLI tool
+├── usage.js                     # Usage reporting CLI tool
 ├── package.json                 # Project metadata and dependencies
 ├── README.md                    # Project documentation
-├── simple_qwen_test.py          # Direct API test utility
-├── test-logger.js               # Logger testing utility
+├── scripts/                     # Validation and helper scripts
 ├── debug/                       # Debug log files (git-ignored)
 ├── docs/                        # Documentation files
 ├── node_modules/                # Dependencies (git-ignored)
 ├── qwen-code/                   # Qwen code directory (git-ignored)
 ├── src/                         # Main source code
 │   ├── config.js                # Configuration management
-│   ├── index.js                 # Main application entry point
+│   ├── index.js                 # Runtime bootstrap
+│   ├── server/                  # Controllers/middleware/lifecycle
+│   ├── core/                    # Typed core rewrite foundation
 │   ├── qwen/                    # Qwen-specific modules
 │   │   ├── api.js               # Qwen API client implementation
 │   │   └── auth.js              # Authentication management
@@ -61,7 +63,9 @@ Contains configuration files, documentation, and entry points for the applicatio
 #### src/ Directory
 Contains the main application source code, organized into logical modules:
 - `config.js`: Centralized configuration management
-- `index.js`: Main Express.js application and route handlers
+- `index.js`: Express bootstrap and route wiring
+- `server/`: Request controllers, middleware, health, and lifecycle handlers
+- `core/`: TypeScript core contracts/services for rewrite foundation
 - `qwen/`: Qwen-specific functionality including API client and authentication
 - `utils/`: Shared utility functions
 
@@ -117,7 +121,7 @@ Project metadata and dependency management:
 #### .env.example
 Example environment configuration file showing:
 - Server configuration options (PORT, HOST)
-- Debug logging settings (DEBUG_LOG, LOG_FILE_LIMIT)
+- Debug logging settings (LOG_LEVEL, MAX_DEBUG_LOGS)
 - Streaming configuration (STREAM)
 
 #### .gitignore
@@ -152,18 +156,17 @@ No frontend/UI components - this is a pure API proxy server.
 
 ### Testing
 
-#### simple_qwen_test.py
-Python utility for testing direct Qwen API calls:
-- Loads credentials from file
-- Makes direct API calls to Qwen
-- Supports file-based prompts
-- Useful for debugging and verification
+#### scripts/validate-runtime.js
+Tracked runtime validation utility:
+- Loads key runtime modules to catch syntax/import regressions
+- Used by npm scripts: `test`, `test:simple`, and `test:proxy`
 
-#### test-logger.js
-Simple test utility for the debug logger:
-- Creates mock requests and responses
-- Tests logging functionality
-- Verifies log file creation
+#### tmp-test/*
+Ad-hoc exploratory scripts:
+- direct qwen checks
+- logger/debug probes
+- large request and temperature behavior checks
+- not part of primary npm test entrypoints
 
 ### Documentation
 
@@ -264,9 +267,16 @@ The Qwen OpenAI-Compatible Proxy follows a layered architecture:
 ```
 src/index.js
 ├── src/config.js
+├── src/server/*
+│   ├── proxy-controller.js
+│   ├── health-handler.js
+│   ├── lifecycle.js
+│   └── middleware/api-key.js
+├── src/core/* (typed services, build output in dist/)
 ├── src/qwen/api.js
 │   └── src/qwen/auth.js
-├── src/utils/logger.js
+├── src/utils/fileLogger.js
+├── src/utils/liveLogger.js
 └── src/utils/tokenCounter.js
 ```
 
@@ -276,8 +286,10 @@ src/index.js
 
 - `PORT`: Server port (default: 8080)
 - `HOST`: Server host (default: localhost)
-- `DEBUG_LOG`: Enable debug logging (default: false)
-- `LOG_FILE_LIMIT`: Maximum debug log files to keep (default: 20)
+- `LOG_LEVEL`: Logging mode (`off`, `error`, `error-debug`, `debug`)
+- `MAX_DEBUG_LOGS`: Maximum request debug directories to keep (default: 20)
+- `ERROR_LOG_MAX_MB`: Rotate `error.log` by size (default: 10)
+- `ERROR_LOG_MAX_DAYS`: Keep rotated error logs for N days (default: 30)
 - `STREAM`: Enable streaming responses (default: false)
 - `QWEN_CLIENT_ID`: Qwen OAuth client ID (default provided)
 - `QWEN_CLIENT_SECRET`: Qwen OAuth client secret (optional)

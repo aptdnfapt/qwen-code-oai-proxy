@@ -2,7 +2,9 @@ const fs = require('fs');
 const fsPromises = require('fs').promises;
 const path = require('path');
 
-const LOG_LEVEL = String(process.env.LOG_LEVEL || 'error-debug').toLowerCase();
+const LEGACY_DEBUG_LOG = String(process.env.DEBUG_LOG || '').toLowerCase() === 'true';
+const resolvedLogLevel = process.env.LOG_LEVEL || (LEGACY_DEBUG_LOG ? 'debug' : 'error-debug');
+const LOG_LEVEL = String(resolvedLogLevel).toLowerCase();
 const validLevels = ['off', 'error', 'error-debug', 'debug'];
 const logLevel = validLevels.includes(LOG_LEVEL) ? LOG_LEVEL : 'off';
 
@@ -12,7 +14,7 @@ const isDebugLogging = logLevel === 'debug';
 
 const ERROR_LOG_MAX_MB = parseInt(process.env.ERROR_LOG_MAX_MB || '10');
 const ERROR_LOG_MAX_DAYS = parseInt(process.env.ERROR_LOG_MAX_DAYS || '30');
-const MAX_DEBUG_LOGS = parseInt(process.env.MAX_DEBUG_LOGS || '20');
+const MAX_DEBUG_LOGS = parseInt(process.env.MAX_DEBUG_LOGS || process.env.LOG_FILE_LIMIT || '20');
 
 const LOG_DIR = path.join(process.cwd(), 'log');
 if ((isErrorLogging || isDebugLogging) && !fs.existsSync(LOG_DIR)) {
@@ -348,5 +350,3 @@ module.exports = {
   maskSensitiveHeaders,
   startCleanupJob
 };
-
-startCleanupJob();

@@ -20,6 +20,7 @@ These are non-negotiable unless explicitly changed later.
 1. **NO ACCIDENTAL FEATURE LOSS**
 2. **KEEP LIVE LOG STYLE AND `error.log` STYLE**
 3. **USE GLOBAL PERSISTENT STORAGE FOR RUNTIME SETTINGS**
+4. **THE TUI MUST LOOK GOOD, SCALE WELL, AND SUPPORT THEMES**
 
 The detailed rules live in `spec/rewrite/safety-and-lifecycle.md`.
 
@@ -52,10 +53,14 @@ The final product should support both:
 
 ### Rezi references for TUI guidance
 
+- `/home/idc/proj/qwen-code-oai-proxy/Rezi/AGENTS.md`
+- `/home/idc/proj/qwen-code-oai-proxy/Rezi/CLAUDE.md`
 - `/home/idc/proj/qwen-code-oai-proxy/Rezi/README.md`
 - `/home/idc/proj/qwen-code-oai-proxy/Rezi/packages/create-rezi/templates/cli-tool/src/main.ts`
 - `/home/idc/proj/qwen-code-oai-proxy/Rezi/packages/create-rezi/templates/cli-tool/src/screens/shell.ts`
 - `/home/idc/proj/qwen-code-oai-proxy/Rezi/packages/create-rezi/templates/cli-tool/src/screens/logs.ts`
+- `/home/idc/proj/qwen-code-oai-proxy/Rezi/docs/design-system.md`
+- `/home/idc/proj/qwen-code-oai-proxy/Rezi/docs/dev/live-pty-debugging.md`
 - `/home/idc/proj/qwen-code-oai-proxy/Rezi/docs/widgets/logs-console.md`
 - `/home/idc/proj/qwen-code-oai-proxy/Rezi/docs/widgets/table.md`
 - `/home/idc/proj/qwen-code-oai-proxy/Rezi/docs/widgets/virtual-list.md`
@@ -64,6 +69,10 @@ The final product should support both:
 ## Phase Plan
 
 The rewrite phases should stay medium-sized: not tiny, not huge.
+
+**After each phase is completed:**
+1. Create or update `spec/rewrite/progress.md` to track what was done, what's next, and any blockers or notes.
+2. Commit all changes with format: `phase<N>: <short summary>` — include details about what changed, why, and any decisions made.
 
 ### Phase 0 — Safety Cleanup
 

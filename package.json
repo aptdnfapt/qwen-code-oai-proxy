@@ -4,10 +4,13 @@
   "description": "A proxy server that exposes Qwen models through an OpenAI-compatible API",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node src/index.js",
-    "test": "node test-proxy.js",
-    "test:simple": "node test-simple.js",
+    "start": "npm run build:core && node src/index.js",
+    "dev": "npm run build:core && node src/index.js",
+    "build:core": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node scripts/validate-runtime.js",
+    "test:simple": "node scripts/validate-runtime.js",
+    "test:proxy": "node scripts/validate-runtime.js",
     "test:all": "node test-all-accounts.js",
     "auth": "node authenticate.js",
     "auth:list": "node authenticate.js list",
@@ -40,6 +43,8 @@
     "winston": "^3.19.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "@types/node": "^25.5.0",
+    "nodemon": "^3.0.1",
+    "typescript": "^6.0.2"
   }
 }
