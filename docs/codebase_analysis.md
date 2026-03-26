@@ -29,8 +29,8 @@ Client-Server API Proxy Architecture with middleware pattern for request handlin
 /home/idc/proj/qwen-code-oai-proxy/
 ├── .env.example                 # Environment configuration example
 ├── .gitignore                   # Git ignore patterns
-├── authenticate.js              # Authentication CLI tool
-├── usage.js                     # Usage reporting CLI tool
+├── authenticate.js              # Authentication CLI tool (legacy + reusable command module)
+├── usage.js                     # Usage reporting CLI tool (legacy + reusable command module)
 ├── package.json                 # Project metadata and dependencies
 ├── README.md                    # Project documentation
 ├── scripts/                     # Validation and helper scripts
@@ -40,7 +40,8 @@ Client-Server API Proxy Architecture with middleware pattern for request handlin
 ├── qwen-code/                   # Qwen code directory (git-ignored)
 ├── src/                         # Main source code
 │   ├── config.js                # Configuration management
-│   ├── index.js                 # Runtime bootstrap
+│   ├── index.js                 # Runtime compatibility bootstrap
+│   ├── cli/                     # Package CLI command entry (`qwen-proxy`)
 │   ├── server/                  # Controllers/middleware/lifecycle
 │   ├── core/                    # Typed core rewrite foundation
 │   ├── qwen/                    # Qwen-specific modules
@@ -58,12 +59,15 @@ Contains configuration files, documentation, and entry points for the applicatio
 - `package.json`: Defines dependencies, scripts, and project metadata
 - `README.md`: Main documentation
 - `authenticate.js`: CLI tool for managing Qwen authentication
+- `usage.js`: CLI tool for usage reporting
+- package `bin` command: `qwen-proxy`
 - `.env.example`: Example environment configuration
 
 #### src/ Directory
 Contains the main application source code, organized into logical modules:
 - `config.js`: Centralized configuration management
-- `index.js`: Express bootstrap and route wiring
+- `index.js`: Compatibility entry that delegates to headless runtime bootstrap
+- `cli/`: Package CLI command entrypoint and command routing
 - `server/`: Request controllers, middleware, health, and lifecycle handlers
 - `core/`: TypeScript core contracts/services for rewrite foundation
 - `qwen/`: Qwen-specific functionality including API client and authentication
@@ -86,12 +90,22 @@ Stores debug log files when debugging is enabled, helping with troubleshooting.
 
 #### src/index.js
 The main entry point of the application that:
-- Sets up the Express.js server
-- Configures middleware (CORS, JSON parsing)
-- Initializes Qwen API client and authentication manager
-- Defines API routes (`/v1/chat/completions`, `/v1/models`, `/auth/*`)
-- Implements request handling for chat completions (both streaming and regular)
-- Provides health check endpoint (`/health`)
+- Delegates runtime startup to `src/server/headless-runtime.js`
+- Preserves backward compatibility for `node src/index.js`
+
+#### src/cli/qwen-proxy.js
+Package CLI command entry that:
+- Provides `qwen-proxy serve --headless`
+- Routes auth/account commands to reusable auth command runner
+- Routes usage/tokens commands to reusable usage command runner
+- Supports `help` and `version` command output
+
+#### src/server/headless-runtime.js
+Headless runtime bootstrap that:
+- Owns Express app wiring and middleware setup
+- Registers API/auth/health/mcp routes
+- Initializes lifecycle startup and shutdown behavior
+- Starts the server for CLI/headless mode
 
 #### src/config.js
 Centralized configuration management that:
@@ -310,7 +324,11 @@ src/index.js
 
 ### Development Workflow
 
-- `npm start`: Run the proxy server
+- `npm start`: Run the proxy server in headless mode (`qwen-proxy serve --headless`)
+- `npm run serve:headless`: Run the headless server command explicitly
+- `qwen-proxy serve --headless`: Package CLI headless entry
+- `qwen-proxy auth list|add|remove|counts`: Package CLI auth/account commands
+- `qwen-proxy usage`: Package CLI usage reporting command
 - `npm run auth`: Authenticate with Qwen
 - `npm run auth:list`: List all configured accounts
 - `npm run auth:add <account-id>`: Add a new account

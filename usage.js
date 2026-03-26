@@ -215,13 +215,30 @@ async function showUsageReport() {
   }
 }
 
-// Parse command line arguments
-const args = process.argv.slice(2);
-
-if (args.length > 0 && (args[0] === '--help' || args[0] === '-h')) {
-  console.log('Usage: npm run usage');
+function printUsage(commandName = 'npm run usage') {
+  console.log(`Usage: ${commandName}`);
   console.log('Display daily usage statistics for chat completions and web search.');
-  process.exit(0);
 }
 
-showUsageReport();
+async function runUsageCommand(args = process.argv.slice(2), options = {}) {
+  const commandName = options.commandName || 'npm run usage';
+
+  if (args.length > 0 && (args[0] === '--help' || args[0] === '-h' || args[0] === 'help')) {
+    printUsage(commandName);
+    return;
+  }
+
+  await showUsageReport();
+}
+
+if (require.main === module) {
+  runUsageCommand().catch((error) => {
+    console.error('Usage command failed:', error.message);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  runUsageCommand,
+  showUsageReport,
+};

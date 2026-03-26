@@ -15,7 +15,11 @@ const modulePaths = [
   '../src/server/proxy-controller.js',
   '../src/server/health-handler.js',
   '../src/server/lifecycle.js',
-  '../src/server/typed-core-bridge.js'
+  '../src/server/typed-core-bridge.js',
+  '../src/server/headless-runtime.js',
+  '../src/cli/qwen-proxy.js',
+  '../authenticate.js',
+  '../usage.js'
 ];
 
 function loadModule(relativePath) {

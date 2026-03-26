@@ -45,13 +45,31 @@ Users might face errors or 504 Gateway Timeout issues when using contexts with 1
     *   Run `npm run auth:add <account>` to authenticate with your Qwen account
     *   This will create the `~/.qwen/oauth_creds.json` file needed by the proxy server
     *   Alternatively, you can use the official `qwen-code` CLI tool from [QwenLM/qwen-code](https://github.com/QwenLM/qwen-code)
-3.  **Start the Server**:
+3.  **Start the Server (Headless)**:
     ```bash
-    npm start
+    npm run serve:headless
     ```
 4.  **Use the Proxy**: Point your OpenAI-compatible client to `http://localhost:8080/v1`.
 
 **Note**: API key can be any random string - it doesn't matter for this proxy.
+
+## CLI Entry (Rewrite Phase 2)
+
+The package now exposes a CLI command:
+
+```bash
+qwen-proxy serve --headless
+```
+
+Fallback utility commands are also available:
+
+```bash
+qwen-proxy auth list
+qwen-proxy auth add <account-id>
+qwen-proxy auth remove <account-id>
+qwen-proxy auth counts
+qwen-proxy usage
+```
 
 ## Multi-Account Support
 
@@ -69,18 +87,21 @@ docker-compose exec qwen-proxy npm run auth:remove <account-id>
 **For Local Development:**
 1. List existing accounts:
    ```bash
-   npm run auth:list
+    npm run auth:list
+    qwen-proxy auth list
    ```
 
 2. Add a new account:
    ```bash
-   npm run auth:add <account-id>
+    npm run auth:add <account-id>
+    qwen-proxy auth add <account-id>
    ```
    Replace `<account-id>` with a unique identifier for your account (e.g., `account2`, `team-account`, etc.)
 
 3. Remove an account:
    ```bash
-   npm run auth:remove <account-id>
+    npm run auth:remove <account-id>
+    qwen-proxy auth remove <account-id>
    ```
 
 ### How Account Rotation Works
@@ -105,6 +126,7 @@ Monitor your API usage with detailed reports:
 ```bash
 # Show comprehensive usage report (chat + web search)
 npm run usage
+qwen-proxy usage
 ```
 
 ### Account Usage Monitoring

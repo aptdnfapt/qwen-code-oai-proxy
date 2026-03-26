@@ -111,3 +111,8 @@ For information about configuring a default account, see `default-account.md`.
 Users might face errors or 504 Gateway Timeout issues when using contexts with 130,000 to 150,000 tokens or more. This appears to be a practical limit for Qwen models. For detailed information based on user feedback, see `user-feedback.md`.
 
 The proxy now displays token counts in the terminal for each request, showing both input token estimates and API-returned usage statistics (prompt, completion, and total tokens).
+
+## Rewrite Phase Docs
+
+- Phase 1 foundation notes: `docs/typescript-core-foundation.md`
+- Phase 2 CLI/headless notes: `docs/cli-headless-phase2.md`

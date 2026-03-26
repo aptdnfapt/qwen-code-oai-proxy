@@ -254,41 +254,67 @@ async function authenticate() {
   }
 }
 
-// Parse command line arguments
-const args = process.argv.slice(2);
-const command = args[0];
-
-switch (command) {
-  case 'list':
-    listAccounts();
-    break;
-  case 'add':
-    if (!args[1]) {
-      console.error('Please provide an account ID: npm run auth add <account-id>');
-      process.exit(1);
-    }
-    addAccount(args[1]);
-    break;
-  case 'remove':
-    if (!args[1]) {
-      console.error('Please provide an account ID: npm run auth remove <account-id>');
-      process.exit(1);
-    }
-    removeAccount(args[1]);
-    break;
-  case 'counts':
-    checkRequestCounts();
-    break;
-  case undefined:
-  case '':
-    authenticate();
-    break;
-  default:
-    console.log('Usage: npm run auth [list|add <account-id>|remove <account-id>]');
-    console.log('  list                - List all accounts');
-    console.log('  add <account-id>    - Add a new account with the specified ID');
-    console.log('  remove <account-id> - Remove an existing account with the specified ID');
-    console.log('  counts              - Check request counts for all accounts');
-    console.log('  (no arguments)      - Authenticate default account');
-    process.exit(1);
+function printAuthUsage(commandPrefix = 'npm run auth') {
+  console.log(`Usage: ${commandPrefix} [list|add <account-id>|remove <account-id>|counts]`);
+  console.log('  list                - List all accounts');
+  console.log('  add <account-id>    - Add a new account with the specified ID');
+  console.log('  remove <account-id> - Remove an existing account with the specified ID');
+  console.log('  counts              - Check request counts for all accounts');
+  console.log('  (no arguments)      - Authenticate default account');
 }
+
+async function runAuthCommand(args = process.argv.slice(2), options = {}) {
+  const commandPrefix = options.commandPrefix || 'npm run auth';
+  const command = args[0];
+
+  switch (command) {
+    case 'help':
+    case '--help':
+    case '-h':
+      printAuthUsage(commandPrefix);
+      return;
+    case 'list':
+      await listAccounts();
+      return;
+    case 'add':
+      if (!args[1]) {
+        console.error(`Please provide an account ID: ${commandPrefix} add <account-id>`);
+        process.exit(1);
+      }
+      await addAccount(args[1]);
+      return;
+    case 'remove':
+      if (!args[1]) {
+        console.error(`Please provide an account ID: ${commandPrefix} remove <account-id>`);
+        process.exit(1);
+      }
+      await removeAccount(args[1]);
+      return;
+    case 'counts':
+      await checkRequestCounts();
+      return;
+    case undefined:
+    case '':
+      await authenticate();
+      return;
+    default:
+      printAuthUsage(commandPrefix);
+      process.exit(1);
+  }
+}
+
+if (require.main === module) {
+  runAuthCommand().catch((error) => {
+    console.error('Authentication command failed:', error.message);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  runAuthCommand,
+  listAccounts,
+  addAccount,
+  removeAccount,
+  checkRequestCounts,
+  authenticate,
+};

@@ -3,9 +3,13 @@
   "version": "1.0.0",
   "description": "A proxy server that exposes Qwen models through an OpenAI-compatible API",
   "main": "src/index.js",
+  "bin": {
+    "qwen-proxy": "src/cli/qwen-proxy.js"
+  },
   "scripts": {
-    "start": "npm run build:core && node src/index.js",
-    "dev": "npm run build:core && node src/index.js",
+    "start": "npm run build:core && node src/cli/qwen-proxy.js serve --headless",
+    "dev": "npm run build:core && node src/cli/qwen-proxy.js serve --headless",
+    "serve:headless": "npm run build:core && node src/cli/qwen-proxy.js serve --headless",
     "build:core": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node scripts/validate-runtime.js",
