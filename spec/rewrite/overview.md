@@ -191,6 +191,7 @@ Main outputs:
 - `spec/rewrite/logging-and-debugging.md`
 - `spec/rewrite/tui-and-rezi.md`
 - `spec/rewrite/storage-and-runtime-config.md`
+- `spec/rewrite/review.md`
 
 ## Success Criteria
 
