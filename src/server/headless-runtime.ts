@@ -15,6 +15,7 @@ const { createApiKeyMiddleware } = require("./middleware/api-key.js") as any;
 const { QwenOpenAIProxy } = require("./proxy-controller.js") as any;
 const { createHealthHandler } = require("./health-handler.js") as any;
 const { registerShutdownHandlers, initializeServerRuntime } = require("./lifecycle.js") as any;
+const { createRuntimeLogLevelGetHandler, createRuntimeLogLevelPostHandler } = require("./runtime-control-handler.js") as any;
 const { createTypedCoreServices } = require("./typed-core-bridge.js") as any;
 
 export function createHeadlessAppRuntime(): {
@@ -47,6 +48,7 @@ export function createHeadlessAppRuntime(): {
   const validateApiKey = createApiKeyMiddleware(config);
   app.use("/v1/", validateApiKey);
   app.use("/auth/", validateApiKey);
+  app.use("/runtime/", validateApiKey);
 
   app.post("/v1/chat/completions", (req: any, res: any) => {
     void proxy.handleChatCompletion(req, res);
@@ -64,6 +66,9 @@ export function createHeadlessAppRuntime(): {
   app.post("/auth/poll", (req: any, res: any) => {
     void proxy.handleAuthPoll(req, res);
   });
+
+  app.get("/runtime/log-level", createRuntimeLogLevelGetHandler({ fileLogger }));
+  app.post("/runtime/log-level", createRuntimeLogLevelPostHandler({ fileLogger }));
 
   app.get("/mcp", mcpGetHandler);
   app.post("/mcp", mcpPostHandler);

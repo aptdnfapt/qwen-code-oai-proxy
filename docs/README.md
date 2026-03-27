@@ -117,3 +117,4 @@ The proxy now displays token counts in the terminal for each request, showing bo
 - Phase 1 foundation notes: `docs/typescript-core-foundation.md`
 - Phase 2 CLI/headless notes: `docs/cli-headless-phase2.md`
 - Phase 3 runtime migration notes: `docs/typescript-runtime-phase3.md`
+- Phase 4 logging/runtime controls: `docs/logging-runtime-controls-phase4.md`

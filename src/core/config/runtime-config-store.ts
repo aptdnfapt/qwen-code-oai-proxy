@@ -65,7 +65,8 @@ export class RuntimeConfigStore {
   }
 
   resolveStartupLogLevel(): RuntimeLogLevel {
-    return normalizeLogLevel(this.env.LOG_LEVEL, this.fallbackLogLevel);
+    const legacyDebugLog = String(this.env.DEBUG_LOG || "").toLowerCase() === "true";
+    return normalizeLogLevel(this.env.LOG_LEVEL || (legacyDebugLog ? "debug" : undefined), this.fallbackLogLevel);
   }
 
   async readConfig(): Promise<RuntimeConfig> {

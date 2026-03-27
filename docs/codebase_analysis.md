@@ -104,8 +104,15 @@ Package CLI command entry that:
 Headless runtime bootstrap that:
 - Owns Express app wiring and middleware setup
 - Registers API/auth/health/mcp routes
+- Registers runtime logging control routes
 - Initializes lifecycle startup and shutdown behavior
 - Starts the server for CLI/headless mode
+
+#### src/server/runtime-control-handler.ts
+Runtime logging control handler that:
+- Exposes `GET /runtime/log-level`
+- Exposes `POST /runtime/log-level`
+- Validates runtime log level changes and optional persistence
 
 #### src/config.ts
 Centralized configuration management that:
@@ -115,6 +122,14 @@ Centralized configuration management that:
 - Configures streaming behavior
 - Manages Qwen OAuth settings
 - Controls debug logging parameters
+
+#### src/utils/runtimeLoggingService.ts
+Shared runtime logging service that:
+- Holds the active log level in memory
+- Loads persisted runtime log level on startup
+- Resolves runtime log directory from typed storage rules
+- Owns error/request log cleanup and rotation
+- Feeds both live logger and file logger from one runtime state
 
 #### authenticate.ts
 CLI tool for managing Qwen authentication that:
@@ -241,6 +256,16 @@ Models listing endpoint:
 Health check endpoint:
 - Returns simple status response
 - Useful for monitoring and deployment checks
+
+#### GET /runtime/log-level
+Runtime logging status endpoint:
+- Returns current and persisted log levels
+- Returns resolved log directory and config path
+
+#### POST /runtime/log-level
+Runtime logging control endpoint:
+- Changes log level while server is running
+- Can persist or apply memory-only changes
 
 ## 5. Architecture Deep Dive
 

@@ -62,6 +62,7 @@ export class QwenOpenAIProxy {
 
   async handleChatCompletion(req: RequestLike, res: ResponseLike): Promise<void> {
     const requestId = this.createRequestId();
+    const loggingState = this.fileLogger.captureState();
     const accountId = getRequestAccountId(req);
     const model = req.body.model || this.config.defaultModel;
     const startTime = Date.now();
@@ -71,23 +72,23 @@ export class QwenOpenAIProxy {
 
     try {
       const tokenCount = this.countTokens(req.body.messages);
-      this.liveLogger.proxyRequest(requestId, model, displayAccount, tokenCount, requestNum, isStreaming);
+      this.liveLogger.proxyRequest(requestId, model, displayAccount, tokenCount, requestNum, isStreaming, loggingState);
 
       if (isStreaming) {
-        await this.handleStreamingChatCompletion(req, res, requestId, accountId, model, startTime);
+        await this.handleStreamingChatCompletion(req, res, requestId, accountId, model, startTime, loggingState);
       } else {
-        await this.handleRegularChatCompletion(req, res, requestId, accountId, model, startTime);
+        await this.handleRegularChatCompletion(req, res, requestId, accountId, model, startTime, loggingState);
       }
     } catch (error: any) {
       if ((error.message || "").includes("Validation error")) {
-        this.liveLogger.proxyError(requestId, 400, displayAccount, error.message);
+        this.liveLogger.proxyError(requestId, 400, displayAccount, error.message, loggingState);
         const validationError = this.ErrorFormatter.openAIValidationError(error.message);
         res.status(validationError.status).json(validationError.body);
         return;
       }
 
-      this.fileLogger.logError(requestId, displayAccount, 500, error);
-      this.liveLogger.proxyError(requestId, 500, displayAccount, error.message);
+      this.fileLogger.logError(requestId, displayAccount, 500, error, undefined, loggingState);
+      this.liveLogger.proxyError(requestId, 500, displayAccount, error.message, loggingState);
 
       if (isAuthLikeError(error)) {
         const authError = this.ErrorFormatter.openAIAuthError();
@@ -100,7 +101,7 @@ export class QwenOpenAIProxy {
     }
   }
 
-  async handleRegularChatCompletion(req: RequestLike, res: ResponseLike, requestId: string, accountId: string | null, model: string, startTime: number): Promise<void> {
+  async handleRegularChatCompletion(req: RequestLike, res: ResponseLike, requestId: string, accountId: string | null, model: string, startTime: number, loggingState: any): Promise<void> {
     const displayAccount = accountId ? accountId.substring(0, 8) : "default";
 
     try {
@@ -124,17 +125,17 @@ export class QwenOpenAIProxy {
       const outputTokens = response?.usage?.completion_tokens || 0;
       const qwenId = response?.id ? response.id.replace("chatcmpl-", "").substring(0, 8) : null;
 
-      if (this.fileLogger.isDebugLogging) {
+      if (loggingState.isDebugLogging) {
         const logContent = this.fileLogger.formatLogContent(requestId, req, { model, messages: transformedMessages }, 200, latency, response);
-        this.fileLogger.logToFile(requestId, logContent, 200);
+        this.fileLogger.logToFile(requestId, logContent, 200, loggingState);
       }
 
-      this.liveLogger.proxyResponse(requestId, 200, displayAccount, latency, inputTokens, outputTokens, qwenId);
+      this.liveLogger.proxyResponse(requestId, 200, displayAccount, latency, inputTokens, outputTokens, qwenId, loggingState);
       res.json(response);
     } catch (error: any) {
       const statusCode = error.response?.status || 500;
-      this.fileLogger.logError(requestId, displayAccount, statusCode, error);
-      this.liveLogger.proxyError(requestId, statusCode, displayAccount, error.message);
+      this.fileLogger.logError(requestId, displayAccount, statusCode, error, undefined, loggingState);
+      this.liveLogger.proxyError(requestId, statusCode, displayAccount, error.message, loggingState);
 
       if (isAuthLikeError(error)) {
         const authError = this.ErrorFormatter.openAIAuthError();
@@ -146,7 +147,7 @@ export class QwenOpenAIProxy {
     }
   }
 
-  async handleStreamingChatCompletion(req: RequestLike, res: ResponseLike, requestId: string, accountId: string | null, model: string, startTime: number): Promise<void> {
+  async handleStreamingChatCompletion(req: RequestLike, res: ResponseLike, requestId: string, accountId: string | null, model: string, startTime: number, loggingState: any): Promise<void> {
     const displayAccount = accountId ? accountId.substring(0, 8) : "default";
 
     try {
@@ -170,9 +171,9 @@ export class QwenOpenAIProxy {
         accountId,
       });
 
-      if (this.fileLogger.isDebugLogging) {
+      if (loggingState.isDebugLogging) {
         const logContent = this.fileLogger.formatLogContent(requestId, req, { model, messages: transformedMessages }, 200, 0, { streaming: true });
-        this.fileLogger.logToFile(requestId, logContent, 200);
+        this.fileLogger.logToFile(requestId, logContent, 200, loggingState);
       }
 
       let qwenId: string | null = null;
@@ -204,13 +205,13 @@ export class QwenOpenAIProxy {
       stream.on("end", () => {
         const latency = Date.now() - startTime;
         const qwenIdShort = qwenId ? qwenId.substring(0, 8) : null;
-        this.liveLogger.proxyResponse(requestId, 200, displayAccount, latency, 0, 0, qwenIdShort);
+        this.liveLogger.proxyResponse(requestId, 200, displayAccount, latency, 0, 0, qwenIdShort, loggingState);
         res.end();
       });
 
       stream.on("error", (error: any) => {
-        this.fileLogger.logError(requestId, displayAccount, 500, error);
-        this.liveLogger.proxyError(requestId, 500, displayAccount, error.message);
+          this.fileLogger.logError(requestId, displayAccount, 500, error, undefined, loggingState);
+          this.liveLogger.proxyError(requestId, 500, displayAccount, error.message, loggingState);
         if (!res.headersSent) {
           const apiError = this.ErrorFormatter.openAIApiError(error.message, "streaming_error");
           res.status(apiError.status).json(apiError.body);
@@ -223,8 +224,8 @@ export class QwenOpenAIProxy {
       });
     } catch (error: any) {
       const statusCode = error.response?.status || 500;
-      this.fileLogger.logError(requestId, displayAccount, statusCode, error);
-      this.liveLogger.proxyError(requestId, statusCode, displayAccount, error.message);
+      this.fileLogger.logError(requestId, displayAccount, statusCode, error, undefined, loggingState);
+      this.liveLogger.proxyError(requestId, statusCode, displayAccount, error.message, loggingState);
 
       if (isAuthLikeError(error)) {
         const authError = this.ErrorFormatter.openAIAuthError();
@@ -245,16 +246,17 @@ export class QwenOpenAIProxy {
 
   async handleModels(_req: RequestLike, res: ResponseLike): Promise<void> {
     const requestId = this.createRequestId();
+    const loggingState = this.fileLogger.captureState();
     const startTime = Date.now();
 
     try {
       const models = await this.qwenAPI.listModels();
       const latency = Date.now() - startTime;
-      this.liveLogger.proxyResponse(requestId, 200, "system", latency, 0, 0);
+      this.liveLogger.proxyResponse(requestId, 200, "system", latency, 0, 0, undefined, loggingState);
       res.json(models);
     } catch (error: any) {
-      this.liveLogger.proxyError(requestId, 500, "system", error.message);
-      this.fileLogger.logError(requestId, "system", 500, error);
+      this.liveLogger.proxyError(requestId, 500, "system", error.message, loggingState);
+      this.fileLogger.logError(requestId, "system", 500, error, undefined, loggingState);
 
       if (isAuthLikeError(error)) {
         res.status(401).json({
@@ -277,6 +279,7 @@ export class QwenOpenAIProxy {
 
   async handleAuthInitiate(_req: RequestLike, res: ResponseLike): Promise<void> {
     const requestId = this.createRequestId();
+    const loggingState = this.fileLogger.captureState();
 
     try {
       const deviceFlow = await this.authService.initiateDeviceFlow();
@@ -288,8 +291,8 @@ export class QwenOpenAIProxy {
         code_verifier: deviceFlow.code_verifier,
       });
     } catch (error: any) {
-      this.fileLogger.logError(requestId, "auth", 500, error);
-      this.liveLogger.proxyError(requestId, 500, "auth", error.message);
+      this.fileLogger.logError(requestId, "auth", 500, error, undefined, loggingState);
+      this.liveLogger.proxyError(requestId, 500, "auth", error.message, loggingState);
       res.status(500).json({
         error: {
           message: error.message,
@@ -301,6 +304,7 @@ export class QwenOpenAIProxy {
 
   async handleAuthPoll(req: RequestLike, res: ResponseLike): Promise<void> {
     const requestId = this.createRequestId();
+    const loggingState = this.fileLogger.captureState();
 
     try {
       const { device_code, code_verifier } = req.body;
@@ -311,8 +315,8 @@ export class QwenOpenAIProxy {
             type: "invalid_request",
           },
         };
-        this.fileLogger.logError(requestId, "auth", 400, "Missing device_code or code_verifier");
-        this.liveLogger.proxyError(requestId, 400, "auth", "Missing device_code or code_verifier");
+        this.fileLogger.logError(requestId, "auth", 400, "Missing device_code or code_verifier", undefined, loggingState);
+        this.liveLogger.proxyError(requestId, 400, "auth", "Missing device_code or code_verifier", loggingState);
         res.status(400).json(errorResponse);
         return;
       }
@@ -326,14 +330,14 @@ export class QwenOpenAIProxy {
       });
     } catch (error: any) {
       if ((error.message || "").includes("Validation error")) {
-        this.liveLogger.proxyError(requestId, 400, "auth", error.message);
+        this.liveLogger.proxyError(requestId, 400, "auth", error.message, loggingState);
         const validationError = this.ErrorFormatter.openAIValidationError(error.message);
         res.status(validationError.status).json(validationError.body);
         return;
       }
 
-      this.fileLogger.logError(requestId, "auth", 500, error);
-      this.liveLogger.proxyError(requestId, 500, "auth", error.message);
+      this.fileLogger.logError(requestId, "auth", 500, error, undefined, loggingState);
+      this.liveLogger.proxyError(requestId, 500, "auth", error.message, loggingState);
       const apiError = this.ErrorFormatter.openAIApiError(error.message, "authentication_error");
       res.status(apiError.status).json(apiError.body);
     }
@@ -341,26 +345,27 @@ export class QwenOpenAIProxy {
 
   async handleWebSearch(req: RequestLike, res: ResponseLike): Promise<void> {
     const requestId = this.createRequestId();
+    const loggingState = this.fileLogger.captureState();
     const startTime = Date.now();
 
     try {
       const { query, page, rows } = req.body;
       if (!query || typeof query !== "string") {
-        this.liveLogger.proxyError(requestId, 400, "web", "Query parameter required");
+        this.liveLogger.proxyError(requestId, 400, "web", "Query parameter required", loggingState);
         const validationError = this.ErrorFormatter.openAIValidationError("Query parameter is required and must be a string");
         res.status(validationError.status).json(validationError.body);
         return;
       }
 
       if (page && (typeof page !== "number" || page < 1)) {
-        this.liveLogger.proxyError(requestId, 400, "web", "Page must be positive integer");
+        this.liveLogger.proxyError(requestId, 400, "web", "Page must be positive integer", loggingState);
         const validationError = this.ErrorFormatter.openAIValidationError("Page must be a positive integer");
         res.status(validationError.status).json(validationError.body);
         return;
       }
 
       if (rows && (typeof rows !== "number" || rows < 1 || rows > 100)) {
-        this.liveLogger.proxyError(requestId, 400, "web", "Rows must be 1-100");
+        this.liveLogger.proxyError(requestId, 400, "web", "Rows must be 1-100", loggingState);
         const validationError = this.ErrorFormatter.openAIValidationError("Rows must be a number between 1 and 100");
         res.status(validationError.status).json(validationError.body);
         return;
@@ -368,7 +373,7 @@ export class QwenOpenAIProxy {
 
       const accountId = getRequestAccountId(req);
       const displayAccount = accountId ? accountId.substring(0, 8) : "default";
-      this.liveLogger.proxyRequest(requestId, "web-search", displayAccount, 0);
+      this.liveLogger.proxyRequest(requestId, "web-search", displayAccount, 0, undefined, undefined, loggingState);
 
       const response = await this.qwenAPI.webSearch({
         query,
@@ -378,18 +383,18 @@ export class QwenOpenAIProxy {
       });
 
       const latency = Date.now() - startTime;
-      this.liveLogger.proxyResponse(requestId, 200, displayAccount, latency, 0, 0);
+      this.liveLogger.proxyResponse(requestId, 200, displayAccount, latency, 0, 0, undefined, loggingState);
       res.json(response);
     } catch (error: any) {
       if ((error.message || "").includes("Validation error")) {
-        this.liveLogger.proxyError(requestId, 400, "web", error.message);
+        this.liveLogger.proxyError(requestId, 400, "web", error.message, loggingState);
         const validationError = this.ErrorFormatter.openAIValidationError(error.message);
         res.status(validationError.status).json(validationError.body);
         return;
       }
 
-      this.fileLogger.logError(requestId, "web", 500, error);
-      this.liveLogger.proxyError(requestId, 500, "web", error.message);
+      this.fileLogger.logError(requestId, "web", 500, error, undefined, loggingState);
+      this.liveLogger.proxyError(requestId, 500, "web", error.message, loggingState);
 
       if (isAuthLikeError(error)) {
         const authError = this.ErrorFormatter.openAIAuthError();

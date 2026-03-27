@@ -1,5 +1,7 @@
 const winston: any = require("winston");
 
+import { runtimeLoggingService } from "./runtimeLoggingService";
+
 type ColorName = "red" | "green" | "blue" | "yellow" | "cyan" | "magenta" | "gray" | "white";
 
 const colors: Record<ColorName, (text: string) => string> = {
@@ -55,7 +57,12 @@ const logger = winston.createLogger({
   ],
 });
 
-function log(message: string): void {
+function log(message: string, loggingState?: { liveEnabled?: boolean }): void {
+  const liveEnabled = loggingState?.liveEnabled ?? runtimeLoggingService.shouldEmitLive();
+  if (!liveEnabled) {
+    return;
+  }
+
   logger.info(message);
 }
 
@@ -68,25 +75,25 @@ function maskAccountId(accountId: string | null | undefined): string {
 }
 
 const liveLogger = {
-  proxyRequest(requestId: string, model: string, accountId: string | null | undefined, tokenCount: number, requestNum?: number, isStreaming?: boolean): void {
+  proxyRequest(requestId: string, model: string, accountId: string | null | undefined, tokenCount: number, requestNum?: number, isStreaming?: boolean, loggingState?: { liveEnabled?: boolean }): void {
     const reqNumStr = requestNum ? colors.gray(`#${requestNum}`) : "";
     const streamStr = isStreaming ? colors.cyan("{streaming}") : "";
     const message = `${colors.blue("→")} ${formatAccountTag(accountId)} ${colors.gray(requestId.substring(0, 8))} | ${colors.yellow(model)} ${streamStr} | ${colors.gray(`${tokenCount} tokens`)} ${reqNumStr}`;
-    log(message);
+    log(message, loggingState);
   },
 
-  proxyResponse(requestId: string, statusCode: number, accountId: string | null | undefined, latency: number, inputTokens: number, outputTokens: number, qwenId?: string | null): void {
+  proxyResponse(requestId: string, statusCode: number, accountId: string | null | undefined, latency: number, inputTokens: number, outputTokens: number, qwenId?: string | null, loggingState?: { liveEnabled?: boolean }): void {
     const statusColor = statusCode === 200 ? colors.green : colors.red;
     const tokenInfo = inputTokens && outputTokens ? ` | ${colors.cyan(`${inputTokens}+${outputTokens} tok`)}` : "";
     const shortId = requestId.length > 12 ? requestId.substring(0, 8) : requestId;
     const qwenInfo = qwenId ? ` | ${colors.magenta(`qwen: ${qwenId}`)}` : "";
     const message = `${colors.blue("←")} ${formatAccountTag(accountId)} ${colors.gray(shortId)} ${statusColor(String(statusCode))} | ${colors.gray(`${latency}ms`)}${tokenInfo}${qwenInfo}`;
-    log(message);
+    log(message, loggingState);
   },
 
-  proxyError(_requestId: string, statusCode: number, accountId: string | null | undefined, errorMessage: string): void {
+  proxyError(_requestId: string, statusCode: number, accountId: string | null | undefined, errorMessage: string, loggingState?: { liveEnabled?: boolean }): void {
     const message = `${colors.red("✗")} ${formatAccountTag(accountId)} ${colors.red(String(statusCode))} | ${colors.gray((errorMessage || "").substring(0, 50))}`;
-    log(message);
+    log(message, loggingState);
   },
 
   authInitiated(deviceCode: string): void {

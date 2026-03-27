@@ -1,8 +1,13 @@
 const fs = require("node:fs").promises as typeof import("node:fs").promises;
 const path = require("node:path") as typeof import("node:path");
-const config = require("../config.js") as any;
 
-const debugDir = path.join(__dirname, "..", "..", "debug");
+import { runtimeLoggingService } from "./runtimeLoggingService";
+
+const debugLogLimit = Number.parseInt(process.env.MAX_DEBUG_LOGS || process.env.LOG_FILE_LIMIT || "20", 10);
+
+function getDebugDir(): string {
+  return path.join(runtimeLoggingService.getLogDir(), "debug");
+}
 
 export class DebugLogger {
   constructor() {
@@ -10,6 +15,7 @@ export class DebugLogger {
   }
 
   async ensureDebugDir(): Promise<void> {
+    const debugDir = getDebugDir();
     try {
       await fs.access(debugDir);
     } catch {
@@ -18,6 +24,7 @@ export class DebugLogger {
   }
 
   async enforceLogFileLimit(limit: number): Promise<void> {
+    const debugDir = getDebugDir();
     try {
       const files = await fs.readdir(debugDir);
       const debugFiles = files.filter((file) => file.startsWith("debug-") && file.endsWith(".txt"));
@@ -64,12 +71,13 @@ export class DebugLogger {
   }
 
   async logApiCall(endpoint: string, request: any, response: any, error: any = null): Promise<string | null> {
-    if (!config.debugLog) {
+    if (!runtimeLoggingService.captureState().isDebugLogging) {
       return null;
     }
 
     try {
       const timestamp = this.getTimestampForFilename();
+      const debugDir = getDebugDir();
       const logFilePath = path.join(debugDir, `debug-${timestamp}.txt`);
       const debugFileName = `debug-${timestamp}.txt`;
       const logRequest = {
@@ -123,7 +131,7 @@ export class DebugLogger {
       }, 2);
 
       await fs.writeFile(logFilePath, logContent);
-      await this.enforceLogFileLimit(config.logFileLimit);
+      await this.enforceLogFileLimit(debugLogLimit);
       console.log("\x1b[32m%s\x1b[0m", `Debug log saved to: ${debugFileName}`);
       return debugFileName;
     } catch {
@@ -163,12 +171,13 @@ export class DebugLogger {
   }
 
   async logError(context: string, error: any, level = "error"): Promise<string | null> {
-    if (!config.debugLog) {
+    if (!runtimeLoggingService.captureState().isDebugLogging) {
       return null;
     }
 
     try {
       const timestamp = this.getTimestampForFilename();
+      const debugDir = getDebugDir();
       const logFilePath = path.join(debugDir, `debug-${timestamp}.txt`);
       const debugFileName = `debug-${timestamp}.txt`;
       const detailedError: any = {
@@ -195,7 +204,7 @@ export class DebugLogger {
       }
 
       await fs.writeFile(logFilePath, JSON.stringify(detailedError, null, 2));
-      await this.enforceLogFileLimit(config.logFileLimit);
+      await this.enforceLogFileLimit(debugLogLimit);
       console.log("\x1b[32m%s\x1b[0m", `Error log saved to: ${debugFileName}`);
       return debugFileName;
     } catch {

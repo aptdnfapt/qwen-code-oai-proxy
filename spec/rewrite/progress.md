@@ -6,7 +6,7 @@
 - Phase 1: complete
 - Phase 2: complete
 - Phase 3: complete
-- Phase 4: not started
+- Phase 4: complete
 - Phase 5: not started
 - Phase 6: not started
 
@@ -114,13 +114,24 @@ Clarification:
 
 - the operator-facing boot/auth/api/logging/server path now builds from TS and runs from `dist/`
 
-## Phase 4 — Logging / Runtime Controls (not started)
+## Phase 4 — Logging / Runtime Controls (complete)
 
-Target:
+Done:
 
-- one central logging service
-- runtime log-level switching
-- persistent operator choices applied to the real typed runtime
+- added one shared runtime logging service for live/file logging state
+- wired runtime log-level changes to the real typed runtime
+- loaded persisted runtime log level before normal runtime boot logs
+- added runtime control endpoints:
+  - `GET /runtime/log-level`
+  - `POST /runtime/log-level`
+- kept classic live log style and `error.log` / request-log layout
+- restored `req-<id>/error.json` artifact parity for failed debugged requests
+
+Acceptance check:
+
+- one central logging service -> yes
+- runtime log-level switching -> yes
+- persistent operator choices applied to typed runtime -> yes
 
 ## Validation Log
 
@@ -129,6 +140,9 @@ Target:
 - `npm run test:proxy` -> pass
 - `npm run typecheck` -> pass
 - `npm run build:core` -> pass
+- `GET /runtime/log-level` smoke test -> pass
+- `POST /runtime/log-level` memory-only change smoke test -> pass
+- `RuntimeConfigStore({ DEBUG_LOG=true }).resolveStartupLogLevel()` -> `debug`
 - `node dist/src/cli/qwen-proxy.js help` -> pass
 - `node dist/src/cli/qwen-proxy.js serve --headless --help` -> pass
 - `node dist/authenticate.js --help` -> pass
@@ -136,4 +150,4 @@ Target:
 
 ## Next Phase
 
-Phase 4: logging/runtime controls.
+Phase 5: TUI product layer.

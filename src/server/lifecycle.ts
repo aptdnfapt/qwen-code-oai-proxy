@@ -23,16 +23,15 @@ export function registerShutdownHandlers({ qwenAPI, accountRefreshScheduler, liv
   process.on("SIGTERM", createShutdownHandler({ signal: "SIGTERM", qwenAPI, accountRefreshScheduler, liveLogger }));
 }
 
-async function initializeRuntimeConfig(runtimeConfigStore: any): Promise<void> {
-  if (!runtimeConfigStore) {
+async function initializeRuntimeLogging(runtimeConfigStore: any, fileLogger: any): Promise<void> {
+  if (!fileLogger) {
     return;
   }
 
   try {
-    await runtimeConfigStore.ensureStorage();
-    await runtimeConfigStore.readConfig();
+    await fileLogger.initialize(runtimeConfigStore);
   } catch (error: any) {
-    console.log(`\x1b[33mRuntime config init warning: ${error.message}\x1b[0m`);
+    console.log(`\x1b[33mRuntime logging init warning: ${error.message}\x1b[0m`);
   }
 }
 
@@ -92,10 +91,10 @@ export async function initializeServerRuntime({
   fileLogger: any;
   config: any;
 }): Promise<void> {
+  await initializeRuntimeLogging(runtimeConfigStore, fileLogger);
   liveLogger.serverStarted(host, port);
   qwenAPI.authManager.init(qwenAPI);
   fileLogger.startCleanupJob();
-  await initializeRuntimeConfig(runtimeConfigStore);
 
   try {
     await logAccountStatus({ qwenAPI, authService, config });

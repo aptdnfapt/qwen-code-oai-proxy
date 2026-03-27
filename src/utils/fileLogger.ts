@@ -1,6 +1,6 @@
 const fs = require("node:fs") as typeof import("node:fs");
-const fsPromises = fs.promises;
-const path = require("node:path") as typeof import("node:path");
+
+import { runtimeLoggingService, type LoggingStateSnapshot } from "./runtimeLoggingService";
 
 type HeadersLike = Record<string, unknown> | null | undefined;
 type RequestLike = {
@@ -9,25 +9,6 @@ type RequestLike = {
   headers: Record<string, unknown>;
   body: any;
 };
-
-const LEGACY_DEBUG_LOG = String(process.env.DEBUG_LOG || "").toLowerCase() === "true";
-const resolvedLogLevel = process.env.LOG_LEVEL || (LEGACY_DEBUG_LOG ? "debug" : "error-debug");
-const LOG_LEVEL = String(resolvedLogLevel).toLowerCase();
-const validLevels = ["off", "error", "error-debug", "debug"];
-const logLevel = validLevels.includes(LOG_LEVEL) ? LOG_LEVEL : "off";
-
-const isErrorLogging = logLevel === "error" || logLevel === "error-debug" || logLevel === "debug";
-const isErrorDebugLogging = logLevel === "error-debug" || logLevel === "debug";
-const isDebugLogging = logLevel === "debug";
-
-const ERROR_LOG_MAX_MB = Number.parseInt(process.env.ERROR_LOG_MAX_MB || "10", 10);
-const ERROR_LOG_MAX_DAYS = Number.parseInt(process.env.ERROR_LOG_MAX_DAYS || "30", 10);
-const MAX_DEBUG_LOGS = Number.parseInt(process.env.MAX_DEBUG_LOGS || process.env.LOG_FILE_LIMIT || "20", 10);
-
-const LOG_DIR = path.join(process.cwd(), "log");
-if ((isErrorLogging || isDebugLogging) && !fs.existsSync(LOG_DIR)) {
-  fs.mkdirSync(LOG_DIR, { recursive: true });
-}
 
 function maskSensitiveHeaders(headers: HeadersLike): Record<string, unknown> {
   if (!headers) {
@@ -102,12 +83,13 @@ function getErrorMessage(errorOrMessage: any): string {
   return String(errorOrMessage);
 }
 
-function getErrorResponseData(errorOrMessage: any, responseData: unknown): unknown {
+function getErrorResponseData(errorOrMessage: any, responseData: unknown, loggingState?: LoggingStateSnapshot): unknown {
   if (responseData !== undefined) {
     return responseData;
   }
 
-  if (!isErrorDebugLogging || !errorOrMessage || typeof errorOrMessage !== "object") {
+  const effectiveState = loggingState ?? runtimeLoggingService.captureState();
+  if (!effectiveState.isErrorDebugLogging || !errorOrMessage || typeof errorOrMessage !== "object") {
     return undefined;
   }
 
@@ -123,8 +105,9 @@ function getErrorResponseData(errorOrMessage: any, responseData: unknown): unkno
   return upstreamResponseData;
 }
 
-function getErrorDebugDetails(errorOrMessage: any, statusCode: number): Record<string, unknown> | null {
-  if (!isErrorDebugLogging || !errorOrMessage || typeof errorOrMessage !== "object") {
+function getErrorDebugDetails(errorOrMessage: any, statusCode: number, loggingState?: LoggingStateSnapshot): Record<string, unknown> | null {
+  const effectiveState = loggingState ?? runtimeLoggingService.captureState();
+  if (!effectiveState.isErrorDebugLogging || !errorOrMessage || typeof errorOrMessage !== "object") {
     return null;
   }
 
@@ -159,17 +142,20 @@ function getErrorDebugDetails(errorOrMessage: any, statusCode: number): Record<s
   return Object.keys(details).length > 1 ? details : null;
 }
 
-function logError(requestId: string, accountId: string | null | undefined, statusCode: number, errorOrMessage: any, responseData?: unknown): void {
-  if (!isErrorLogging) {
-    return;
-  }
-
-  const errorLogPath = path.join(LOG_DIR, "error.log");
+function logError(requestId: string, accountId: string | null | undefined, statusCode: number, errorOrMessage: any, responseData?: unknown, loggingState?: LoggingStateSnapshot): void {
   const timestamp = new Date().toISOString();
   const id = accountId ? accountId.substring(0, 8) : "default";
   const errorMessage = getErrorMessage(errorOrMessage);
-  const resolvedResponseData = getErrorResponseData(errorOrMessage, responseData);
-  const errorDebugDetails = getErrorDebugDetails(errorOrMessage, statusCode);
+  const resolvedResponseData = getErrorResponseData(errorOrMessage, responseData, loggingState);
+  const errorDebugDetails = getErrorDebugDetails(errorOrMessage, statusCode, loggingState);
+
+   runtimeLoggingService.writeRequestErrorArtifact(requestId, {
+    status: statusCode,
+    error: errorMessage,
+    timestamp,
+    response: resolvedResponseData,
+    details: errorDebugDetails,
+  }, statusCode, loggingState);
 
   let logEntry = `[${timestamp}] STATUS=${statusCode} ACCOUNT=${id} REQUEST_ID=${requestId}\n`;
   logEntry += `Error: ${errorMessage}\n`;
@@ -181,51 +167,11 @@ function logError(requestId: string, accountId: string | null | undefined, statu
   }
   logEntry += `${"=".repeat(80)}\n\n`;
 
-  fs.appendFile(errorLogPath, logEntry, (error: NodeJS.ErrnoException | null) => {
-    if (error) {
-      console.error("Failed to write error log:", error.message);
-    }
-  });
+  runtimeLoggingService.writeErrorEntry(logEntry, loggingState);
 }
 
-function logToFile(requestId: string, content: string, statusCode: number): void {
-  if (!isDebugLogging && !(isErrorDebugLogging && statusCode !== 200)) {
-    return;
-  }
-
-  const requestDir = path.join(LOG_DIR, `req-${requestId}`);
-  fsPromises.mkdir(requestDir, { recursive: true }).then(() => {
-    const sections = content.split("--------------------------\n");
-
-    for (const section of sections) {
-      if (!section.trim() || section.startsWith("requestId:")) {
-        continue;
-      }
-
-      const [title, ...rest] = section.trim().split("\n");
-      const data = rest.join("\n").trim();
-
-      if (!data) {
-        continue;
-      }
-
-      let filename: string | null = null;
-      if (title === "INPUT") {
-        filename = "client-request.json";
-      } else if (title === "TRANSFORMER") {
-        filename = "upstream-request.json";
-      } else if (title === "OUTPUT") {
-        filename = "response.json";
-      }
-
-      if (!filename) {
-        continue;
-      }
-
-      const filePath = path.join(requestDir, filename);
-      void fsPromises.writeFile(filePath, data).catch(() => {});
-    }
-  }).catch(() => {});
+function logToFile(requestId: string, content: string, statusCode: number, loggingState?: LoggingStateSnapshot): void {
+  runtimeLoggingService.writeRequestLogContent(requestId, content, statusCode, loggingState);
 }
 
 function formatLogContent(requestId: string, req: RequestLike, transformedBody: unknown, statusCode: number, latency: number, output: unknown): string {
@@ -260,122 +206,38 @@ function formatLogContent(requestId: string, req: RequestLike, transformedBody: 
   return logContent;
 }
 
-async function rotateErrorLog(): Promise<void> {
-  const errorLogPath = path.join(LOG_DIR, "error.log");
-
-  try {
-    const stats = await fsPromises.stat(errorLogPath);
-    const sizeMb = stats.size / (1024 * 1024);
-
-    if (sizeMb >= ERROR_LOG_MAX_MB) {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const rotatedPath = path.join(LOG_DIR, `error-${timestamp}.log`);
-      await fsPromises.rename(errorLogPath, rotatedPath);
-      console.log(`[LOG] Rotated error.log to error-${timestamp}.log`);
-    }
-  } catch (error: any) {
-    if (error.code !== "ENOENT") {
-      console.error("[LOG] Failed to rotate error.log:", error.message);
-    }
-  }
-}
-
-async function cleanupOldErrorLogs(): Promise<void> {
-  try {
-    const files = await fsPromises.readdir(LOG_DIR);
-    const errorLogs = files.filter((file) => file.startsWith("error-") && file.endsWith(".log"));
-    const now = Date.now();
-    const maxAge = ERROR_LOG_MAX_DAYS * 24 * 60 * 60 * 1000;
-
-    for (const file of errorLogs) {
-      const filePath = path.join(LOG_DIR, file);
-      const stats = await fsPromises.stat(filePath);
-      const age = now - stats.mtime.getTime();
-      if (age > maxAge) {
-        await fsPromises.unlink(filePath);
-        console.log(`[LOG] Deleted old error log: ${file}`);
-      }
-    }
-  } catch (error: any) {
-    console.error("[LOG] Failed to cleanup old error logs:", error.message);
-  }
-}
-
-async function cleanupOldDebugLogs(): Promise<void> {
-  try {
-    const entries = await fsPromises.readdir(LOG_DIR, { withFileTypes: true });
-    const debugDirs = entries.filter((entry) => entry.isDirectory() && entry.name.startsWith("req-"));
-
-    if (debugDirs.length <= MAX_DEBUG_LOGS) {
-      return;
-    }
-
-    const dirStats: Array<{ name: string; path: string; mtime: Date }> = [];
-    for (const dir of debugDirs) {
-      const dirPath = path.join(LOG_DIR, dir.name);
-      const stats = await fsPromises.stat(dirPath);
-      dirStats.push({ name: dir.name, path: dirPath, mtime: stats.mtime });
-    }
-
-    dirStats.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
-    const dirsToDelete = dirStats.slice(MAX_DEBUG_LOGS);
-    for (const dir of dirsToDelete) {
-      await fsPromises.rm(dir.path, { recursive: true });
-      console.log(`[LOG] Deleted old debug log directory: ${dir.name}`);
-    }
-  } catch (error: any) {
-    console.error("[LOG] Failed to cleanup old debug logs:", error.message);
-  }
-}
-
-async function cleanupOldFormatLogs(): Promise<void> {
-  try {
-    const files = await fsPromises.readdir(LOG_DIR);
-    const oldFormatLogs = files.filter((file) => file.startsWith("req-") && file.endsWith(".log"));
-    for (const file of oldFormatLogs) {
-      const filePath = path.join(LOG_DIR, file);
-      await fsPromises.unlink(filePath);
-      console.log(`[LOG] Deleted old format log file: ${file}`);
-    }
-  } catch (error: any) {
-    console.error("[LOG] Failed to cleanup old format logs:", error.message);
-  }
-}
-
-async function cleanupLogs(): Promise<void> {
-  await rotateErrorLog();
-  await cleanupOldErrorLogs();
-  await cleanupOldFormatLogs();
-  await cleanupOldDebugLogs();
-}
-
-function startCleanupJob(): void {
-  if (logLevel === "off") {
-    return;
-  }
-
-  const debugModeDescription = isDebugLogging ? "full" : (isErrorDebugLogging ? "non-200 only" : "off");
-  console.log(`[LOG] Logging mode=${logLevel}, debug=${debugModeDescription} - error.log: ${ERROR_LOG_MAX_MB}MB, error logs: ${ERROR_LOG_MAX_DAYS} days, request logs: last ${MAX_DEBUG_LOGS} files`);
-
-  setInterval(() => {
-    void cleanupLogs().catch((error: any) => console.error("[LOG] Cleanup job error:", error.message));
-  }, 3600000);
-
-  setTimeout(() => {
-    void cleanupLogs();
-  }, 5000);
-}
-
 const fileLogger = {
   logToFile,
   formatLogContent,
   logError,
-  isErrorLogging,
-  isErrorDebugLogging,
-  isDebugLogging,
-  LOG_DIR,
   maskSensitiveHeaders,
-  startCleanupJob,
+  captureState(): LoggingStateSnapshot {
+    return runtimeLoggingService.captureState();
+  },
+  async initialize(runtimeConfigStore?: any): Promise<any> {
+    return runtimeLoggingService.initialize(runtimeConfigStore);
+  },
+  async getRuntimeStatus(): Promise<any> {
+    return runtimeLoggingService.getRuntimeStatus();
+  },
+  async setRuntimeLogLevel(level: any, persist?: boolean): Promise<any> {
+    return runtimeLoggingService.setRuntimeLogLevel(level, persist);
+  },
+  get isErrorLogging(): boolean {
+    return runtimeLoggingService.captureState().isErrorLogging;
+  },
+  get isErrorDebugLogging(): boolean {
+    return runtimeLoggingService.captureState().isErrorDebugLogging;
+  },
+  get isDebugLogging(): boolean {
+    return runtimeLoggingService.captureState().isDebugLogging;
+  },
+  get LOG_DIR(): string {
+    return runtimeLoggingService.getLogDir();
+  },
+  startCleanupJob(): void {
+    runtimeLoggingService.startCleanupJob();
+  },
 };
 
 export = fileLogger;

@@ -73,6 +73,22 @@ qwen-proxy usage
 
 The operator-facing runtime behind these commands is now fully source-authored in TypeScript and emitted to `dist/` for execution.
 
+## Runtime Logging Controls (Rewrite Phase 4)
+
+The runtime now has a shared logging service with live log-level switching.
+
+- inspect current logging state --> `GET /runtime/log-level`
+- change it at runtime --> `POST /runtime/log-level`
+- persist the change by default --> send `{ "level": "debug" }`
+- apply only for current process --> send `{ "level": "error", "persist": false }`
+
+Response includes:
+
+- current log level
+- persisted log level
+- active log directory
+- runtime config file path
+
 ## Multi-Account Support
 
 The proxy supports multiple Qwen accounts and rotates requests across them with round-robin selection. Tokens are refreshed ahead of expiry, while transient upstream failures move the request to the next account without long-lived account blocking.
@@ -193,6 +209,9 @@ The proxy server can be configured using environment variables. Create a `.env` 
 *   `MAX_DEBUG_LOGS`: Maximum number of request debug directories to keep (default: 20)
 *   `ERROR_LOG_MAX_MB`: Rotate `error.log` when it reaches this size in MB (default: 10)
 *   `ERROR_LOG_MAX_DAYS`: Keep rotated error logs for this many days (default: 30)
+*   `QWEN_PROXY_HOME`: Override base runtime data directory
+*   `QWEN_PROXY_CONFIG_DIR`: Override runtime config/state directory
+*   `QWEN_PROXY_LOG_DIR`: Override runtime log directory
 *   `API_KEY`: Set API key(s) for authentication (comma-separated for multiple keys)
 *   `DEFAULT_ACCOUNT`: Specify which account the proxy should use by default
 
