@@ -130,13 +130,14 @@ Goal:
 - migrate the remaining first-party app runtime from JS to TS
 - remove the "JavaScript-first runtime" state
 - make the typed runtime the real runtime, not only a foundation/bridge
+- retire maintained first-party source `.js` files so the product runtime is fully source-authored in TS
 
 Main outputs:
 
 - runtime/server/auth/logging/config/account/usage source migrated to TS
 - CLI/runtime entrypoints migrated to TS
-- legacy JS runtime shims removed or reduced to temporary boot wrappers only
-- no major app/runtime source under `src/` remains JS before TUI begins
+- maintained first-party runtime source `.js` files removed rather than kept as migration wrappers
+- no maintained app/runtime source under `src/` remains JS before TUI begins
 
 Phase 3 is the answer to: **when should the core runtime actually become TypeScript?**
 

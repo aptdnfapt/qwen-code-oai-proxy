@@ -50,9 +50,10 @@ It must:
 
 This is a product requirement, not optional polish.
 
-### HARD RULE 5 — DO NOT START REAL TUI IMPLEMENTATION WHILE THE APP RUNTIME IS STILL JS-FIRST
+### HARD RULE 5 — DO NOT START REAL TUI IMPLEMENTATION WHILE THE APP RUNTIME IS STILL JS-FIRST OR MIXED-SOURCE BY DESIGN
 
 Before the TUI phase starts, the runtime that actually powers the product must already be migrated to TypeScript.
+The intended end state for maintained first-party runtime source is **TS-only**, not "mostly TS with normal JS leftovers".
 
 This includes the major first-party runtime areas such as:
 
@@ -72,7 +73,7 @@ In practical terms:
 - `src/config.js`
 - `src/cli/qwen-proxy.js`
 
-must be migrated, replaced, or explicitly retired before real TUI implementation begins.
+must be migrated and retired from maintained source before real TUI implementation begins.
 
 ## Rewrite Operating Model
 

@@ -200,7 +200,7 @@ Important note:
 
 ### Phase 3 deliverables
 
-- major runtime JS files migrated to TS
+- maintained first-party runtime source migrated to TS with no kept JS runtime source in `src/`
 - runtime no longer described as "JavaScript-first"
 - typed runtime becomes the primary runtime path
 - TUI gate cleared
@@ -213,3 +213,4 @@ This area is complete when:
 - the TUI can later consume the same core services without special hacks
 - feature parity with the current CLI/headless flows is maintained
 - before TUI starts, the real runtime path has been migrated to TS rather than merely wrapped
+- maintained first-party source is TS-only for the runtime path; JS migration leftovers are retired, not kept as normal source

@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const packageJson = require("../../../package.json") as { version: string };
 const { runAuthCommand } = require("../../authenticate.js") as any;
 const { runUsageCommand } = require("../../usage.js") as any;

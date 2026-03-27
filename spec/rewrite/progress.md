@@ -97,21 +97,21 @@ Done:
   - `src/server/headless-runtime.ts`
   - `src/cli/qwen-proxy.ts`
   - `src/index.ts`
-- reduced the old JS files at those paths to compatibility wrappers that forward to `dist/`
+- removed the maintained source `.js` runtime files instead of keeping JS migration wrappers
 - expanded build output from core-only TS to the operator runtime TS surface
-- added helper-copy step (`scripts/copy-runtime-js.js`) so remaining JS helper modules still land in `dist/`
-- updated npm scripts so runtime validation, auth, and usage flows build the TS runtime first
+- updated npm scripts so runtime validation, auth, usage, and package preparation all build the TS runtime first
+- added package include/build hooks so `dist/` is present for installs and publish flows
 
 Acceptance check:
 
 - major runtime JS files migrated -> yes
 - runtime no longer JS-first for operator path -> yes
 - typed runtime is primary runtime path -> yes
+- maintained first-party runtime source is TS-only -> yes
 - TUI gate cleared -> yes
 
 Clarification:
 
-- some secondary helper modules still remain JS
 - the operator-facing boot/auth/api/logging/server path now builds from TS and runs from `dist/`
 
 ## Phase 4 — Logging / Runtime Controls (not started)
