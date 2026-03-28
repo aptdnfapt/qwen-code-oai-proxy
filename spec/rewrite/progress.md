@@ -259,3 +259,38 @@ PTY evidence:
 - npm run test:tui -> pass (30 tests)
 
 Review: not run
+
+### 5E — Usage + Cache Metrics (complete)
+
+Done:
+
+- Usage screen now reads real persisted runtime usage data instead of empty placeholder state
+- daily usage aggregation now includes:
+  - requests
+  - input tokens
+  - output tokens
+  - cache read tokens
+  - cache write/create tokens
+  - cache type label
+  - derived cache hit rate
+- streaming usage capture now parses final SSE `usage` payloads and records cache metrics too
+- Usage screen now adds:
+  - summary bar for today
+  - search/filter input
+  - cache-aware table columns
+  - fallback request display for older rows without exact request counts
+- PTY validation script now includes deterministic dark/light Usage captures with non-zero cache fixture data
+
+Tests added:
+
+- src/tui/__tests__/usage-metrics.test.ts: SSE usage parsing coverage
+- src/tui/__tests__/usage-runtime.test.ts: runtime usage aggregation coverage
+- src/tui/__tests__/render.test.ts: Usage screen cache metrics + light theme coverage
+- src/tui/__tests__/reducer.test.ts: usage filter/selection state coverage
+
+PTY evidence captured:
+
+- usage-cache-metrics: dark theme Usage screen with non-zero cache read/write/type values
+- usage-cache-metrics-light: light theme Usage screen with non-zero cache read/write/type values
+
+Review: pass
