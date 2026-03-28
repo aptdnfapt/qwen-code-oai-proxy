@@ -41,6 +41,13 @@ const CAPTURES: readonly CaptureSpec[] = Object.freeze([
     keys: "q",
     expectedSnippets: Object.freeze(["QP", "Live", "streams 0", "[ toggle", "theme Dark"]),
   }),
+  Object.freeze({
+    name: "light",
+    cols: 160,
+    rows: 40,
+    keys: "tq",
+    expectedSnippets: Object.freeze(["qwen-proxy", "Live", "streams 0", "theme Light", "[<] collapse"]),
+  }),
 ]);
 
 function wait(ms: number): Promise<void> {
@@ -74,11 +81,11 @@ async function runCapture(spec: CaptureSpec): Promise<CaptureResult> {
     stderr += chunk.toString();
   });
 
-  await wait(500);
+  await wait(800);
 
   for (const key of spec.keys) {
     child.stdin.write(key);
-    await wait(250);
+    await wait(400);
   }
 
   child.stdin.end();

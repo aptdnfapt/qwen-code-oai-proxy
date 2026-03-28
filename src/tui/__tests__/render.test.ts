@@ -57,10 +57,12 @@ test("live screen renders full shell markers at 160x40", () => {
   assert.match(output, /READY/);
   assert.match(output, /host 127.0.0.1:38471/);
   assert.match(output, /LV Live/);
-  assert.match(output, /Shell snapshot/);
   assert.match(output, /\[<\] collapse/);
   assert.doesNotMatch(output, /\[\[]/);
   assert.match(output, /click sidebar to navigate/);
+  assert.match(output, /Workspace details/);
+  assert.match(output, /viewport 160x40/);
+  assert.doesNotMatch(output, /Shell snapshot/);
 });
 
 test("live screen stays compact when sidebar is collapsed at 80x24", () => {

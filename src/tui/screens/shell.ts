@@ -35,6 +35,10 @@ function navIcon(item: NavItem, useFallback: boolean): string {
   return useFallback ? item.fallbackIcon : item.nerdIcon;
 }
 
+function activeNavItem(screen: ScreenId): NavItem {
+  return NAV_ITEMS.find((item) => item.id === screen) ?? NAV_ITEMS[0];
+}
+
 function renderSidebar(options: ShellOptions): VNode {
   const state = options.context.state;
   const collapsed = state.sidebarMode === "collapsed" || state.viewportCols <= 100;
@@ -135,32 +139,37 @@ function renderFooter(state: TuiState): VNode {
   });
 }
 
-export function renderShell(options: ShellOptions): VNode {
+function renderWorkspace(options: ShellOptions): VNode {
   const state = options.context.state;
   const wide = state.viewportCols >= 140;
 
-  const workspace = wide
-    ? ui.row({ gap: 2, items: "start" }, [
-        ui.box({ border: "none", flex: 3 }, [options.body]),
-        ui.box({ border: "none", width: 34 }, [
-          ui.column({ gap: 1 }, [
-            ui.text("Shell snapshot", { variant: "heading" }),
-            ui.text(`status ${statusLabel(state.runtime.status)}`, { variant: "caption" }),
-            ui.text(`rotation ${state.runtime.rotationMode}`, { variant: "caption" }),
-            ui.text(`accounts ${String(state.runtime.accountCount)}`, { variant: "caption" }),
-            ui.text(`requests ${String(state.runtime.requestCount)}`, { variant: "caption" }),
-            ui.text(`streams ${formatStreamCount(state.runtime.streamCount)}`, { variant: "caption" }),
-            ui.divider({ color: "muted" }),
-            ui.text("Layout snapshot", { variant: "heading" }),
-            ui.text(`viewport ${String(state.viewportCols)}x${String(state.viewportRows)}`, { variant: "caption" }),
-            ui.text(`icons ${state.iconMode}`, { variant: "caption" }),
-            ui.text(`theme ${themeSpec(state.themeName).label}`, { variant: "caption" }),
-            ui.text(`sidebar ${state.sidebarMode}`, { variant: "caption" }),
-          ]),
-        ]),
-      ])
-    : options.body;
+  if (!wide) {
+    return options.body;
+  }
 
+  const currentItem = activeNavItem(state.activeScreen);
+
+  return ui.row({ gap: 2, items: "start" }, [
+    ui.box({ border: "none", flex: 1 }, [options.body]),
+    ui.box({ border: "none", width: 34 }, [
+      ui.card("Workspace details", [
+        ui.column({ gap: 1 }, [
+          ui.text(currentItem.blurb, { variant: "caption", wrap: true }),
+          ui.divider({ color: "muted" }),
+          ui.text(`viewport ${String(state.viewportCols)}x${String(state.viewportRows)}`, { variant: "caption" }),
+          ui.text(`sidebar ${state.sidebarMode}`, { variant: "caption" }),
+          ui.text(`icons ${state.iconMode}`, { variant: "caption" }),
+          ui.text(`theme ${themeSpec(state.themeName).label}`, { variant: "caption" }),
+          ui.text(`status ${statusLabel(state.runtime.status)}`, { variant: "caption" }),
+          ui.text(`rotation ${state.runtime.rotationMode}`, { variant: "caption" }),
+        ]),
+      ]),
+    ]),
+  ]);
+}
+
+export function renderShell(options: ShellOptions): VNode {
+  const state = options.context.state;
   return ui.page({
     p: 1,
     gap: 0,
@@ -174,7 +183,7 @@ export function renderShell(options: ShellOptions): VNode {
             ui.text(options.title, { variant: "heading" }),
             ui.badge("5A", { variant: "info" }),
           ]),
-          workspace,
+          renderWorkspace(options),
         ]),
       ]),
     ]),
