@@ -14,6 +14,7 @@ export type KeybindingDeps = Readonly<{
   onOpenAuthModal: () => void;
   getFocusRegion: () => FocusRegion;
   getActiveScreen: () => ScreenId;
+  getSidebarScreen: () => ScreenId;
 }>;
 
 export function resolveGlobalKey(key: string, focusRegion: FocusRegion, activeScreen: ScreenId): GlobalKeyResult | null {
@@ -82,6 +83,11 @@ export function createKeybindingMap(deps: KeybindingDeps): Record<string, () => 
 
       if (result.kind === "accounts-add") {
         deps.onOpenAuthModal();
+        return;
+      }
+
+      if (result.action.type === "sidebar-activate") {
+        deps.onNavigate(deps.getSidebarScreen());
         return;
       }
 

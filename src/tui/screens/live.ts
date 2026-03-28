@@ -34,14 +34,38 @@ function serverStateVariant(serverState: TuiState["runtime"]["serverState"]): "s
   return "info";
 }
 
+function focusedServerAction(serverState: TuiState["runtime"]["serverState"]): "start" | "stop" | "restart" {
+  if (serverState === "stopped") return "start";
+  if (serverState === "running") return "stop";
+  return "restart";
+}
+
 function buildServerControlsRow(deps: LiveBodyDeps): VNode {
   const serverState = deps.state.runtime.serverState;
+  const focusTarget = deps.state.focusRegion === "main" ? focusedServerAction(serverState) : null;
   return ui.row({ gap: 1, items: "center" }, [
     ui.text("Server:", { variant: "caption" }),
     ui.badge(serverState.toUpperCase(), { variant: serverStateVariant(serverState) }),
-    ui.button({ id: "live-start", label: "Start", intent: serverState === "running" ? "secondary" : "success", onPress: deps.onStartServer }),
-    ui.button({ id: "live-stop", label: "Stop", intent: serverState === "stopped" ? "secondary" : "danger", onPress: deps.onStopServer }),
-    ui.button({ id: "live-restart", label: "Restart", intent: "warning", onPress: deps.onRestartServer }),
+    ui.actions([
+      ui.button({
+        id: "live-start",
+        label: focusTarget === "start" ? "> Start" : "Start",
+        intent: serverState === "running" ? "secondary" : "success",
+        onPress: deps.onStartServer,
+      }),
+      ui.button({
+        id: "live-stop",
+        label: focusTarget === "stop" ? "> Stop" : "Stop",
+        intent: serverState === "stopped" ? "secondary" : "danger",
+        onPress: deps.onStopServer,
+      }),
+      ui.button({
+        id: "live-restart",
+        label: focusTarget === "restart" ? "> Restart" : "Restart",
+        intent: "warning",
+        onPress: deps.onRestartServer,
+      }),
+    ]),
   ]);
 }
 
@@ -57,7 +81,7 @@ function buildLogLevelRow(currentLevel: LogLevel, onLogLevelChange: (level: LogL
 
   return ui.row({ gap: 1, items: "center" }, [
     ui.text("Log level:", { variant: "caption" }),
-    ...buttons,
+    ui.actions(buttons),
   ]);
 }
 

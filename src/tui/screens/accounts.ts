@@ -22,6 +22,7 @@ type AccountsBodyDeps = Readonly<{
   state: TuiState;
   onSelect: (id: string | null) => void;
   onAddAccount: () => void;
+  onOpenAuthBrowser: () => void;
   onCloseAuthModal: () => void;
   onAuthAccountIdChange: (accountId: string) => void;
   onStartAccountAuth: () => void;
@@ -121,6 +122,14 @@ function buildAuthModal(deps: AccountsBodyDeps): VNode {
     returnFocusTo: "account-add",
     content: ui.column({ gap: 1 }, content),
     actions: [
+      flow
+        ? ui.button({
+            id: "auth-open-browser",
+            label: "Open browser",
+            intent: "link",
+            onPress: deps.onOpenAuthBrowser,
+          })
+        : null,
       !busy
         ? ui.button({
             id: "auth-start",
@@ -131,7 +140,7 @@ function buildAuthModal(deps: AccountsBodyDeps): VNode {
         : null,
       ui.button({
         id: "auth-close",
-        label: busy ? "Working..." : modal.phase === "success" ? "Done" : "Close",
+        label: modal.phase === "success" ? "Done" : "Close",
         intent: "secondary",
         onPress: busy ? () => undefined : deps.onCloseAuthModal,
       }),
@@ -173,7 +182,7 @@ function buildAccountDetailPanel(state: TuiState, deps: AccountsBodyDeps): VNode
         ui.text(String(account.todayRequests), { variant: "code" }),
       ]),
       ui.divider({ color: "muted" }),
-      ui.row({ gap: 1 }, [
+      ui.actions([
         ui.button({
           id: "account-refresh",
           label: "Refresh",
@@ -259,6 +268,7 @@ export function renderAccountsScreen(
   deps: ScreenRouteDeps & {
     onSelect: (id: string | null) => void;
     onAddAccount: () => void;
+    onOpenAuthBrowser: () => void;
     onCloseAuthModal: () => void;
     onAuthAccountIdChange: (accountId: string) => void;
     onStartAccountAuth: () => void;
@@ -273,6 +283,7 @@ export function renderAccountsScreen(
       state: context.state,
       onSelect: deps.onSelect,
       onAddAccount: deps.onAddAccount,
+      onOpenAuthBrowser: deps.onOpenAuthBrowser,
       onCloseAuthModal: deps.onCloseAuthModal,
       onAuthAccountIdChange: deps.onAuthAccountIdChange,
       onStartAccountAuth: deps.onStartAccountAuth,
@@ -293,6 +304,7 @@ export function renderAccountsScreen(
       state: context.state,
       onSelect: deps.onSelect,
       onAddAccount: deps.onAddAccount,
+      onOpenAuthBrowser: deps.onOpenAuthBrowser,
       onCloseAuthModal: deps.onCloseAuthModal,
       onAuthAccountIdChange: deps.onAuthAccountIdChange,
       onStartAccountAuth: deps.onStartAccountAuth,

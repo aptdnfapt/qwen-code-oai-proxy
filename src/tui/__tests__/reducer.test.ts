@@ -35,7 +35,20 @@ test("reducer updates active screen without mutating prior state", () => {
 });
 
 test("reducer rolls runtime uptime forward on tick", () => {
-  const initial = createInitialState(1000);
+  const initial = reduceTuiState(createInitialState(1000), {
+    type: "set-runtime",
+    runtime: {
+      serverState: "running",
+      status: "ready",
+      host: "127.0.0.1",
+      port: 8080,
+      uptimeMs: 0,
+      rotationMode: "single",
+      accountCount: 1,
+      requestCount: 0,
+      streamCount: 0,
+    },
+  });
   const next = reduceTuiState(initial, { type: "tick", nowMs: 4000 });
 
   assert.equal(next.nowMs, 4000);
@@ -56,6 +69,17 @@ test("reducer cycles between dark and light themes", () => {
 
   assert.equal(initial.themeName, "dark");
   assert.equal(next.themeName, "light");
+});
+
+test("reducer applies explicit theme, sidebar, and icon selections", () => {
+  let state = createInitialState(1000);
+  state = reduceTuiState(state, { type: "set-theme", theme: "light" });
+  state = reduceTuiState(state, { type: "set-sidebar-mode", mode: "collapsed" });
+  state = reduceTuiState(state, { type: "set-icon-mode", mode: "nerd" });
+
+  assert.equal(state.themeName, "light");
+  assert.equal(state.sidebarMode, "collapsed");
+  assert.equal(state.iconMode, "nerd");
 });
 
 test("reducer switches focus region forward with focus-next-region", () => {

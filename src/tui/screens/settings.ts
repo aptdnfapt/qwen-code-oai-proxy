@@ -20,7 +20,7 @@ function buildSettingRow(label: string, content: VNode): VNode {
 
 function buildThemePicker(current: ThemeName, onChange: (theme: ThemeName) => void): VNode {
   const themes: ThemeName[] = ["dark", "light"];
-  return ui.row({ gap: 1 }, [
+  return ui.actions([
     ...themes.map((theme) =>
       ui.button({
         id: `theme-${theme}`,
@@ -34,7 +34,7 @@ function buildThemePicker(current: ThemeName, onChange: (theme: ThemeName) => vo
 
 function buildSidebarModePicker(current: SidebarMode, onChange: (mode: SidebarMode) => void): VNode {
   const modes: SidebarMode[] = ["expanded", "collapsed"];
-  return ui.row({ gap: 1 }, [
+  return ui.actions([
     ...modes.map((mode) =>
       ui.button({
         id: `sidebar-mode-${mode}`,
@@ -49,7 +49,7 @@ function buildSidebarModePicker(current: SidebarMode, onChange: (mode: SidebarMo
 function buildIconModePicker(current: IconMode, onChange: (mode: IconMode) => void): VNode {
   const modes: IconMode[] = ["nerd", "fallback"];
   const labels: Record<IconMode, string> = { nerd: "Nerd Font", fallback: "Fallback" };
-  return ui.row({ gap: 1 }, [
+  return ui.actions([
     ...modes.map((mode) =>
       ui.button({
         id: `icon-mode-${mode}`,
@@ -63,7 +63,7 @@ function buildIconModePicker(current: IconMode, onChange: (mode: IconMode) => vo
 
 function buildLogLevelPicker(current: LogLevel, onChange: (level: LogLevel) => void): VNode {
   const levels: LogLevel[] = ["off", "error", "error-debug", "debug"];
-  return ui.row({ gap: 1 }, [
+  return ui.actions([
     ...levels.map((level) =>
       ui.button({
         id: `default-log-${level}`,

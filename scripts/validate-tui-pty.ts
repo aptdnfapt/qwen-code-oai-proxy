@@ -13,7 +13,7 @@ type CaptureSpec = Readonly<{
   rows: number;
   inputs: readonly string[];
   expectedSnippets: readonly string[];
-  fixtureKind?: "usage-cache";
+  fixtureKind?: "usage-cache" | "auth-waiting";
 }>;
 
 type CaptureResult = Readonly<{
@@ -57,11 +57,26 @@ const CAPTURES: readonly CaptureSpec[] = Object.freeze([
     expectedSnippets: Object.freeze(["focus:sidebar", "Tab focus"]),
   }),
   Object.freeze({
+    name: "live-main-controls-focus",
+    cols: 160,
+    rows: 40,
+    inputs: Object.freeze(["\t", "q"]),
+    expectedSnippets: Object.freeze(["MAIN FOCUS", "> Start", "Log level"]),
+  }),
+  Object.freeze({
+    name: "sidebar-enter-accounts",
+    cols: 160,
+    rows: 40,
+    inputs: Object.freeze(["\u001b[B", "\u001b[B", "\r", "q"]),
+    expectedSnippets: Object.freeze(["Accounts", "Add new account", "Account details"]),
+  }),
+  Object.freeze({
     name: "auth-modal",
     cols: 160,
     rows: 40,
-    inputs: Object.freeze(["\u001b[B", "\u001b[B", "\r", "a", "\u001b", "q"]),
-    expectedSnippets: Object.freeze(["Accounts", "Add account", "Account ID", "Start auth"]),
+    inputs: Object.freeze(["q"]),
+    expectedSnippets: Object.freeze(["Accounts", "Add account", "Account ID", "Open browser", "ABCD-EFGH"]),
+    fixtureKind: "auth-waiting",
   }),
   Object.freeze({
     name: "usage-cache-metrics",
@@ -158,7 +173,7 @@ function createUsageFixtureHome(name: string): string {
 
 async function runCapture(spec: CaptureSpec): Promise<CaptureResult> {
   const paths = createTempPaths(spec.name);
-  const fixtureHome = spec.fixtureKind === "usage-cache" ? createUsageFixtureHome(spec.name) : null;
+  const fixtureHome = spec.fixtureKind ? createUsageFixtureHome(spec.name) : null;
   const command = [
     `stty rows ${spec.rows} cols ${spec.cols}`,
     `REZI_FRAME_AUDIT=1 REZI_FRAME_AUDIT_LOG=${paths.auditPath} node ${DIST_TUI_ENTRY}`,
@@ -166,7 +181,13 @@ async function runCapture(spec: CaptureSpec): Promise<CaptureResult> {
 
   const child = childProcess.spawn("script", ["-qefc", command, paths.rawPath], {
     cwd: PROJECT_ROOT,
-    env: fixtureHome ? { ...process.env, HOME: fixtureHome } : process.env,
+    env: fixtureHome
+      ? {
+          ...process.env,
+          HOME: fixtureHome,
+          ...(spec.fixtureKind === "auth-waiting" ? { QWEN_TUI_FIXTURE: "accounts-auth-waiting" } : {}),
+        }
+      : process.env,
     stdio: ["pipe", "ignore", "pipe"],
   });
 

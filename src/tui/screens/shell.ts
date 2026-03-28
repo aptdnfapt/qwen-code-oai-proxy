@@ -59,8 +59,10 @@ function renderSidebar(options: ShellOptions): VNode {
     const icon = navIcon(item, useFallback);
     const isActive = state.activeScreen === item.id;
     const isSelected = index === state.sidebarIndex && sidebarFocused;
-    const prefix = isSelected ? ">" : " ";
-    const label = collapsed ? padSidebarLabel(icon, 3) : padSidebarLabel(`${prefix}${icon} ${item.title}`, 18);
+    const marker = isSelected ? ">" : isActive ? "*" : " ";
+    const label = collapsed
+      ? padSidebarLabel(`${marker}${icon}`, 4)
+      : padSidebarLabel(`${marker} ${icon} ${item.title}`, 19);
     return ui.button({
       id: `sidebar-${item.id}`,
       label,
@@ -78,7 +80,14 @@ function renderSidebar(options: ShellOptions): VNode {
     },
     [
       ui.column({ gap: 1 }, [
-        ui.text(collapsed ? "QP" : PRODUCT_NAME, { variant: "heading" }),
+        collapsed
+          ? ui.text(sidebarFocused ? "QP>" : "QP", { variant: "heading" })
+          : ui.row({ gap: 1, items: "center", wrap: true }, [
+              ui.text(PRODUCT_NAME, { variant: "heading" }),
+              ui.badge(sidebarFocused ? "NAV FOCUS" : "NAV", {
+                variant: sidebarFocused ? "info" : "default",
+              }),
+            ]),
         collapsed ? null : ui.text(PRODUCT_TAGLINE, { variant: "caption" }),
         ui.column({ gap: 0 }, buttons),
         ui.spacer({ flex: 1 }),
@@ -112,6 +121,7 @@ function renderHeader(state: TuiState): VNode {
     ui.text(`stored req ${String(runtime.requestCount)}`, { variant: "caption" }),
     ui.text(`streams ${formatStreamCount(runtime.streamCount)}`, { variant: "caption" }),
     ui.spacer({ flex: 1 }),
+    ui.badge(state.focusRegion === "sidebar" ? "NAV FOCUS" : "MAIN FOCUS", { variant: "info" }),
     compact ? ui.text(`theme ${themeSpec(state.themeName).label}`, { variant: "caption" }) : null,
   ]);
 
@@ -149,6 +159,7 @@ function renderFooter(state: TuiState): VNode {
           ]),
     ],
     right: [
+      ui.badge(state.focusRegion === "sidebar" ? "NAV" : "MAIN", { variant: "info" }),
       ui.text(focusLabel, { variant: "caption" }),
     ],
   });
@@ -187,6 +198,9 @@ function renderWorkspace(options: ShellOptions): VNode {
 
 export function renderShell(options: ShellOptions): VNode {
   const state = options.context.state;
+  const currentItem = activeNavItem(state.activeScreen);
+  const mainFocused = state.focusRegion === "main";
+
   return ui.page({
     p: 1,
     gap: 0,
@@ -196,7 +210,11 @@ export function renderShell(options: ShellOptions): VNode {
       ui.box({ border: "none", width: 1, py: 0 }, [ui.divider({ direction: "vertical", color: "muted" })]),
       ui.box({ border: "none", flex: 1, p: 1 }, [
         ui.column({ gap: 1 }, [
-          ui.text(options.title, { variant: "heading" }),
+          ui.row({ gap: 1, items: "center", wrap: true }, [
+            ui.text(options.title, { variant: "heading" }),
+            ui.badge(mainFocused ? "MAIN FOCUS" : "MAIN", { variant: mainFocused ? "info" : "default" }),
+            ui.text(currentItem.blurb, { variant: "caption" }),
+          ]),
           renderWorkspace(options),
         ]),
       ]),

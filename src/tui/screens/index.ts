@@ -28,6 +28,7 @@ export type ExtendedScreenRouteDeps = ScreenRouteDeps &
     // Accounts screen
     onSelectAccount: (id: string | null) => void;
     onAddAccount: () => void;
+    onOpenAuthBrowser: () => void;
     onCloseAuthModal: () => void;
     onAuthAccountIdChange: (accountId: string) => void;
     onStartAccountAuth: () => void;
@@ -80,6 +81,7 @@ export function createTuiRoutes(deps: ExtendedScreenRouteDeps): readonly TuiRout
           onToggleSidebar: deps.onToggleSidebar,
           onSelect: deps.onSelectAccount,
           onAddAccount: deps.onAddAccount,
+          onOpenAuthBrowser: deps.onOpenAuthBrowser,
           onCloseAuthModal: deps.onCloseAuthModal,
           onAuthAccountIdChange: deps.onAuthAccountIdChange,
           onStartAccountAuth: deps.onStartAccountAuth,

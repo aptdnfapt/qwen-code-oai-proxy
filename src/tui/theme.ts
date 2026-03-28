@@ -1,4 +1,4 @@
-import { darkTheme, lightTheme, type ThemeDefinition } from "@rezi-ui/core";
+import { lightTheme, nordTheme, type ThemeDefinition } from "@rezi-ui/core";
 import type { ThemeName } from "./types.js";
 
 type ThemeSpec = Readonly<{
@@ -10,7 +10,7 @@ export const PRODUCT_NAME = "qwen-proxy";
 export const PRODUCT_TAGLINE = "Operator shell";
 
 const THEME_SPECS: Readonly<Record<ThemeName, ThemeSpec>> = Object.freeze({
-  dark: Object.freeze({ label: "Dark", theme: darkTheme }),
+  dark: Object.freeze({ label: "Dark", theme: nordTheme }),
   light: Object.freeze({ label: "Light", theme: lightTheme }),
 });
 

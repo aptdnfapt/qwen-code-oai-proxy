@@ -19,12 +19,45 @@ import {
 
 const UI_FPS_CAP = 30;
 const TICK_MS = 1000;
-const initialState = createInitialState();
-const runtimeMonitor = createRuntimeMonitor(initialState.bootMs);
 const require = createRequire(import.meta.url);
+const { spawn } = require("node:child_process") as typeof import("node:child_process");
 const qrcode = require("qrcode-terminal") as {
   generate: (text: string, options: { small?: boolean }, callback: (qrText: string) => void) => void;
 };
+
+function applyFixtureState(state: TuiState): TuiState {
+  if (process.env.QWEN_TUI_FIXTURE !== "accounts-auth-waiting") {
+    return state;
+  }
+
+  let next = reduceTuiState(state, { type: "navigate", screen: "accounts" });
+  next = reduceTuiState(next, { type: "sidebar-move", direction: "down" });
+  next = reduceTuiState(next, { type: "sidebar-move", direction: "down" });
+  next = reduceTuiState(next, {
+    type: "set-accounts",
+    accounts: Object.freeze([
+      Object.freeze({ id: "work", status: "valid", expiresAt: Date.now() + 60 * 60 * 1000, todayRequests: 2 }),
+    ]),
+  });
+  next = reduceTuiState(next, { type: "open-auth-modal" });
+  next = reduceTuiState(next, { type: "set-auth-account-id", accountId: "ops" });
+  next = reduceTuiState(next, {
+    type: "auth-device-flow-ready",
+    message: "Open link or scan QR, then approve in browser.",
+    flow: Object.freeze({
+      verificationUri: "https://chat.qwen.ai/verify",
+      verificationUriComplete: "https://chat.qwen.ai/verify?user_code=ABCD-EFGH",
+      userCode: "ABCD-EFGH",
+      deviceCode: "device-code",
+      codeVerifier: "code-verifier",
+      qrText: "████  ████\n██      ██\n████  ████",
+    }),
+  });
+  return next;
+}
+
+const initialState = applyFixtureState(createInitialState());
+const runtimeMonitor = createRuntimeMonitor(initialState.bootMs);
 
 // Strip ANSI/control sequences. Returns empty string if nothing readable remains.
 const ANSI_RE = /\x1b[\x20-\x2f]*[\x40-\x7e]|\x1b\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]|\x1b[\x40-\x5f][^\x1b]*/g;
@@ -238,6 +271,37 @@ function closeAuthModal(): void {
   dispatch({ type: "close-auth-modal" });
 }
 
+function openExternalUrl(url: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child =
+      process.platform === "darwin"
+        ? spawn("open", [url], { stdio: "ignore", detached: true })
+        : process.platform === "win32"
+          ? spawn("cmd", ["/c", "start", "", url], { stdio: "ignore", detached: true })
+          : spawn("xdg-open", [url], { stdio: "ignore", detached: true });
+
+    child.once("error", reject);
+    child.once("spawn", () => {
+      child.unref();
+      resolve();
+    });
+  });
+}
+
+async function handleOpenAuthBrowser(): Promise<void> {
+  const url = currentState.accounts.authModal.flow?.verificationUriComplete;
+  if (!url) {
+    return;
+  }
+
+  try {
+    await openExternalUrl(url);
+    appendSystemLog("info", "Opened auth page in browser");
+  } catch (error: any) {
+    appendSystemLog("warn", `Browser open failed: ${String(error?.message ?? error)}`);
+  }
+}
+
 async function handleStartAccountAuth(): Promise<void> {
   const accountId = currentState.accounts.authModal.accountId.trim();
   const validationError = validateAccountId(accountId);
@@ -385,6 +449,9 @@ app = createNodeApp({
     // Accounts screen callbacks
     onSelectAccount: (id: string | null) => dispatch({ type: "select-account", id }),
     onAddAccount: openAuthModal,
+    onOpenAuthBrowser: () => {
+      void handleOpenAuthBrowser();
+    },
     onCloseAuthModal: closeAuthModal,
     onAuthAccountIdChange: (accountId: string) => dispatch({ type: "set-auth-account-id", accountId }),
     onStartAccountAuth: () => {
@@ -401,14 +468,10 @@ app = createNodeApp({
     onUsageFilterChange: (value: string) => dispatch({ type: "set-usage-filter", value }),
     // Settings screen callbacks
     onThemeChange: (theme: ThemeName) => {
-      dispatch({ type: "cycle-theme" });
-      // Only cycle if different from target
-      if (currentState.themeName !== theme) {
-        dispatch({ type: "cycle-theme" });
-      }
+      dispatch({ type: "set-theme", theme });
     },
-    onSidebarModeChange: (_mode: SidebarMode) => dispatch({ type: "toggle-sidebar" }),
-    onIconModeChange: (_mode: IconMode) => dispatch({ type: "toggle-icon-mode" }),
+    onSidebarModeChange: (mode: SidebarMode) => dispatch({ type: "set-sidebar-mode", mode }),
+    onIconModeChange: (mode: IconMode) => dispatch({ type: "set-icon-mode", mode }),
     onDefaultLogLevelChange: (level: LogLevel) => {
       void handleRuntimeLogLevelChange(level);
     },
@@ -431,6 +494,7 @@ app.keys(
     onOpenAuthModal: openAuthModal,
     getFocusRegion: () => currentState.focusRegion,
     getActiveScreen: () => currentState.activeScreen,
+    getSidebarScreen: () => NAV_ITEMS[currentState.sidebarIndex]?.id ?? currentState.activeScreen,
   }),
 );
 

@@ -128,15 +128,30 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
         ...state,
         sidebarMode: state.sidebarMode === "expanded" ? "collapsed" : "expanded",
       });
+    case "set-sidebar-mode":
+      return Object.freeze({
+        ...state,
+        sidebarMode: action.mode,
+      });
     case "toggle-icon-mode":
       return Object.freeze({
         ...state,
         iconMode: state.iconMode === "fallback" ? "nerd" : "fallback",
       });
+    case "set-icon-mode":
+      return Object.freeze({
+        ...state,
+        iconMode: action.mode,
+      });
     case "cycle-theme":
       return Object.freeze({
         ...state,
         themeName: state.themeName === "dark" ? "light" : "dark",
+      });
+    case "set-theme":
+      return Object.freeze({
+        ...state,
+        themeName: action.theme,
       });
     case "set-runtime":
       return Object.freeze({

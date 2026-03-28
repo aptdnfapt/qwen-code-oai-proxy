@@ -40,6 +40,7 @@ type LiveScreenDeps = ScreenRouteDeps & {
 type AccountsScreenDeps = ScreenRouteDeps & {
   onSelect: (id: string | null) => void;
   onAddAccount: () => void;
+  onOpenAuthBrowser: () => void;
   onCloseAuthModal: () => void;
   onAuthAccountIdChange: (accountId: string) => void;
   onStartAccountAuth: () => void;
@@ -70,6 +71,7 @@ function createAccountsDeps(): AccountsScreenDeps {
     onToggleSidebar: () => {},
     onSelect: () => {},
     onAddAccount: () => {},
+    onOpenAuthBrowser: () => {},
     onCloseAuthModal: () => {},
     onAuthAccountIdChange: () => {},
     onStartAccountAuth: () => {},
@@ -115,6 +117,7 @@ test("live screen renders full shell markers at 160x40", () => {
   assert.doesNotMatch(output, /\[\[]/);
   assert.match(output, /Tab focus/);
   assert.match(output, /focus:sidebar/);
+  assert.match(output, /NAV FOCUS/);
   assert.match(output, /Workspace details/);
   assert.match(output, /viewport 160x40/);
   assert.doesNotMatch(output, /Shell snapshot/);
@@ -144,6 +147,16 @@ test("live screen renders under the light theme", () => {
 
   assert.match(output, /theme Light/);
   assert.match(output, /Log level/);
+});
+
+test("live screen marks the primary server action when main pane is focused", () => {
+  const base = createInitialState(1000);
+  const mainFocused = reduceTuiState(base, { type: "focus-next-region" });
+  const renderer = createTestRenderer({ viewport: { cols: 160, rows: 40 } });
+  const output = renderer.render(renderLiveScreen(createContext(mainFocused, "live"), createLiveDeps())).toText();
+
+  assert.match(output, /MAIN FOCUS/);
+  assert.match(output, /> Start/);
 });
 
 test("accounts screen shows auth modal with waiting details", () => {
@@ -176,7 +189,8 @@ test("accounts screen shows auth modal with waiting details", () => {
   assert.match(output, /WAITING/);
   assert.match(output, /ABCD-EFGH/);
   assert.match(output, /Verification link/);
-  assert.match(output, /Working\.\.\./);
+  assert.match(output, /Open browser/);
+  assert.match(output, /Close/);
 });
 
 test("usage screen renders cache metrics, cache type, and filter", () => {

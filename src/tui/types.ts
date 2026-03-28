@@ -179,8 +179,11 @@ export type TuiAction =
   | Readonly<{ type: "set-viewport"; cols: number; rows: number }>
   | Readonly<{ type: "navigate"; screen: ScreenId }>
   | Readonly<{ type: "toggle-sidebar" }>
+  | Readonly<{ type: "set-sidebar-mode"; mode: SidebarMode }>
   | Readonly<{ type: "toggle-icon-mode" }>
+  | Readonly<{ type: "set-icon-mode"; mode: IconMode }>
   | Readonly<{ type: "cycle-theme" }>
+  | Readonly<{ type: "set-theme"; theme: ThemeName }>
   | Readonly<{ type: "set-runtime"; runtime: RuntimeSummary }>
   | Readonly<{ type: "request-quit" }>
   | Readonly<{ type: "focus-next-region" }>
