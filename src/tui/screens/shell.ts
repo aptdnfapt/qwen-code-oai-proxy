@@ -61,7 +61,7 @@ function renderSidebar(options: ShellOptions): VNode {
 
   return ui.box(
     {
-      border: sidebarFocused ? "single" : "none",
+      border: "none",
       p: 1,
       width: collapsed ? 8 : 22,
       height: "full",

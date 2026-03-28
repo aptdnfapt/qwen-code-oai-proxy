@@ -5,7 +5,7 @@ import { createRuntimeMonitor } from "./helpers/runtime.js";
 import { createInitialState, reduceTuiState } from "./helpers/state.js";
 import { createTuiRoutes } from "./screens/index.js";
 import { themeSpec } from "./theme.js";
-import type { ScreenId, TuiAction, TuiState } from "./types.js";
+import { NAV_ITEMS, type ScreenId, type TuiAction, type TuiState } from "./types.js";
 
 const UI_FPS_CAP = 30;
 const TICK_MS = 1000;
@@ -102,24 +102,73 @@ function installProcessHooks(): void {
 
   const onData = (chunk: Buffer | string): void => {
     const input = chunk.toString();
+
+    // Quit
     if (input === "q" || input === "Q") {
       dispatch({ type: "request-quit" });
       void stopApp();
       return;
     }
 
+    // Sidebar collapse/expand
     if (input === "[") {
       dispatch({ type: "toggle-sidebar" });
       return;
     }
 
+    // Theme toggle
     if (input === "t" || input === "T") {
       dispatch({ type: "cycle-theme" });
       return;
     }
 
+    // Icon mode toggle
     if (input === "i" || input === "I") {
       dispatch({ type: "toggle-icon-mode" });
+      return;
+    }
+
+    // Tab - focus next region
+    if (input === "\t") {
+      dispatch({ type: "focus-next-region" });
+      return;
+    }
+
+    // Shift+Tab - focus prev region
+    if (input === "\x1b[Z") {
+      dispatch({ type: "focus-prev-region" });
+      return;
+    }
+
+    // Arrow up - sidebar move up (when sidebar focused)
+    if (input === "\x1b[A") {
+      if (currentState.focusRegion === "sidebar") {
+        dispatch({ type: "sidebar-move", direction: "up" });
+      }
+      return;
+    }
+
+    // Arrow down - sidebar move down (when sidebar focused)
+    if (input === "\x1b[B") {
+      if (currentState.focusRegion === "sidebar") {
+        dispatch({ type: "sidebar-move", direction: "down" });
+      }
+      return;
+    }
+
+    // Enter - activate sidebar selection (when sidebar focused)
+    if (input === "\r" || input === "\n") {
+      if (currentState.focusRegion === "sidebar") {
+        const screen = NAV_ITEMS[currentState.sidebarIndex]?.id ?? "live";
+        navigate(screen);
+      }
+      return;
+    }
+
+    // Help
+    if (input === "?" || input === "h" || input === "H") {
+      navigate("help");
+      return;
     }
   };
 
