@@ -4,16 +4,19 @@ export type GlobalKeyResult = Readonly<
   | { kind: "action"; action: TuiAction }
   | { kind: "quit" }
   | { kind: "navigate"; screen: ScreenId }
+  | { kind: "accounts-add" }
 >;
 
 export type KeybindingDeps = Readonly<{
   dispatch: (action: TuiAction) => void;
   onQuit: () => void;
   onNavigate: (screen: ScreenId) => void;
+  onOpenAuthModal: () => void;
   getFocusRegion: () => FocusRegion;
+  getActiveScreen: () => ScreenId;
 }>;
 
-export function resolveGlobalKey(key: string, focusRegion: FocusRegion): GlobalKeyResult | null {
+export function resolveGlobalKey(key: string, focusRegion: FocusRegion, activeScreen: ScreenId): GlobalKeyResult | null {
   switch (key) {
     case "q":
     case "ctrl+c":
@@ -31,6 +34,11 @@ export function resolveGlobalKey(key: string, focusRegion: FocusRegion): GlobalK
     case "?":
     case "h":
       return Object.freeze({ kind: "navigate", screen: "help" });
+    case "a":
+      if (activeScreen === "accounts") {
+        return Object.freeze({ kind: "accounts-add" });
+      }
+      break;
     default:
       break;
   }
@@ -56,7 +64,8 @@ export function createKeybindingMap(deps: KeybindingDeps): Record<string, () => 
   const bind = (key: string): (() => void) => {
     return () => {
       const focusRegion = deps.getFocusRegion();
-      const result = resolveGlobalKey(key, focusRegion);
+      const activeScreen = deps.getActiveScreen();
+      const result = resolveGlobalKey(key, focusRegion, activeScreen);
       if (!result) {
         return;
       }
@@ -68,6 +77,11 @@ export function createKeybindingMap(deps: KeybindingDeps): Record<string, () => 
 
       if (result.kind === "navigate") {
         deps.onNavigate(result.screen);
+        return;
+      }
+
+      if (result.kind === "accounts-add") {
+        deps.onOpenAuthModal();
         return;
       }
 
@@ -88,5 +102,6 @@ export function createKeybindingMap(deps: KeybindingDeps): Record<string, () => 
     enter: bind("enter"),
     "?": bind("?"),
     h: bind("h"),
+    a: bind("a"),
   };
 }
