@@ -3,6 +3,7 @@ import test from "node:test";
 import type { RouteRenderContext, RouterApi } from "@rezi-ui/core";
 import { createTestRenderer } from "@rezi-ui/core";
 import { createInitialState, reduceTuiState } from "../helpers/state.js";
+import { renderAccountsScreen } from "../screens/accounts.js";
 import { renderLiveScreen } from "../screens/live.js";
 import { themeSpec } from "../theme.js";
 import type { LogLevel, ScreenId, ScreenRouteDeps, TuiState } from "../types.js";
@@ -35,6 +36,16 @@ type LiveScreenDeps = ScreenRouteDeps & {
   onLogsScroll: (scrollTop: number) => void;
 };
 
+type AccountsScreenDeps = ScreenRouteDeps & {
+  onSelect: (id: string | null) => void;
+  onAddAccount: () => void;
+  onCloseAuthModal: () => void;
+  onAuthAccountIdChange: (accountId: string) => void;
+  onStartAccountAuth: () => void;
+  onRefreshAccount: (id: string) => void;
+  onRemoveAccount: (id: string) => void;
+};
+
 function createLiveDeps(): LiveScreenDeps {
   return {
     onNavigate: () => {},
@@ -44,6 +55,20 @@ function createLiveDeps(): LiveScreenDeps {
     onRestartServer: () => {},
     onLogLevelChange: () => {},
     onLogsScroll: () => {},
+  };
+}
+
+function createAccountsDeps(): AccountsScreenDeps {
+  return {
+    onNavigate: () => {},
+    onToggleSidebar: () => {},
+    onSelect: () => {},
+    onAddAccount: () => {},
+    onCloseAuthModal: () => {},
+    onAuthAccountIdChange: () => {},
+    onStartAccountAuth: () => {},
+    onRefreshAccount: () => {},
+    onRemoveAccount: () => {},
   };
 }
 
@@ -104,4 +129,37 @@ test("live screen renders under the light theme", () => {
 
   assert.match(output, /theme Light/);
   assert.match(output, /Log level/);
+});
+
+test("accounts screen shows auth modal with waiting details", () => {
+  let state = createInitialState(1000);
+  state = reduceTuiState(state, {
+    type: "set-accounts",
+    accounts: Object.freeze([
+      Object.freeze({ id: "work", status: "valid", expiresAt: 2_000_000, todayRequests: 12 }),
+    ]),
+  });
+  state = reduceTuiState(state, { type: "open-auth-modal" });
+  state = reduceTuiState(state, { type: "set-auth-account-id", accountId: "ops" });
+  state = reduceTuiState(state, {
+    type: "auth-device-flow-ready",
+    message: "Open link or scan QR, then approve in browser.",
+    flow: Object.freeze({
+      verificationUri: "https://chat.qwen.ai/verify",
+      verificationUriComplete: "https://chat.qwen.ai/verify?user_code=ABCD-EFGH",
+      userCode: "ABCD-EFGH",
+      deviceCode: "device-code",
+      codeVerifier: "code-verifier",
+      qrText: "██\n██",
+    }),
+  });
+
+  const renderer = createTestRenderer({ viewport: { cols: 160, rows: 40 } });
+  const output = renderer.render(renderAccountsScreen(createContext(state, "accounts"), createAccountsDeps())).toText();
+
+  assert.match(output, /Add account/);
+  assert.match(output, /WAITING/);
+  assert.match(output, /ABCD-EFGH/);
+  assert.match(output, /Verification link/);
+  assert.match(output, /Working\.\.\./);
 });

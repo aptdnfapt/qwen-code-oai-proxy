@@ -139,6 +139,14 @@ CLI tool for managing Qwen authentication that:
 - Handles token polling and credential storage
 - Shows request counts for quota management
 
+#### src/tui/main.ts + src/tui/screens/accounts.ts
+Operator TUI auth flow that:
+- Opens add-account auth in a Rezi modal layer
+- Collects a named account ID inside the TUI
+- Starts the same device authorization flow used by the CLI auth command
+- Renders verification link, device code, terminal QR block, and waiting/success/failure states
+- Refreshes the Accounts screen after auth succeeds
+
 ### Configuration Files
 
 #### package.json
@@ -348,6 +356,7 @@ src/index.ts
 - `npm start`: Build the TS runtime and run the proxy server in headless mode (`qwen-proxy serve --headless`)
 - `npm run serve:headless`: Run the headless server command explicitly
 - `qwen-proxy serve --headless`: Package CLI headless entry
+- `qwen-proxy serve`: Package CLI TUI entry with in-app account auth modal
 - `qwen-proxy auth list|add|remove|counts`: Package CLI auth/account commands
 - `qwen-proxy usage`: Package CLI usage reporting command
 - `npm run auth`: Build the TS runtime and authenticate with Qwen

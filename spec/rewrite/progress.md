@@ -235,10 +235,27 @@ PTY evidence:
 
 Review: pass
 
-### 5D — Auth UX (not started)
+### 5D — Auth UX (complete)
 
-Next up:
+Done:
 
-- add-account flow in modal/layer form
-- verification link + device code + QR code block
-- progress states for waiting / success / failure
+- added Accounts add-account flow in a Rezi modal layer
+- account ID input now starts named-account auth directly from the TUI
+- modal shows verification link, device code, and terminal QR block
+- modal exposes clear waiting / success / failure states with status copy
+- successful auth refreshes the Accounts table and selects the new account
+- added `a` shortcut on the Accounts screen to open the add-account modal
+
+Tests added:
+
+- src/tui/__tests__/reducer.test.ts: auth modal open/close, waiting flow, account refresh selection coverage
+- src/tui/__tests__/render.test.ts: Accounts auth modal waiting-state render coverage
+- scripts/validate-tui-pty.ts: auth-modal PTY capture
+
+PTY evidence:
+
+- auth-modal capture shows Accounts -> Add account modal -> Account ID -> Start auth
+- npm run typecheck -> pass
+- npm run test:tui -> pass (30 tests)
+
+Review: not run

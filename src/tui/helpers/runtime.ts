@@ -1,5 +1,5 @@
 import { createRequire } from "module";
-import type { LogLevel, RotationMode, RuntimeSummary, ServerState } from "../types.js";
+import type { AccountInfo, LogLevel, RotationMode, RuntimeSummary, ServerState } from "../types.js";
 
 type ConfigModule = {
   host?: string;
@@ -10,6 +10,16 @@ type AuthManagerLike = {
   loadAllAccounts: () => Promise<unknown>;
   getAccountIds: () => string[];
   loadCredentials: () => Promise<unknown>;
+  getAccountCredentials: (accountId: string) => { expiry_date?: number } | null;
+  isAccountValid: (accountId: string) => boolean;
+  initiateDeviceFlow: () => Promise<{
+    device_code: string;
+    user_code: string;
+    verification_uri: string;
+    verification_uri_complete: string;
+    code_verifier: string;
+  }>;
+  pollForToken: (deviceCode: string, codeVerifier: string, accountId?: string | null) => Promise<unknown>;
 };
 
 type QwenApiLike = {
@@ -62,6 +72,15 @@ function sumRequestCounts(requestCounts: Map<string, number>): number {
 
 export function createRuntimeMonitor(_bootMs: number): {
   refresh: () => Promise<RuntimeSummary>;
+  loadAccounts: () => Promise<readonly AccountInfo[]>;
+  initiateAddAccountFlow: () => Promise<{
+    deviceCode: string;
+    userCode: string;
+    verificationUri: string;
+    verificationUriComplete: string;
+    codeVerifier: string;
+  }>;
+  completeAddAccountFlow: (deviceCode: string, codeVerifier: string, accountId: string) => Promise<void>;
   startServer: () => Promise<RuntimeSummary>;
   stopServer: () => Promise<RuntimeSummary>;
   restartServer: () => Promise<RuntimeSummary>;
@@ -72,6 +91,25 @@ export function createRuntimeMonitor(_bootMs: number): {
   let serverState: ServerState = "stopped";
   let serverHandle: StartedServer | null = null;
   let serverBootMs = 0;
+
+  async function buildAccounts(): Promise<readonly AccountInfo[]> {
+    await Promise.allSettled([qwenAPI.loadRequestCounts(), qwenAPI.authManager.loadAllAccounts()]);
+
+    const accountIds = qwenAPI.authManager.getAccountIds().slice().sort((a, b) => a.localeCompare(b));
+    return Object.freeze(
+      accountIds.map((accountId) => {
+        const credentials = qwenAPI.authManager.getAccountCredentials(accountId);
+        const isValid = qwenAPI.authManager.isAccountValid(accountId);
+
+        return Object.freeze({
+          id: accountId,
+          status: isValid ? "valid" : credentials ? "expired" : "unknown",
+          expiresAt: typeof credentials?.expiry_date === "number" ? credentials.expiry_date : undefined,
+          todayRequests: qwenAPI.requestCount.get(accountId) ?? 0,
+        });
+      }),
+    );
+  }
 
   async function buildSummary(): Promise<RuntimeSummary> {
     await Promise.allSettled([qwenAPI.loadRequestCounts(), qwenAPI.authManager.loadAllAccounts()]);
@@ -99,6 +137,28 @@ export function createRuntimeMonitor(_bootMs: number): {
   return {
     async refresh(): Promise<RuntimeSummary> {
       return buildSummary();
+    },
+    async loadAccounts(): Promise<readonly AccountInfo[]> {
+      return buildAccounts();
+    },
+    async initiateAddAccountFlow(): Promise<{
+      deviceCode: string;
+      userCode: string;
+      verificationUri: string;
+      verificationUriComplete: string;
+      codeVerifier: string;
+    }> {
+      const flow = await qwenAPI.authManager.initiateDeviceFlow();
+      return Object.freeze({
+        deviceCode: flow.device_code,
+        userCode: flow.user_code,
+        verificationUri: flow.verification_uri,
+        verificationUriComplete: flow.verification_uri_complete,
+        codeVerifier: flow.code_verifier,
+      });
+    },
+    async completeAddAccountFlow(deviceCode: string, codeVerifier: string, accountId: string): Promise<void> {
+      await qwenAPI.authManager.pollForToken(deviceCode, codeVerifier, accountId);
     },
     async startServer(): Promise<RuntimeSummary> {
       if (serverState === "running" || serverState === "starting") {

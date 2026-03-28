@@ -45,6 +45,25 @@ export type AccountInfo = Readonly<{
   todayRequests: number;
 }>;
 
+export type AccountsAuthPhase = "idle" | "initiating" | "waiting" | "success" | "failure";
+
+export type AccountsAuthFlow = Readonly<{
+  verificationUri: string;
+  verificationUriComplete: string;
+  userCode: string;
+  deviceCode: string;
+  codeVerifier: string;
+  qrText: string;
+}>;
+
+export type AccountsAuthModalState = Readonly<{
+  isOpen: boolean;
+  accountId: string;
+  phase: AccountsAuthPhase;
+  message: string | null;
+  flow: AccountsAuthFlow | null;
+}>;
+
 export type UsageDay = Readonly<{
   date: string;
   requests: number;
@@ -124,6 +143,7 @@ export type ArtifactsScreenState = Readonly<{
 export type AccountsScreenState = Readonly<{
   accounts: readonly AccountInfo[];
   selectedId: string | null;
+  authModal: AccountsAuthModalState;
 }>;
 
 export type UsageScreenState = Readonly<{
@@ -172,6 +192,13 @@ export type TuiAction =
   | Readonly<{ type: "set-artifact-preview"; content: string | null }>
   | Readonly<{ type: "set-accounts"; accounts: readonly AccountInfo[] }>
   | Readonly<{ type: "select-account"; id: string | null }>
+  | Readonly<{ type: "open-auth-modal" }>
+  | Readonly<{ type: "close-auth-modal" }>
+  | Readonly<{ type: "set-auth-account-id"; accountId: string }>
+  | Readonly<{ type: "auth-start"; message: string }>
+  | Readonly<{ type: "auth-device-flow-ready"; flow: AccountsAuthFlow; message: string }>
+  | Readonly<{ type: "auth-success"; message: string }>
+  | Readonly<{ type: "auth-failure"; message: string }>
   | Readonly<{ type: "set-usage-days"; days: readonly UsageDay[] }>
   | Readonly<{ type: "select-usage-date"; date: string | null }>;
 

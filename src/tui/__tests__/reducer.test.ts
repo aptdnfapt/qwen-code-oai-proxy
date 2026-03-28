@@ -113,3 +113,58 @@ test("reducer activates screen from sidebar index", () => {
   const activated = reduceTuiState(moved, { type: "sidebar-activate" });
   assert.equal(activated.activeScreen, "artifacts");
 });
+
+test("reducer opens and closes auth modal", () => {
+  const initial = createInitialState(1000);
+  const opened = reduceTuiState(initial, { type: "open-auth-modal" });
+  assert.equal(opened.accounts.authModal.isOpen, true);
+  assert.equal(opened.accounts.authModal.phase, "idle");
+
+  const closed = reduceTuiState(opened, { type: "close-auth-modal" });
+  assert.equal(closed.accounts.authModal.isOpen, false);
+  assert.equal(closed.accounts.authModal.accountId, "");
+});
+
+test("reducer tracks auth modal account id and waiting flow", () => {
+  const initial = reduceTuiState(createInitialState(1000), { type: "open-auth-modal" });
+  const named = reduceTuiState(initial, { type: "set-auth-account-id", accountId: "ops" });
+  assert.equal(named.accounts.authModal.accountId, "ops");
+
+  const waiting = reduceTuiState(named, {
+    type: "auth-device-flow-ready",
+    message: "Waiting for approval",
+    flow: Object.freeze({
+      verificationUri: "https://chat.qwen.ai/verify",
+      verificationUriComplete: "https://chat.qwen.ai/verify?user_code=ABCD-EFGH",
+      userCode: "ABCD-EFGH",
+      deviceCode: "device-code",
+      codeVerifier: "code-verifier",
+      qrText: "██\n██",
+    }),
+  });
+
+  assert.equal(waiting.accounts.authModal.phase, "waiting");
+  assert.equal(waiting.accounts.authModal.flow?.userCode, "ABCD-EFGH");
+});
+
+test("reducer keeps selected account when account list refreshes", () => {
+  let state = createInitialState(1000);
+  state = reduceTuiState(state, {
+    type: "set-accounts",
+    accounts: Object.freeze([
+      Object.freeze({ id: "work", status: "valid", expiresAt: 2_000_000, todayRequests: 2 }),
+      Object.freeze({ id: "ops", status: "expired", expiresAt: 3_000_000, todayRequests: 1 }),
+    ]),
+  });
+  state = reduceTuiState(state, { type: "select-account", id: "ops" });
+
+  const refreshed = reduceTuiState(state, {
+    type: "set-accounts",
+    accounts: Object.freeze([
+      Object.freeze({ id: "work", status: "valid", expiresAt: 2_000_000, todayRequests: 4 }),
+      Object.freeze({ id: "ops", status: "valid", expiresAt: 4_000_000, todayRequests: 3 }),
+    ]),
+  });
+
+  assert.equal(refreshed.accounts.selectedId, "ops");
+});

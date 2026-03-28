@@ -47,10 +47,21 @@ function createInitialArtifactsState(): ArtifactsScreenState {
   });
 }
 
+function createInitialAuthModalState() {
+  return Object.freeze({
+    isOpen: false,
+    accountId: "",
+    phase: "idle",
+    message: null,
+    flow: null,
+  });
+}
+
 function createInitialAccountsState(): AccountsScreenState {
   return Object.freeze({
     accounts: Object.freeze([]),
     selectedId: null,
+    authModal: createInitialAuthModalState(),
   });
 }
 
@@ -224,19 +235,110 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
         }),
       });
     case "set-accounts":
+      {
+        const selectedId =
+          state.accounts.selectedId && action.accounts.some((account) => account.id === state.accounts.selectedId)
+            ? state.accounts.selectedId
+            : action.accounts[0]?.id ?? null;
       return Object.freeze({
         ...state,
         accounts: Object.freeze({
           ...state.accounts,
           accounts: action.accounts,
+          selectedId,
         }),
       });
+      }
     case "select-account":
       return Object.freeze({
         ...state,
         accounts: Object.freeze({
           ...state.accounts,
           selectedId: action.id,
+        }),
+      });
+    case "open-auth-modal":
+      return Object.freeze({
+        ...state,
+        accounts: Object.freeze({
+          ...state.accounts,
+          authModal: Object.freeze({
+            isOpen: true,
+            accountId: "",
+            phase: "idle",
+            message: null,
+            flow: null,
+          }),
+        }),
+      });
+    case "close-auth-modal":
+      return Object.freeze({
+        ...state,
+        accounts: Object.freeze({
+          ...state.accounts,
+          authModal: createInitialAuthModalState(),
+        }),
+      });
+    case "set-auth-account-id":
+      return Object.freeze({
+        ...state,
+        accounts: Object.freeze({
+          ...state.accounts,
+          authModal: Object.freeze({
+            ...state.accounts.authModal,
+            accountId: action.accountId,
+            message: null,
+          }),
+        }),
+      });
+    case "auth-start":
+      return Object.freeze({
+        ...state,
+        accounts: Object.freeze({
+          ...state.accounts,
+          authModal: Object.freeze({
+            ...state.accounts.authModal,
+            phase: "initiating",
+            message: action.message,
+            flow: null,
+          }),
+        }),
+      });
+    case "auth-device-flow-ready":
+      return Object.freeze({
+        ...state,
+        accounts: Object.freeze({
+          ...state.accounts,
+          authModal: Object.freeze({
+            ...state.accounts.authModal,
+            phase: "waiting",
+            message: action.message,
+            flow: action.flow,
+          }),
+        }),
+      });
+    case "auth-success":
+      return Object.freeze({
+        ...state,
+        accounts: Object.freeze({
+          ...state.accounts,
+          authModal: Object.freeze({
+            ...state.accounts.authModal,
+            phase: "success",
+            message: action.message,
+          }),
+        }),
+      });
+    case "auth-failure":
+      return Object.freeze({
+        ...state,
+        accounts: Object.freeze({
+          ...state.accounts,
+          authModal: Object.freeze({
+            ...state.accounts.authModal,
+            phase: "failure",
+            message: action.message,
+          }),
         }),
       });
     case "set-usage-days":

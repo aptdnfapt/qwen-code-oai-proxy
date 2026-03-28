@@ -11,7 +11,7 @@ type CaptureSpec = Readonly<{
   name: string;
   cols: number;
   rows: number;
-  keys: string;
+  inputs: readonly string[];
   expectedSnippets: readonly string[];
 }>;
 
@@ -31,29 +31,36 @@ const CAPTURES: readonly CaptureSpec[] = Object.freeze([
     name: "wide",
     cols: 160,
     rows: 40,
-    keys: "[q",
+    inputs: Object.freeze(["[", "q"]),
     expectedSnippets: Object.freeze(["qwen-proxy", "Live", "streams 0", "[>]", "theme Dark"]),
   }),
   Object.freeze({
     name: "narrow",
     cols: 80,
     rows: 24,
-    keys: "q",
+    inputs: Object.freeze(["q"]),
     expectedSnippets: Object.freeze(["QP", "Live", "streams 0", "Tab focus", "theme Dark"]),
   }),
   Object.freeze({
     name: "light",
     cols: 160,
     rows: 40,
-    keys: "tq",
+    inputs: Object.freeze(["t", "q"]),
     expectedSnippets: Object.freeze(["qwen-proxy", "Live", "streams 0", "theme Light", "[<] collapse"]),
   }),
   Object.freeze({
     name: "focus-indicator",
     cols: 160,
     rows: 40,
-    keys: "q",
+    inputs: Object.freeze(["q"]),
     expectedSnippets: Object.freeze(["focus:sidebar", "Tab focus"]),
+  }),
+  Object.freeze({
+    name: "auth-modal",
+    cols: 160,
+    rows: 40,
+    inputs: Object.freeze(["\u001b[B", "\u001b[B", "\r", "a", "\u001b", "q"]),
+    expectedSnippets: Object.freeze(["Accounts", "Add account", "Account ID", "Start auth"]),
   }),
 ]);
 
@@ -90,8 +97,8 @@ async function runCapture(spec: CaptureSpec): Promise<CaptureResult> {
 
   await wait(800);
 
-  for (const key of spec.keys) {
-    child.stdin.write(key);
+  for (const input of spec.inputs) {
+    child.stdin.write(input);
     await wait(400);
   }
 

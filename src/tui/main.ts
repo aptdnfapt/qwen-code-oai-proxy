@@ -1,4 +1,5 @@
 import { exit } from "process";
+import { createRequire } from "module";
 import { createNodeApp } from "@rezi-ui/node";
 import { createKeybindingMap } from "./helpers/keybindings.js";
 import { createRuntimeMonitor } from "./helpers/runtime.js";
@@ -20,6 +21,10 @@ const UI_FPS_CAP = 30;
 const TICK_MS = 1000;
 const initialState = createInitialState();
 const runtimeMonitor = createRuntimeMonitor(initialState.bootMs);
+const require = createRequire(import.meta.url);
+const qrcode = require("qrcode-terminal") as {
+  generate: (text: string, options: { small?: boolean }, callback: (qrText: string) => void) => void;
+};
 
 let app!: ReturnType<typeof createNodeApp<TuiState>>;
 let currentState: TuiState = initialState;
@@ -27,6 +32,25 @@ let tickTimer: ReturnType<typeof setInterval> | null = null;
 let stopping = false;
 let stdinCleanup: (() => void) | null = null;
 let resizeCleanup: (() => void) | null = null;
+let authRunId = 0;
+
+function renderQrText(text: string): Promise<string> {
+  return new Promise((resolve) => {
+    qrcode.generate(text, { small: true }, (qrText: string) => resolve(qrText));
+  });
+}
+
+function validateAccountId(accountId: string): string | null {
+  if (accountId.length === 0) {
+    return "Account ID is required.";
+  }
+
+  if (!/^[a-zA-Z0-9._-]+$/.test(accountId)) {
+    return "Use only letters, numbers, dot, dash, underscore.";
+  }
+
+  return null;
+}
 
 function appendSystemLog(level: "info" | "warn" | "error" | "debug", message: string): void {
   dispatch({
@@ -109,6 +133,80 @@ async function refreshRuntimeSummary(): Promise<void> {
   dispatch({ type: "set-runtime", runtime });
 }
 
+async function refreshAccounts(selectedId?: string | null): Promise<void> {
+  const accounts = await runtimeMonitor.loadAccounts();
+  dispatch({ type: "set-accounts", accounts });
+
+  if (selectedId && accounts.some((account) => account.id === selectedId)) {
+    dispatch({ type: "select-account", id: selectedId });
+  }
+}
+
+function openAuthModal(): void {
+  dispatch({ type: "open-auth-modal" });
+}
+
+function closeAuthModal(): void {
+  authRunId += 1;
+  dispatch({ type: "close-auth-modal" });
+}
+
+async function handleStartAccountAuth(): Promise<void> {
+  const accountId = currentState.accounts.authModal.accountId.trim();
+  const validationError = validateAccountId(accountId);
+
+  if (validationError) {
+    dispatch({ type: "auth-failure", message: validationError });
+    return;
+  }
+
+  const runId = authRunId + 1;
+  authRunId = runId;
+  dispatch({ type: "auth-start", message: "Requesting device code..." });
+  appendSystemLog("info", `Starting auth flow for ${accountId}`);
+
+  try {
+    const flow = await runtimeMonitor.initiateAddAccountFlow();
+    const qrText = await renderQrText(flow.verificationUriComplete);
+
+    if (runId !== authRunId) {
+      return;
+    }
+
+    dispatch({
+      type: "auth-device-flow-ready",
+      message: "Open link or scan QR, then approve in browser.",
+      flow: {
+        verificationUri: flow.verificationUri,
+        verificationUriComplete: flow.verificationUriComplete,
+        userCode: flow.userCode,
+        deviceCode: flow.deviceCode,
+        codeVerifier: flow.codeVerifier,
+        qrText,
+      },
+    });
+
+    await runtimeMonitor.completeAddAccountFlow(flow.deviceCode, flow.codeVerifier, accountId);
+
+    if (runId !== authRunId) {
+      return;
+    }
+
+    await Promise.all([refreshAccounts(accountId), refreshRuntimeSummary()]);
+    dispatch({ type: "auth-success", message: `Account ${accountId} added.` });
+    dispatch({ type: "select-account", id: accountId });
+    appendSystemLog("info", `Account ${accountId} authenticated`);
+  } catch (error: any) {
+    if (runId !== authRunId) {
+      return;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    dispatch({ type: "auth-failure", message });
+    appendSystemLog("error", `Account auth failed: ${message}`);
+  }
+}
+
 async function handleStartServer(): Promise<void> {
   try {
     appendSystemLog("info", "Starting proxy server...");
@@ -173,6 +271,10 @@ function installProcessHooks(): void {
 
   const onData = (chunk: Buffer | string): void => {
     const input = chunk.toString();
+
+    if (currentState.accounts.authModal.isOpen) {
+      return;
+    }
 
     // Quit
     if (input === "q" || input === "Q") {
@@ -241,6 +343,10 @@ function installProcessHooks(): void {
       navigate("help");
       return;
     }
+
+    if ((input === "a" || input === "A") && currentState.activeScreen === "accounts") {
+      openAuthModal();
+    }
   };
 
   process.stdin.on("data", onData);
@@ -276,8 +382,11 @@ app = createNodeApp({
     },
     // Accounts screen callbacks
     onSelectAccount: (id: string | null) => dispatch({ type: "select-account", id }),
-    onAddAccount: () => {
-      // TODO: Open add account modal (5D)
+    onAddAccount: openAuthModal,
+    onCloseAuthModal: closeAuthModal,
+    onAuthAccountIdChange: (accountId: string) => dispatch({ type: "set-auth-account-id", accountId }),
+    onStartAccountAuth: () => {
+      void handleStartAccountAuth();
     },
     onRefreshAccount: (_id: string) => {
       // TODO: Refresh account credentials
@@ -334,6 +443,7 @@ tickTimer = setInterval(() => {
 
 try {
   await refreshRuntimeSummary();
+  await refreshAccounts();
   await app.start();
 } finally {
   if (tickTimer) {

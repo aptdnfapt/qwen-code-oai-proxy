@@ -49,7 +49,7 @@ Users might face errors or 504 Gateway Timeout issues when using contexts with 1
     ```bash
     qwen-proxy serve
     ```
-    This launches the Phase 5 TUI shell scaffold with the shared operator layout.
+    This launches the Phase 5 TUI with live controls, screen navigation, and the Accounts add-account auth modal.
 
 4.  **Start the Server (Headless)**:
     ```bash
@@ -68,7 +68,7 @@ qwen-proxy serve
 qwen-proxy serve --headless
 ```
 
-`qwen-proxy serve` currently opens the Phase 5 shell scaffold; deeper screen features continue to land across later 5B-5F slices.
+`qwen-proxy serve` now opens the Phase 5 operator TUI. The Accounts screen can start a device-code auth flow in-app and shows the verification link, device code, and terminal QR block while waiting.
 
 Fallback utility commands are also available:
 

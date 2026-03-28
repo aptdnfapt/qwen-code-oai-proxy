@@ -26,6 +26,22 @@ The authentication script will:
 3. If expired credentials are found, it will attempt to refresh them automatically
 4. If no credentials exist or refresh fails, it will initiate a new authentication flow
 
+## TUI Add-Account Flow
+
+If you start the operator UI with `qwen-proxy serve`, the Accounts screen now exposes the same device-flow auth path inside the TUI:
+
+1. Open **Accounts**
+2. Choose **Add account**
+3. Enter an account ID
+4. Start auth and complete the verification link / QR code flow shown in the modal
+
+The TUI modal shows:
+
+- verification link
+- device code
+- terminal QR code block
+- live waiting / success / failure state
+
 ## Authentication Flow
 
 When a new authentication flow is initiated, you'll see output similar to:
