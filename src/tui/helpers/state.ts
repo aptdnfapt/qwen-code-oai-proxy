@@ -69,6 +69,7 @@ function createInitialUsageState(): UsageScreenState {
   return Object.freeze({
     days: Object.freeze([]),
     selectedDate: null,
+    filterQuery: "",
   });
 }
 
@@ -342,19 +343,34 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
         }),
       });
     case "set-usage-days":
+      {
+        const selectedDate =
+          state.usage.selectedDate && action.days.some((day) => day.date === state.usage.selectedDate)
+            ? state.usage.selectedDate
+            : action.days[0]?.date ?? null;
       return Object.freeze({
         ...state,
         usage: Object.freeze({
           ...state.usage,
           days: action.days,
+          selectedDate,
         }),
       });
+      }
     case "select-usage-date":
       return Object.freeze({
         ...state,
         usage: Object.freeze({
           ...state.usage,
           selectedDate: action.date,
+        }),
+      });
+    case "set-usage-filter":
+      return Object.freeze({
+        ...state,
+        usage: Object.freeze({
+          ...state.usage,
+          filterQuery: action.value,
         }),
       });
     default:

@@ -2,36 +2,47 @@
 
 ## Overview
 
-The Qwen OpenAI Proxy now includes comprehensive token usage tracking functionality that monitors and reports on input and output token consumption across all accounts and request types.
+The Qwen OpenAI Proxy tracks daily usage in the shared `~/.qwen/request_counts.json` runtime file.
+
+It now tracks not only input/output tokens, but also cache reads, cache writes, and cache type labels used by the TUI Usage screen.
 
 ## Features
 
-- **Daily Token Tracking**: Records input tokens (prompt) and output tokens (completion) for each day
+- **Daily Request + Token Tracking**: Records request count, input tokens, and output tokens per day
 - **Multi-Account Support**: Aggregates token usage across all configured accounts
-- **Streaming & Regular Requests**: Tracks tokens from both streaming and non-streaming API responses
+- **Streaming & Regular Requests**: Tracks usage from both streaming and non-streaming API responses
+- **Cache Metrics**: Records cache read tokens, cache write/create tokens, and cache type labels
 - **Persistent Storage**: Token usage data is stored locally in `~/.qwen/request_counts.json`
-- **Clean Terminal Display**: Beautiful table-based reporting with `npm run auth:tokens`
+- **TUI Usage Screen**: Rezi Usage screen reads the same runtime data shape for summary + table views
 
 ## How It Works
 
 ### Data Collection
-1. **Regular Requests**: Token usage is extracted from the `usage` field in API responses
-2. **Streaming Requests**: Token usage is captured from the final chunk of streaming responses
-3. **Daily Aggregation**: Usage is automatically grouped by date and account
+1. **Regular Requests**: usage is extracted from the upstream `usage` field
+2. **Streaming Requests**: usage is extracted from streamed SSE chunks that include final `usage`
+3. **Cache Fields**: cache metrics are read from `usage.prompt_tokens_details`
+4. **Daily Aggregation**: usage is grouped by date and account
 
 ### Data Storage
-Token usage data is stored in the existing `request_counts.json` file alongside request counts:
+Usage data is stored in the existing `request_counts.json` file alongside request counts:
 ```json
 {
-  "lastResetDate": "2025-08-22",
+  "lastResetDate": "2026-03-28",
   "requests": {
-    "default": 45,
-    "account2": 82
+    "default": 45
   },
   "tokenUsage": {
     "default": [
-      {"date": "2025-08-20", "inputTokens": 12500, "outputTokens": 8300},
-      {"date": "2025-08-21", "inputTokens": 15200, "outputTokens": 9100}
+      {
+        "date": "2026-03-28",
+        "requests": 45,
+        "requestsKnown": true,
+        "inputTokens": 12500,
+        "outputTokens": 8300,
+        "cacheReadTokens": 6400,
+        "cacheWriteTokens": 1800,
+        "cacheTypes": ["ephemeral"]
+      }
     ]
   }
 }
@@ -53,10 +64,32 @@ or
 npm run tokens
 ```
 
-Both commands display a clean table showing:
-- Daily input tokens, output tokens, and totals
-- Overall lifetime totals
-- Total request count
+Both commands display a terminal report showing:
+- daily request counts
+- daily input/output tokens
+- web search counts
+
+The TUI Usage screen additionally shows:
+- cache read tokens
+- cache write/create tokens
+- cache type label
+- derived cache hit rate
+
+### Cache Source Fields
+
+Cache metrics come from real upstream usage payloads:
+
+- `usage.prompt_tokens_details.cached_tokens`
+- `usage.prompt_tokens_details.cache_creation_input_tokens`
+- `usage.prompt_tokens_details.cache_creation.*`
+- `usage.prompt_tokens_details.cache_type`
+
+### Example TUI Meaning
+
+- `cache read` --> tokens served from cache
+- `cache write` --> tokens written/created for cache
+- `cache hit` --> `cache_read / (cache_read + cache_write)`
+- `cache type` --> upstream label like `ephemeral`, or `mixed` when multiple types appear in a day
 
 ### Example Output
 ```
@@ -79,14 +112,16 @@ Total Requests: 127
 ## Technical Implementation
 
 ### Core Components
-- **QwenAPI Class**: Enhanced with token tracking methods
-- **tokens.js**: Terminal display script with table formatting
-- **cli-table3**: npm package for beautiful terminal tables
+- **`src/qwen/api.ts`** --> records request + token + cache metrics
+- **`src/tui/helpers/runtime.ts`** --> aggregates daily usage for the TUI
+- **`src/tui/screens/usage.ts`** --> renders summary, filter, and usage table
+- **`usage.ts`** --> terminal usage report script
 
 ### Key Methods
-- `recordTokenUsage(accountId, inputTokens, outputTokens)`: Records daily token usage
-- `loadRequestCounts()` / `saveRequestCounts()`: Handle persistent storage
-- Daily aggregation automatically combines data from all accounts
+- `recordTokenUsage(accountId, usage)` --> records prompt/completion/cache usage
+- `extractUsageFromSseText(...)` --> extracts final usage from streaming chunks
+- `loadRequestCounts()` / `saveRequestCounts()` --> handles persistent storage
+- `aggregateUsageDays(...)` --> combines daily usage across accounts for the TUI
 
 ## Dependencies
 - `cli-table3`: Terminal table formatting (automatically installed)

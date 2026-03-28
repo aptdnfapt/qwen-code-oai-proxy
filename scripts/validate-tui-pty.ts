@@ -13,6 +13,7 @@ type CaptureSpec = Readonly<{
   rows: number;
   inputs: readonly string[];
   expectedSnippets: readonly string[];
+  fixtureKind?: "usage-cache";
 }>;
 
 type CaptureResult = Readonly<{
@@ -62,6 +63,22 @@ const CAPTURES: readonly CaptureSpec[] = Object.freeze([
     inputs: Object.freeze(["\u001b[B", "\u001b[B", "\r", "a", "\u001b", "q"]),
     expectedSnippets: Object.freeze(["Accounts", "Add account", "Account ID", "Start auth"]),
   }),
+  Object.freeze({
+    name: "usage-cache-metrics",
+    cols: 160,
+    rows: 40,
+    inputs: Object.freeze(["\u001b[B", "\u001b[B", "\u001b[B", "\r", "q"]),
+    expectedSnippets: Object.freeze(["Usage", "cache read 900", "cache write 300", "cache type ephemeral", "Today:  req 4"]),
+    fixtureKind: "usage-cache",
+  }),
+  Object.freeze({
+    name: "usage-cache-metrics-light",
+    cols: 160,
+    rows: 40,
+    inputs: Object.freeze(["t", "\u001b[B", "\u001b[B", "\u001b[B", "\r", "q"]),
+    expectedSnippets: Object.freeze(["Usage", "theme Light", "cache read 900", "cache type ephemeral", "Today:  req 4"]),
+    fixtureKind: "usage-cache",
+  }),
 ]);
 
 function wait(ms: number): Promise<void> {
@@ -78,8 +95,70 @@ function createTempPaths(name: string): { rawPath: string; auditPath: string } {
   };
 }
 
+function createUsageFixtureHome(name: string): string {
+  const baseDir = fs.mkdtempSync(nodePath.join(os.tmpdir(), `qwen-tui-fixture-${name}-`));
+  const qwenDir = nodePath.join(baseDir, ".qwen");
+  fs.mkdirSync(qwenDir, { recursive: true });
+
+  const today = new Date().toISOString().split("T")[0] as string;
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0] as string;
+
+  fs.writeFileSync(
+    nodePath.join(qwenDir, "oauth_creds.json"),
+    JSON.stringify(
+      {
+        access_token: "fixture-token",
+        expiry_date: Date.now() + 60 * 60 * 1000,
+      },
+      null,
+      2,
+    ),
+  );
+
+  fs.writeFileSync(
+    nodePath.join(qwenDir, "request_counts.json"),
+    JSON.stringify(
+      {
+        lastResetDate: today,
+        requests: {
+          default: 4,
+        },
+        tokenUsage: {
+          default: [
+            {
+              date: today,
+              requests: 4,
+              requestsKnown: true,
+              inputTokens: 1200,
+              outputTokens: 640,
+              cacheReadTokens: 900,
+              cacheWriteTokens: 300,
+              cacheTypes: ["ephemeral"],
+            },
+            {
+              date: yesterday,
+              requests: 2,
+              requestsKnown: true,
+              inputTokens: 600,
+              outputTokens: 220,
+              cacheReadTokens: 120,
+              cacheWriteTokens: 80,
+              cacheTypes: ["mixed"],
+            },
+          ],
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  return baseDir;
+}
+
 async function runCapture(spec: CaptureSpec): Promise<CaptureResult> {
   const paths = createTempPaths(spec.name);
+  const fixtureHome = spec.fixtureKind === "usage-cache" ? createUsageFixtureHome(spec.name) : null;
   const command = [
     `stty rows ${spec.rows} cols ${spec.cols}`,
     `REZI_FRAME_AUDIT=1 REZI_FRAME_AUDIT_LOG=${paths.auditPath} node ${DIST_TUI_ENTRY}`,
@@ -87,6 +166,7 @@ async function runCapture(spec: CaptureSpec): Promise<CaptureResult> {
 
   const child = childProcess.spawn("script", ["-qefc", command, paths.rawPath], {
     cwd: PROJECT_ROOT,
+    env: fixtureHome ? { ...process.env, HOME: fixtureHome } : process.env,
     stdio: ["pipe", "ignore", "pipe"],
   });
 

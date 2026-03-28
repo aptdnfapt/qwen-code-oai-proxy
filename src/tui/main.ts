@@ -142,6 +142,11 @@ async function refreshAccounts(selectedId?: string | null): Promise<void> {
   }
 }
 
+async function refreshUsage(): Promise<void> {
+  const days = await runtimeMonitor.loadUsage();
+  dispatch({ type: "set-usage-days", days });
+}
+
 function openAuthModal(): void {
   dispatch({ type: "open-auth-modal" });
 }
@@ -396,6 +401,7 @@ app = createNodeApp({
     },
     // Usage screen callbacks
     onSelectUsageDate: (date: string | null) => dispatch({ type: "select-usage-date", date }),
+    onUsageFilterChange: (value: string) => dispatch({ type: "set-usage-filter", value }),
     // Settings screen callbacks
     onThemeChange: (theme: ThemeName) => {
       dispatch({ type: "cycle-theme" });
@@ -439,11 +445,11 @@ tickTimer = setInterval(() => {
     rows: process.stdout.rows ?? initialState.viewportRows,
   });
   void refreshRuntimeSummary();
+  void refreshUsage();
 }, TICK_MS);
 
 try {
-  await refreshRuntimeSummary();
-  await refreshAccounts();
+  await Promise.all([refreshRuntimeSummary(), refreshAccounts(), refreshUsage()]);
   await app.start();
 } finally {
   if (tickTimer) {

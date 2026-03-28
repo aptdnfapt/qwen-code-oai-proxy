@@ -168,3 +168,44 @@ test("reducer keeps selected account when account list refreshes", () => {
 
   assert.equal(refreshed.accounts.selectedId, "ops");
 });
+
+test("reducer keeps usage selection and updates filter", () => {
+  let state = createInitialState(1000);
+  state = reduceTuiState(state, {
+    type: "set-usage-days",
+    days: Object.freeze([
+      Object.freeze({
+        date: "2026-03-28",
+        requests: 5,
+        requestsKnown: true,
+        requestFloor: 5,
+        inputTokens: 100,
+        outputTokens: 50,
+        cacheReadTokens: 25,
+        cacheWriteTokens: 5,
+        cacheTypeLabel: "ephemeral",
+        cacheHitRate: 25 / 30,
+      }),
+      Object.freeze({
+        date: "2026-03-27",
+        requests: 3,
+        requestsKnown: true,
+        requestFloor: 3,
+        inputTokens: 80,
+        outputTokens: 40,
+        cacheReadTokens: 10,
+        cacheWriteTokens: 10,
+        cacheTypeLabel: "mixed",
+        cacheHitRate: 0.5,
+      }),
+    ]),
+  });
+
+  assert.equal(state.usage.selectedDate, "2026-03-28");
+
+  state = reduceTuiState(state, { type: "select-usage-date", date: "2026-03-27" });
+  state = reduceTuiState(state, { type: "set-usage-filter", value: "ephemeral" });
+
+  assert.equal(state.usage.selectedDate, "2026-03-27");
+  assert.equal(state.usage.filterQuery, "ephemeral");
+});

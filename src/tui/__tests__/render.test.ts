@@ -5,6 +5,7 @@ import { createTestRenderer } from "@rezi-ui/core";
 import { createInitialState, reduceTuiState } from "../helpers/state.js";
 import { renderAccountsScreen } from "../screens/accounts.js";
 import { renderLiveScreen } from "../screens/live.js";
+import { renderUsageScreen } from "../screens/usage.js";
 import { themeSpec } from "../theme.js";
 import type { LogLevel, ScreenId, ScreenRouteDeps, TuiState } from "../types.js";
 
@@ -46,6 +47,11 @@ type AccountsScreenDeps = ScreenRouteDeps & {
   onRemoveAccount: (id: string) => void;
 };
 
+type UsageScreenDeps = ScreenRouteDeps & {
+  onSelectDate: (date: string | null) => void;
+  onFilterChange: (value: string) => void;
+};
+
 function createLiveDeps(): LiveScreenDeps {
   return {
     onNavigate: () => {},
@@ -69,6 +75,15 @@ function createAccountsDeps(): AccountsScreenDeps {
     onStartAccountAuth: () => {},
     onRefreshAccount: () => {},
     onRemoveAccount: () => {},
+  };
+}
+
+function createUsageDeps(): UsageScreenDeps {
+  return {
+    onNavigate: () => {},
+    onToggleSidebar: () => {},
+    onSelectDate: () => {},
+    onFilterChange: () => {},
   };
 }
 
@@ -162,4 +177,84 @@ test("accounts screen shows auth modal with waiting details", () => {
   assert.match(output, /ABCD-EFGH/);
   assert.match(output, /Verification link/);
   assert.match(output, /Working\.\.\./);
+});
+
+test("usage screen renders cache metrics, cache type, and filter", () => {
+  const today = new Date().toISOString().split("T")[0] as string;
+  let state = createInitialState(1000);
+  state = reduceTuiState(state, {
+    type: "set-usage-days",
+    days: Object.freeze([
+      Object.freeze({
+        date: today,
+        requests: 12,
+        requestsKnown: true,
+        requestFloor: 12,
+        inputTokens: 1200,
+        outputTokens: 640,
+        cacheReadTokens: 900,
+        cacheWriteTokens: 300,
+        cacheTypeLabel: "ephemeral",
+        cacheHitRate: 0.75,
+      }),
+      Object.freeze({
+        date: "2026-03-27",
+        requests: 7,
+        requestsKnown: true,
+        requestFloor: 7,
+        inputTokens: 700,
+        outputTokens: 320,
+        cacheReadTokens: 100,
+        cacheWriteTokens: 100,
+        cacheTypeLabel: "mixed",
+        cacheHitRate: 0.5,
+      }),
+    ]),
+  });
+  state = reduceTuiState(state, { type: "set-usage-filter", value: today });
+
+  const renderer = createTestRenderer({ viewport: { cols: 160, rows: 40 } });
+  const output = renderer.render(renderUsageScreen(createContext(state, "usage"), createUsageDeps())).toText();
+
+  assert.match(output, /Search \/ fi/);
+  assert.match(output, /cache read 900/);
+  assert.match(output, /cache write 300/);
+  assert.match(output, /cache type ephemeral/);
+  assert.match(output, /Today:/);
+  assert.match(output, /75%/);
+  assert.match(output, new RegExp(today.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(output, /2026-03-27/);
+});
+
+test("usage screen renders under the light theme", () => {
+  const today = new Date().toISOString().split("T")[0] as string;
+  let state = createInitialState(1000);
+  state = reduceTuiState(state, { type: "cycle-theme" });
+  state = reduceTuiState(state, {
+    type: "set-usage-days",
+    days: Object.freeze([
+      Object.freeze({
+        date: today,
+        requests: 2,
+        requestsKnown: true,
+        requestFloor: 2,
+        inputTokens: 40,
+        outputTokens: 20,
+        cacheReadTokens: 10,
+        cacheWriteTokens: 5,
+        cacheTypeLabel: "ephemeral",
+        cacheHitRate: 10 / 15,
+      }),
+    ]),
+  });
+
+  const renderer = createTestRenderer({
+    viewport: { cols: 160, rows: 40 },
+    theme: themeSpec(state.themeName).theme,
+  });
+  const output = renderer.render(renderUsageScreen(createContext(state, "usage"), createUsageDeps())).toText();
+
+  assert.match(output, /theme Light/);
+  assert.match(output, /Today:/);
+  assert.match(output, /cache type ephemeral/);
 });

@@ -67,10 +67,13 @@ export type AccountsAuthModalState = Readonly<{
 export type UsageDay = Readonly<{
   date: string;
   requests: number;
+  requestsKnown: boolean;
+  requestFloor: number;
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
+  cacheTypeLabel: string;
   cacheHitRate: number;
 }>;
 
@@ -149,6 +152,7 @@ export type AccountsScreenState = Readonly<{
 export type UsageScreenState = Readonly<{
   days: readonly UsageDay[];
   selectedDate: string | null;
+  filterQuery: string;
 }>;
 
 export type TuiState = Readonly<{
@@ -200,7 +204,8 @@ export type TuiAction =
   | Readonly<{ type: "auth-success"; message: string }>
   | Readonly<{ type: "auth-failure"; message: string }>
   | Readonly<{ type: "set-usage-days"; days: readonly UsageDay[] }>
-  | Readonly<{ type: "select-usage-date"; date: string | null }>;
+  | Readonly<{ type: "select-usage-date"; date: string | null }>
+  | Readonly<{ type: "set-usage-filter"; value: string }>;
 
 export type ScreenRouteDeps = Readonly<{
   onNavigate: (screen: ScreenId) => void;

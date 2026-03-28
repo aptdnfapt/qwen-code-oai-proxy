@@ -47,8 +47,13 @@ const QWEN_MODELS = [
 
 type RequestUsageEntry = {
   date: string;
+  requests: number;
+  requestsKnown: boolean;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  cacheTypes: string[];
 };
 
 type AccountInfo = {
@@ -329,6 +334,106 @@ function parseJsonResponseBody(rawBody: unknown, context: string): any {
   }
 }
 
+function asNonNegativeNumber(value: unknown): number {
+  const num = typeof value === "number" ? value : Number(value ?? 0);
+  if (!Number.isFinite(num) || num <= 0) {
+    return 0;
+  }
+  return num;
+}
+
+function resolveCacheWriteTokens(details: any): number {
+  const directValue = asNonNegativeNumber(details?.cache_creation_input_tokens);
+  if (directValue > 0) {
+    return directValue;
+  }
+
+  const buckets = details?.cache_creation;
+  if (!buckets || typeof buckets !== "object") {
+    return 0;
+  }
+
+  return Object.values(buckets as Record<string, unknown>).reduce<number>(
+    (total, value) => total + asNonNegativeNumber(value),
+    0,
+  );
+}
+
+function resolveCacheType(details: any): string | null {
+  if (typeof details?.cache_type === "string" && details.cache_type.trim().length > 0) {
+    return details.cache_type.trim();
+  }
+
+  const buckets = details?.cache_creation;
+  if (!buckets || typeof buckets !== "object") {
+    return null;
+  }
+
+  const bucketKeys = Object.entries(buckets)
+    .filter(([, value]) => asNonNegativeNumber(value) > 0)
+    .map(([key]) => key.replace(/_input_tokens$/, ""));
+
+  if (bucketKeys.length === 0) {
+    return null;
+  }
+
+  if (bucketKeys.length === 1) {
+    return bucketKeys[0];
+  }
+
+  return "mixed";
+}
+
+function extractUsageMetrics(usage: any): {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  cacheType: string | null;
+} {
+  const details = usage?.prompt_tokens_details;
+  return {
+    inputTokens: asNonNegativeNumber(usage?.prompt_tokens),
+    outputTokens: asNonNegativeNumber(usage?.completion_tokens),
+    cacheReadTokens: asNonNegativeNumber(details?.cached_tokens),
+    cacheWriteTokens: resolveCacheWriteTokens(details),
+    cacheType: resolveCacheType(details),
+  };
+}
+
+export function extractUsageFromSseText(
+  buffer: string,
+  latestUsage: any,
+): { buffer: string; latestUsage: any } {
+  const lines = buffer.split("\n");
+  const remainder = lines.pop() || "";
+  let nextLatestUsage = latestUsage;
+
+  for (const line of lines) {
+    if (!line.startsWith("data: ")) {
+      continue;
+    }
+
+    const payloadLine = line.slice(6);
+    if (payloadLine === "[DONE]") {
+      continue;
+    }
+
+    try {
+      const parsed = JSON.parse(payloadLine) as any;
+      if (parsed?.usage) {
+        nextLatestUsage = parsed.usage;
+      }
+    } catch {
+    }
+  }
+
+  return {
+    buffer: remainder,
+    latestUsage: nextLatestUsage,
+  };
+}
+
 export class QwenAPI {
   authManager: any;
   requestCount: Map<string, number>;
@@ -376,7 +481,10 @@ export class QwenAPI {
 
       if (counts.tokenUsage) {
         for (const [accountId, usageData] of Object.entries(counts.tokenUsage)) {
-          this.tokenUsage.set(accountId, usageData as RequestUsageEntry[]);
+          const normalizedUsage = Array.isArray(usageData)
+            ? usageData.map((entry) => this.normalizeUsageEntry(entry, String(entry?.date || this.lastResetDate)))
+            : [];
+          this.tokenUsage.set(accountId, normalizedUsage);
         }
       }
 
@@ -450,6 +558,52 @@ export class QwenAPI {
     }
   }
 
+  normalizeUsageEntry(entry: any, date: string): RequestUsageEntry {
+    const cacheTypes = Array.isArray(entry?.cacheTypes)
+      ? entry.cacheTypes.filter((value: unknown): value is string => typeof value === "string" && value.length > 0)
+      : typeof entry?.cacheType === "string" && entry.cacheType.length > 0
+        ? [entry.cacheType]
+        : [];
+
+    return {
+      date,
+      requests: asNonNegativeNumber(entry?.requests),
+      requestsKnown: typeof entry?.requests === "number" || entry?.requestsKnown === true,
+      inputTokens: asNonNegativeNumber(entry?.inputTokens),
+      outputTokens: asNonNegativeNumber(entry?.outputTokens),
+      cacheReadTokens: asNonNegativeNumber(entry?.cacheReadTokens),
+      cacheWriteTokens: asNonNegativeNumber(entry?.cacheWriteTokens),
+      cacheTypes: Array.from(new Set<string>(cacheTypes)),
+    };
+  }
+
+  ensureUsageEntry(accountId: string, date: string): RequestUsageEntry {
+    if (!this.tokenUsage.has(accountId)) {
+      this.tokenUsage.set(accountId, []);
+    }
+
+    const accountUsage = this.tokenUsage.get(accountId) as RequestUsageEntry[];
+    const existingIndex = accountUsage.findIndex((entry) => entry.date === date);
+    if (existingIndex >= 0) {
+      const normalized = this.normalizeUsageEntry(accountUsage[existingIndex], date);
+      accountUsage[existingIndex] = normalized;
+      return normalized;
+    }
+
+    const nextEntry: RequestUsageEntry = {
+      date,
+      requests: 0,
+      requestsKnown: true,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      cacheTypes: [],
+    };
+    accountUsage.push(nextEntry);
+    return nextEntry;
+  }
+
   async incrementWebSearchRequestCount(accountId: string): Promise<void> {
     const currentCount = this.webSearchRequestCounts.get(accountId) || 0;
     this.webSearchRequestCounts.set(accountId, currentCount + 1);
@@ -472,29 +626,25 @@ export class QwenAPI {
 
   async incrementRequestCount(accountId: string): Promise<void> {
     this.resetRequestCountsIfNeeded();
+    const currentDate = new Date().toISOString().split("T")[0] as string;
     const currentCount = this.requestCount.get(accountId) || 0;
     this.requestCount.set(accountId, currentCount + 1);
+    const usageEntry = this.ensureUsageEntry(accountId, currentDate);
+    usageEntry.requests += 1;
     this.scheduleSave();
   }
 
-  async recordTokenUsage(accountId: string, inputTokens: number, outputTokens: number): Promise<void> {
+  async recordTokenUsage(accountId: string, usage: any): Promise<void> {
     try {
       const currentDate = new Date().toISOString().split("T")[0] as string;
-      if (!this.tokenUsage.has(accountId)) {
-        this.tokenUsage.set(accountId, []);
-      }
-
-      const accountUsage = this.tokenUsage.get(accountId) as RequestUsageEntry[];
-      let todayEntry = accountUsage.find((entry) => entry.date === currentDate);
-      if (todayEntry) {
-        todayEntry.inputTokens += inputTokens;
-        todayEntry.outputTokens += outputTokens;
-      } else {
-        accountUsage.push({
-          date: currentDate,
-          inputTokens,
-          outputTokens,
-        });
+      const metrics = extractUsageMetrics(usage);
+      const todayEntry = this.ensureUsageEntry(accountId, currentDate);
+      todayEntry.inputTokens += metrics.inputTokens;
+      todayEntry.outputTokens += metrics.outputTokens;
+      todayEntry.cacheReadTokens += metrics.cacheReadTokens;
+      todayEntry.cacheWriteTokens += metrics.cacheWriteTokens;
+      if (metrics.cacheType && !todayEntry.cacheTypes.includes(metrics.cacheType)) {
+        todayEntry.cacheTypes.push(metrics.cacheType);
       }
 
       this.scheduleSave();
@@ -672,7 +822,7 @@ export class QwenAPI {
       async (accountId, response) => {
         await this.incrementRequestCount(accountId);
         if (response && response.usage) {
-          await this.recordTokenUsage(accountId, response.usage.prompt_tokens || 0, response.usage.completion_tokens || 0);
+          await this.recordTokenUsage(accountId, response.usage);
         }
       },
     );
@@ -771,7 +921,21 @@ export class QwenAPI {
         httpsAgent,
       });
       const stream = new PassThrough();
+      let usageBuffer = "";
+      let latestUsage: any = null;
+      const usagePromise = new Promise<any>((resolve) => {
+        response.data.on("data", (chunk: Buffer) => {
+          usageBuffer += chunk.toString();
+          const parsed = extractUsageFromSseText(usageBuffer, latestUsage);
+          usageBuffer = parsed.buffer;
+          latestUsage = parsed.latestUsage;
+        });
+
+        response.data.on("end", () => resolve(latestUsage));
+        response.data.on("error", () => resolve(latestUsage));
+      });
       response.data.pipe(stream);
+      (stream as any).usagePromise = usagePromise;
       return stream;
     } catch (error: any) {
       throw await attachUpstreamErrorDetails(error);
@@ -785,8 +949,13 @@ export class QwenAPI {
     return await this.executeWithAccountRotation(
       configuredAccounts,
       async (accountInfo) => await this.processStreamingRequestWithAccount(request, accountInfo),
-      async (accountId) => {
+      async (accountId: string, response: any) => {
         await this.incrementRequestCount(accountId);
+        if (response?.usagePromise) {
+          void response.usagePromise
+            .then((usage: any) => (usage ? this.recordTokenUsage(accountId, usage) : null))
+            .catch(() => null);
+        }
       },
     );
   }

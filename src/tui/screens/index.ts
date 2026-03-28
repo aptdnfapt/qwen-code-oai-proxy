@@ -35,6 +35,7 @@ export type ExtendedScreenRouteDeps = ScreenRouteDeps &
     onRemoveAccount: (id: string) => void;
     // Usage screen
     onSelectUsageDate: (date: string | null) => void;
+    onUsageFilterChange: (value: string) => void;
     // Settings screen
     onThemeChange: (theme: ThemeName) => void;
     onSidebarModeChange: (mode: SidebarMode) => void;
@@ -94,6 +95,7 @@ export function createTuiRoutes(deps: ExtendedScreenRouteDeps): readonly TuiRout
           onNavigate: deps.onNavigate,
           onToggleSidebar: deps.onToggleSidebar,
           onSelectDate: deps.onSelectUsageDate,
+          onFilterChange: deps.onUsageFilterChange,
         }),
     },
     {

@@ -1,5 +1,5 @@
 import { createRequire } from "module";
-import type { AccountInfo, LogLevel, RotationMode, RuntimeSummary, ServerState } from "../types.js";
+import type { AccountInfo, LogLevel, RotationMode, RuntimeSummary, ServerState, UsageDay } from "../types.js";
 
 type ConfigModule = {
   host?: string;
@@ -25,6 +25,18 @@ type AuthManagerLike = {
 type QwenApiLike = {
   authManager: AuthManagerLike;
   requestCount: Map<string, number>;
+  lastResetDate: string;
+  tokenUsage: Map<string, Array<{
+    date: string;
+    requests?: number;
+    requestsKnown?: boolean;
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+    cacheTypes?: string[];
+    cacheType?: string;
+  }>>;
   loadRequestCounts: () => Promise<void>;
 };
 
@@ -70,9 +82,142 @@ function sumRequestCounts(requestCounts: Map<string, number>): number {
   return Array.from(requestCounts.values()).reduce((total, count) => total + count, 0);
 }
 
+function asCount(value: unknown): number {
+  const num = typeof value === "number" ? value : Number(value ?? 0);
+  if (!Number.isFinite(num) || num <= 0) {
+    return 0;
+  }
+  return num;
+}
+
+function resolveCacheTypes(value: { cacheTypes?: string[]; cacheType?: string }): string[] {
+  if (Array.isArray(value.cacheTypes)) {
+    return value.cacheTypes.filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
+  }
+
+  if (typeof value.cacheType === "string" && value.cacheType.length > 0) {
+    return [value.cacheType];
+  }
+
+  return [];
+}
+
+function resolveCacheTypeLabel(cacheTypes: Set<string>): string {
+  if (cacheTypes.size === 0) {
+    return "--";
+  }
+
+  if (cacheTypes.size === 1) {
+    return Array.from(cacheTypes)[0] ?? "--";
+  }
+
+  return "mixed";
+}
+
+export function aggregateUsageDays(
+  tokenUsage: Map<string, Array<{
+    date: string;
+    requests?: number;
+    requestsKnown?: boolean;
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+    cacheTypes?: string[];
+    cacheType?: string;
+  }>>,
+  requestCounts: Map<string, number>,
+  lastResetDate: string,
+): readonly UsageDay[] {
+  const days = new Map<string, {
+    date: string;
+    requests: number;
+    requestsKnown: boolean;
+    requestFloor: number;
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    cacheTypes: Set<string>;
+  }>();
+
+  for (const usageEntries of tokenUsage.values()) {
+    for (const entry of usageEntries) {
+      const date = String(entry?.date ?? "");
+      if (date.length === 0) {
+        continue;
+      }
+
+      if (!days.has(date)) {
+        days.set(date, {
+          date,
+          requests: 0,
+          requestsKnown: true,
+          requestFloor: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          cacheTypes: new Set<string>(),
+        });
+      }
+
+      const day = days.get(date);
+      if (!day) {
+        continue;
+      }
+
+      const requestsKnown = entry?.requestsKnown !== false && typeof entry?.requests === "number";
+      const requestFloor =
+        asCount(entry?.inputTokens) > 0 ||
+        asCount(entry?.outputTokens) > 0 ||
+        asCount(entry?.cacheReadTokens) > 0 ||
+        asCount(entry?.cacheWriteTokens) > 0
+          ? 1
+          : 0;
+      day.requestsKnown = day.requestsKnown && requestsKnown;
+      day.requests += asCount(entry?.requests);
+      day.requestFloor += requestFloor;
+      day.inputTokens += asCount(entry?.inputTokens);
+      day.outputTokens += asCount(entry?.outputTokens);
+      day.cacheReadTokens += asCount(entry?.cacheReadTokens);
+      day.cacheWriteTokens += asCount(entry?.cacheWriteTokens);
+      for (const cacheType of resolveCacheTypes(entry)) {
+        day.cacheTypes.add(cacheType);
+      }
+    }
+  }
+
+  return Object.freeze(
+    Array.from(days.values())
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map((day) => {
+        if (day.date === lastResetDate && !day.requestsKnown) {
+          day.requests = sumRequestCounts(requestCounts);
+          day.requestsKnown = true;
+        }
+
+        const cacheTotal = day.cacheReadTokens + day.cacheWriteTokens;
+        return Object.freeze({
+          date: day.date,
+          requests: day.requests,
+          requestsKnown: day.requestsKnown,
+          requestFloor: day.requestFloor,
+          inputTokens: day.inputTokens,
+          outputTokens: day.outputTokens,
+          cacheReadTokens: day.cacheReadTokens,
+          cacheWriteTokens: day.cacheWriteTokens,
+          cacheTypeLabel: resolveCacheTypeLabel(day.cacheTypes),
+          cacheHitRate: cacheTotal > 0 ? day.cacheReadTokens / cacheTotal : 0,
+        });
+      }),
+  );
+}
+
 export function createRuntimeMonitor(_bootMs: number): {
   refresh: () => Promise<RuntimeSummary>;
   loadAccounts: () => Promise<readonly AccountInfo[]>;
+  loadUsage: () => Promise<readonly UsageDay[]>;
   initiateAddAccountFlow: () => Promise<{
     deviceCode: string;
     userCode: string;
@@ -140,6 +285,10 @@ export function createRuntimeMonitor(_bootMs: number): {
     },
     async loadAccounts(): Promise<readonly AccountInfo[]> {
       return buildAccounts();
+    },
+    async loadUsage(): Promise<readonly UsageDay[]> {
+      await qwenAPI.loadRequestCounts();
+      return aggregateUsageDays(qwenAPI.tokenUsage, qwenAPI.requestCount, qwenAPI.lastResetDate);
     },
     async initiateAddAccountFlow(): Promise<{
       deviceCode: string;
