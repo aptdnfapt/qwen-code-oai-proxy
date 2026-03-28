@@ -26,6 +26,92 @@ const qrcode = require("qrcode-terminal") as {
   generate: (text: string, options: { small?: boolean }, callback: (qrText: string) => void) => void;
 };
 
+// Strip ANSI escape codes and carriage returns so raw terminal sequences
+// don't appear as garbage in the TUI log panel.
+const ANSI_RE = /\x1b\[[0-9;]*[mGKHFABCDJsuhl]/g;
+function stripAnsi(text: string): string {
+  return text.replace(ANSI_RE, "").replace(/\r/g, "").trim();
+}
+
+// Intercept process.stdout.write so that NOTHING — not winston, not
+// console.log, not any third-party logger — can write raw bytes to the
+// terminal while the TUI owns it.  All text is funnelled into the TUI's
+// logsConsole dispatch instead.
+function installStdoutCapture(): void {
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  let lineBuffer = "";
+
+  function flushLine(line: string): void {
+    const message = stripAnsi(line);
+    if (!message) return;
+    dispatch({
+      type: "append-log",
+      entry: {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        timestamp: Date.now(),
+        level: "info",
+        message,
+        source: "server",
+      },
+    });
+  }
+
+  // Wrap write — accumulate partial lines, emit on newline.
+  (process.stdout.write as any) = (chunk: string | Buffer, encodingOrCb?: unknown, cb?: unknown): boolean => {
+    const text = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
+    lineBuffer += text;
+    const parts = lineBuffer.split("\n");
+    // Everything except the last element is a complete line
+    for (let i = 0; i < parts.length - 1; i++) {
+      flushLine(parts[i]);
+    }
+    lineBuffer = parts[parts.length - 1];
+
+    // Call the original callback if provided (node stream protocol)
+    const callback = typeof encodingOrCb === "function" ? encodingOrCb : cb;
+    if (typeof callback === "function") {
+      (callback as () => void)();
+    }
+    return true;
+  };
+
+  // Also capture stderr the same way (some loggers write there)
+  const originalErrWrite = process.stderr.write.bind(process.stderr);
+  let errBuffer = "";
+
+  (process.stderr.write as any) = (chunk: string | Buffer, encodingOrCb?: unknown, cb?: unknown): boolean => {
+    const text = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
+    errBuffer += text;
+    const parts = errBuffer.split("\n");
+    for (let i = 0; i < parts.length - 1; i++) {
+      const message = stripAnsi(parts[i]);
+      if (message) {
+        dispatch({
+          type: "append-log",
+          entry: {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            timestamp: Date.now(),
+            level: "error",
+            message,
+            source: "server",
+          },
+        });
+      }
+    }
+    errBuffer = parts[parts.length - 1];
+
+    const callback = typeof encodingOrCb === "function" ? encodingOrCb : cb;
+    if (typeof callback === "function") {
+      (callback as () => void)();
+    }
+    return true;
+  };
+
+  // Keep a reference to originals so the TUI renderer can still use them
+  (process.stdout as any).__tuiOriginalWrite = originalWrite;
+  (process.stderr as any).__tuiOriginalWrite = originalErrWrite;
+}
+
 let app!: ReturnType<typeof createNodeApp<TuiState>>;
 let currentState: TuiState = initialState;
 let tickTimer: ReturnType<typeof setInterval> | null = null;
@@ -347,6 +433,7 @@ app.keys(
 );
 
 installResizeHook();
+installStdoutCapture();
 
 tickTimer = setInterval(() => {
   dispatch({ type: "tick", nowMs: Date.now() });

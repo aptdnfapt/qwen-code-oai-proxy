@@ -102,10 +102,6 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
       return Object.freeze({
         ...state,
         nowMs: action.nowMs,
-        runtime: Object.freeze({
-          ...state.runtime,
-          uptimeMs: Math.max(0, action.nowMs - state.bootMs),
-        }),
       });
     case "set-viewport":
       return Object.freeze({
@@ -136,10 +132,7 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
     case "set-runtime":
       return Object.freeze({
         ...state,
-        runtime: Object.freeze({
-          ...action.runtime,
-          uptimeMs: Math.max(0, state.nowMs - state.bootMs),
-        }),
+        runtime: Object.freeze({ ...action.runtime }),
       });
     case "request-quit":
       return Object.freeze({
