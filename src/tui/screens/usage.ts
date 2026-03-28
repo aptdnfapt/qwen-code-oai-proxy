@@ -71,7 +71,11 @@ function buildUsageTable(deps: UsageBodyDeps): VNode {
   const days = state.usage.days;
 
   if (days.length === 0) {
-    return ui.callout("Usage data will appear here after requests are processed.", { variant: "info" });
+    return ui.column({ gap: 1 }, [
+      ui.text("No usage data yet", { variant: "heading" }),
+      ui.divider({ color: "muted" }),
+      ui.text("Usage data will appear here after requests are processed.", { variant: "caption" }),
+    ]);
   }
 
   const tableData = days.map((day) => ({
@@ -86,6 +90,7 @@ function buildUsageTable(deps: UsageBodyDeps): VNode {
 
   return ui.table({
     id: "usage-table",
+    border: "none",
     columns: [
       { key: "date", header: "Date", width: 12 },
       { key: "requests", header: "Req", width: 6, align: "right" },

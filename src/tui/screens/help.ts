@@ -87,9 +87,9 @@ function buildTroubleshooting(): VNode {
   return ui.column({ gap: 1 }, [
     ui.text("Troubleshooting", { variant: "heading" }),
     ui.divider({ color: "muted" }),
-    ui.callout("Auth expired? Refresh the account or re-authenticate.", { variant: "warning" }),
-    ui.callout("No logs? Check DEBUG_LOG=true in your environment.", { variant: "info" }),
-    ui.callout("Port conflict? Set PORT=<number> in .env or environment.", { variant: "info" }),
+    ui.text("Auth expired? Refresh the account or re-authenticate.", { variant: "caption" }),
+    ui.text("No logs? Check DEBUG_LOG=true in your environment.", { variant: "caption" }),
+    ui.text("Port conflict? Set PORT=<number> in environment.", { variant: "caption" }),
   ]);
 }
 

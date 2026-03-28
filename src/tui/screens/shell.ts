@@ -27,12 +27,22 @@ function statusLabel(status: TuiState["runtime"]["status"]): string {
   return status === "ready" ? "READY" : "NO AUTH";
 }
 
+function serverVariant(serverState: TuiState["runtime"]["serverState"]): "success" | "warning" | "info" {
+  if (serverState === "running") return "success";
+  if (serverState === "stopped") return "warning";
+  return "info";
+}
+
 function formatStreamCount(streamCount: TuiState["runtime"]["streamCount"]): string {
   return String(streamCount);
 }
 
 function navIcon(item: NavItem, useFallback: boolean): string {
   return useFallback ? item.fallbackIcon : item.nerdIcon;
+}
+
+function padSidebarLabel(label: string, width: number): string {
+  return label.padEnd(width, " ");
 }
 
 function activeNavItem(screen: ScreenId): NavItem {
@@ -50,7 +60,7 @@ function renderSidebar(options: ShellOptions): VNode {
     const isActive = state.activeScreen === item.id;
     const isSelected = index === state.sidebarIndex && sidebarFocused;
     const prefix = isSelected ? ">" : " ";
-    const label = collapsed ? icon : `${prefix}${icon} ${item.title}`;
+    const label = collapsed ? padSidebarLabel(icon, 3) : padSidebarLabel(`${prefix}${icon} ${item.title}`, 18);
     return ui.button({
       id: `sidebar-${item.id}`,
       label,
@@ -74,7 +84,7 @@ function renderSidebar(options: ShellOptions): VNode {
         ui.spacer({ flex: 1 }),
         ui.button({
           id: "sidebar-toggle",
-          label: collapsed ? "[>]" : "[<] collapse",
+          label: collapsed ? padSidebarLabel("[>]", 3) : padSidebarLabel("[<] collapse", 18),
           intent: "link",
           onPress: options.onToggleSidebar,
         }),
@@ -88,6 +98,7 @@ function renderHeader(state: TuiState): VNode {
   const compact = state.viewportCols <= 100;
 
   const primary = ui.row({ gap: 1, items: "center", wrap: true }, [
+    ui.badge(runtime.serverState.toUpperCase(), { variant: serverVariant(runtime.serverState) }),
     ui.badge(statusLabel(runtime.status), { variant: statusVariant(runtime.status) }),
     ui.text(`up ${formatDuration(runtime.uptimeMs)}`, { variant: "caption" }),
     ui.text(`host ${runtime.host}:${String(runtime.port)}`, { variant: "code" }),
@@ -156,7 +167,9 @@ function renderWorkspace(options: ShellOptions): VNode {
   return ui.row({ gap: 2, items: "start" }, [
     ui.box({ border: "none", flex: 1 }, [options.body]),
     ui.box({ border: "none", width: 34 }, [
-      ui.card("Workspace details", [
+      ui.column({ gap: 1 }, [
+        ui.text("Workspace details", { variant: "heading" }),
+        ui.divider({ color: "muted" }),
         ui.column({ gap: 1 }, [
           ui.text(currentItem.blurb, { variant: "caption", wrap: true }),
           ui.divider({ color: "muted" }),

@@ -16,6 +16,9 @@ import { renderUsageScreen } from "./usage.js";
 export type ExtendedScreenRouteDeps = ScreenRouteDeps &
   Readonly<{
     // Live screen
+    onStartServer: () => void;
+    onStopServer: () => void;
+    onRestartServer: () => void;
     onLogLevelChange: (level: LogLevel) => void;
     onLogsScroll: (scrollTop: number) => void;
     // Artifacts screen
@@ -45,6 +48,9 @@ export function createTuiRoutes(deps: ExtendedScreenRouteDeps): readonly TuiRout
         renderLiveScreen(context, {
           onNavigate: deps.onNavigate,
           onToggleSidebar: deps.onToggleSidebar,
+          onStartServer: deps.onStartServer,
+          onStopServer: deps.onStopServer,
+          onRestartServer: deps.onRestartServer,
           onLogLevelChange: deps.onLogLevelChange,
           onLogsScroll: deps.onLogsScroll,
         }),

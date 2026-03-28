@@ -28,6 +28,9 @@ function createContext(state: TuiState, routeId: ScreenId): RouteRenderContext<T
 }
 
 type LiveScreenDeps = ScreenRouteDeps & {
+  onStartServer: () => void;
+  onStopServer: () => void;
+  onRestartServer: () => void;
   onLogLevelChange: (level: LogLevel) => void;
   onLogsScroll: (scrollTop: number) => void;
 };
@@ -36,6 +39,9 @@ function createLiveDeps(): LiveScreenDeps {
   return {
     onNavigate: () => {},
     onToggleSidebar: () => {},
+    onStartServer: () => {},
+    onStopServer: () => {},
+    onRestartServer: () => {},
     onLogLevelChange: () => {},
     onLogsScroll: () => {},
   };
@@ -47,6 +53,7 @@ test("live screen renders full shell markers at 160x40", () => {
   const state = reduceTuiState(sized, {
     type: "set-runtime",
     runtime: {
+      serverState: "running",
       status: "ready",
       host: "127.0.0.1",
       port: 38471,

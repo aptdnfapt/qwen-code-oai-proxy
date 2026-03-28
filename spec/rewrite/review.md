@@ -147,6 +147,7 @@ Review flow
 - modal/overlay behavior matches spec
 - icons/fallbacks do not break layout
 - theme behavior is coherent in dark and light modes
+- passive info/empty states are not rendered as routine bordered card/callout boxes unless the spec explicitly allows that specific case
 - real PTY run was done
 
 ### Usage / Metrics-Specific

@@ -179,10 +179,29 @@ Required behavior:
 
 - prefer spacing, surface contrast, and alignment over heavy border grids
 - avoid boxing every region with strong line art
+- avoid rounded card shells and boxed callout panels for normal screen content
+- do not render passive info states as framed boxes like `╭─...─╮` / `┌─...─┐`
+- empty states such as `No logs yet`, `No artifacts yet`, `Select an account`, and similar helper text should default to plain text + spacing + subtle divider, not bordered cards/callouts
 - use one subtle vertical keyline between sidebar and main content when helpful
 - keep the shell visually calm with one main surface family per theme
 - allow icons to carry some navigation identity so labels do not do all the work
 - reserve stronger borders mostly for modal surfaces, selected previews, or focused subviews that truly need separation
+
+### 4.2. Forbidden default chrome
+
+These are explicitly not the default visual direction for the main TUI:
+
+- rounded info cards used only to wrap text
+- boxed callouts for routine helper text
+- isolated framed mini-panels that visually float without strong interaction need
+- old-dashboard line-art shells around every empty state or side detail block
+
+Preferred replacement:
+
+- heading
+- subtle divider/keyline
+- plain text or muted helper text
+- optional soft background later if needed, but no hard outline by default
 
 ### 5. Button and action-group rendering quality
 

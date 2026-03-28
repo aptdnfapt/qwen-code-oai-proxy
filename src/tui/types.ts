@@ -8,8 +8,10 @@ export type IconMode = "fallback" | "nerd";
 export type RotationMode = "RR" | "single" | "none";
 export type RuntimeStatus = "ready" | "unauthenticated";
 export type LogLevel = "off" | "error" | "error-debug" | "debug";
+export type ServerState = "running" | "stopped" | "starting" | "stopping";
 
 export type RuntimeSummary = Readonly<{
+  serverState: ServerState;
   status: RuntimeStatus;
   host: string;
   port: number;

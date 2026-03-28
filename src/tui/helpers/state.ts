@@ -18,6 +18,7 @@ function initialViewport(): { cols: number; rows: number } {
 
 function createInitialRuntime(): RuntimeSummary {
   return Object.freeze({
+    serverState: "stopped",
     status: "unauthenticated",
     host: "localhost",
     port: 8080,

@@ -49,7 +49,9 @@ function buildPreviewPane(state: TuiState): VNode {
   const preview = state.artifacts.previewContent;
 
   if (!selected) {
-    return ui.box({ border: "single", p: 1, flex: 1 }, [
+    return ui.column({ gap: 1, flex: 1 }, [
+      ui.text("Preview", { variant: "heading" }),
+      ui.divider({ color: "muted" }),
       ui.text("Select a file to preview", { variant: "caption" }),
     ]);
   }
@@ -57,7 +59,7 @@ function buildPreviewPane(state: TuiState): VNode {
   const node = findNode(state.artifacts.tree, selected);
   const isDir = node?.type === "directory";
 
-  return ui.box({ border: "single", p: 1, flex: 1 }, [
+  return ui.box({ border: "none", p: 0, flex: 1 }, [
     ui.column({ gap: 1 }, [
       ui.text("Preview", { variant: "heading" }),
       ui.divider({ color: "muted" }),
@@ -89,20 +91,22 @@ function buildArtifactsBody(deps: ArtifactsBodyDeps): VNode {
 
   if (tree.length === 0) {
     return ui.column({ gap: 1 }, [
-      ui.text("No artifacts yet", { variant: "caption" }),
+      ui.text("No artifacts yet", { variant: "heading" }),
+      ui.divider({ color: "muted" }),
       ui.text("Request artifacts will appear here after the server processes debug-enabled requests.", {
         variant: "caption",
       }),
-      ui.callout("Enable DEBUG_LOG=true to capture request artifacts.", { variant: "info" }),
+      ui.text("Enable DEBUG_LOG=true to capture request artifacts.", { variant: "caption" }),
     ]);
   }
 
   const fileNodes = toFileNodes(tree);
 
   return ui.row({ gap: 1, flex: 1 }, [
-    ui.box({ border: "single", p: 1, width: 40 }, [
+    ui.box({ border: "none", p: 0, width: 40 }, [
       ui.column({ gap: 0 }, [
         ui.text("Request artifacts", { variant: "heading" }),
+        ui.divider({ color: "muted" }),
         ui.fileTreeExplorer({
           id: "artifacts-tree",
           data: fileNodes,
@@ -122,6 +126,7 @@ function buildArtifactsBody(deps: ArtifactsBodyDeps): VNode {
         }),
       ]),
     ]),
+    ui.box({ border: "none", width: 1, py: 0 }, [ui.divider({ direction: "vertical", color: "muted" })]),
     buildPreviewPane(state),
   ]);
 }

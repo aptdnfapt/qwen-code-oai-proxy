@@ -28,6 +28,19 @@ let stopping = false;
 let stdinCleanup: (() => void) | null = null;
 let resizeCleanup: (() => void) | null = null;
 
+function appendSystemLog(level: "info" | "warn" | "error" | "debug", message: string): void {
+  dispatch({
+    type: "append-log",
+    entry: {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: Date.now(),
+      level,
+      message,
+      source: "tui",
+    },
+  });
+}
+
 function dispatch(action: TuiAction): void {
   let nextTheme = initialState.themeName;
   let themeChanged = false;
@@ -67,6 +80,7 @@ async function stopApp(): Promise<void> {
   }
 
   try {
+    await runtimeMonitor.dispose();
     await app.stop();
   } catch {
     // Ignore stop races.
@@ -93,6 +107,54 @@ function navigate(screen: ScreenId): void {
 async function refreshRuntimeSummary(): Promise<void> {
   const runtime = await runtimeMonitor.refresh();
   dispatch({ type: "set-runtime", runtime });
+}
+
+async function handleStartServer(): Promise<void> {
+  try {
+    appendSystemLog("info", "Starting proxy server...");
+    const runtime = await runtimeMonitor.startServer();
+    dispatch({ type: "set-runtime", runtime });
+    appendSystemLog("info", `Server running on http://${runtime.host}:${String(runtime.port)}`);
+  } catch (error: any) {
+    appendSystemLog("error", `Start failed: ${error.message}`);
+    await refreshRuntimeSummary();
+  }
+}
+
+async function handleStopServer(): Promise<void> {
+  try {
+    appendSystemLog("warn", "Stopping proxy server...");
+    const runtime = await runtimeMonitor.stopServer();
+    dispatch({ type: "set-runtime", runtime });
+    appendSystemLog("info", "Server stopped");
+  } catch (error: any) {
+    appendSystemLog("error", `Stop failed: ${error.message}`);
+    await refreshRuntimeSummary();
+  }
+}
+
+async function handleRestartServer(): Promise<void> {
+  try {
+    appendSystemLog("warn", "Restarting proxy server...");
+    const runtime = await runtimeMonitor.restartServer();
+    dispatch({ type: "set-runtime", runtime });
+    appendSystemLog("info", `Server restarted on http://${runtime.host}:${String(runtime.port)}`);
+  } catch (error: any) {
+    appendSystemLog("error", `Restart failed: ${error.message}`);
+    await refreshRuntimeSummary();
+  }
+}
+
+async function handleRuntimeLogLevelChange(level: LogLevel): Promise<void> {
+  dispatch({ type: "set-log-level", level });
+
+  try {
+    const runtime = await runtimeMonitor.setLogLevel(level);
+    dispatch({ type: "set-runtime", runtime });
+    appendSystemLog("info", `Runtime log level -> ${level}`);
+  } catch (error: any) {
+    appendSystemLog("error", `Log level change failed: ${error.message}`);
+  }
 }
 
 function installProcessHooks(): void {
@@ -193,7 +255,18 @@ app = createNodeApp({
     onNavigate: navigate,
     onToggleSidebar: () => dispatch({ type: "toggle-sidebar" }),
     // Live screen callbacks
-    onLogLevelChange: (level: LogLevel) => dispatch({ type: "set-log-level", level }),
+    onStartServer: () => {
+      void handleStartServer();
+    },
+    onStopServer: () => {
+      void handleStopServer();
+    },
+    onRestartServer: () => {
+      void handleRestartServer();
+    },
+    onLogLevelChange: (level: LogLevel) => {
+      void handleRuntimeLogLevelChange(level);
+    },
     onLogsScroll: (scrollTop: number) => dispatch({ type: "set-logs-scroll", scrollTop }),
     // Artifacts screen callbacks
     onToggleArtifactExpand: (path: string) => dispatch({ type: "toggle-artifact-expand", path }),
@@ -224,7 +297,9 @@ app = createNodeApp({
     },
     onSidebarModeChange: (_mode: SidebarMode) => dispatch({ type: "toggle-sidebar" }),
     onIconModeChange: (_mode: IconMode) => dispatch({ type: "toggle-icon-mode" }),
-    onDefaultLogLevelChange: (level: LogLevel) => dispatch({ type: "set-log-level", level }),
+    onDefaultLogLevelChange: (level: LogLevel) => {
+      void handleRuntimeLogLevelChange(level);
+    },
   }),
   initialRoute: initialState.activeScreen,
   config: {

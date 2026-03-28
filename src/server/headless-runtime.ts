@@ -14,7 +14,7 @@ const { mcpGetHandler, mcpPostHandler } = require("../mcp.js") as any;
 const { createApiKeyMiddleware } = require("./middleware/api-key.js") as any;
 const { QwenOpenAIProxy } = require("./proxy-controller.js") as any;
 const { createHealthHandler } = require("./health-handler.js") as any;
-const { registerShutdownHandlers, initializeServerRuntime } = require("./lifecycle.js") as any;
+const { registerShutdownHandlers, initializeServerRuntime, shutdownServerRuntime } = require("./lifecycle.js") as any;
 const { createRuntimeLogLevelGetHandler, createRuntimeLogLevelPostHandler } = require("./runtime-control-handler.js") as any;
 const { createTypedCoreServices } = require("./typed-core-bridge.js") as any;
 
@@ -74,8 +74,6 @@ export function createHeadlessAppRuntime(): {
   app.post("/mcp", mcpPostHandler);
   app.get("/health", createHealthHandler({ qwenAPI, authService }));
 
-  registerShutdownHandlers({ qwenAPI, accountRefreshScheduler, liveLogger });
-
   return {
     app,
     qwenAPI,
@@ -85,9 +83,10 @@ export function createHeadlessAppRuntime(): {
   };
 }
 
-export function startHeadlessServer(options: { host?: string; port?: number } = {}): Promise<{ server: any; host: string; port: number }> {
+export function startHeadlessServer(options: { host?: string; port?: number; registerProcessHandlers?: boolean } = {}): Promise<{ server: any; host: string; port: number; stop: (reason?: string) => Promise<void> }> {
   const host = options.host || config.host;
   const port = options.port || config.port;
+  const registerProcessHandlers = options.registerProcessHandlers !== false;
   const runtime = createHeadlessAppRuntime();
 
   return new Promise((resolve, reject) => {
@@ -104,7 +103,27 @@ export function startHeadlessServer(options: { host?: string; port?: number } = 
           fileLogger,
           config,
         });
-        resolve({ server, host, port });
+        let stopped = false;
+        const stop = async (reason = "server stopped") => {
+          if (stopped) {
+            return;
+          }
+
+          stopped = true;
+          await shutdownServerRuntime({
+            server,
+            qwenAPI: runtime.qwenAPI,
+            accountRefreshScheduler: runtime.accountRefreshScheduler,
+            liveLogger,
+            reason,
+          });
+        };
+
+        if (registerProcessHandlers) {
+          registerShutdownHandlers({ server, qwenAPI: runtime.qwenAPI, accountRefreshScheduler: runtime.accountRefreshScheduler, liveLogger });
+        }
+
+        resolve({ server, host, port, stop });
       } catch (error) {
         server.close(() => reject(error));
       }

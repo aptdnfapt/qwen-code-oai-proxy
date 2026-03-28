@@ -21,16 +21,27 @@ function levelVariant(level: string): "info" | "warn" | "error" | "debug" {
 
 type LiveBodyDeps = Readonly<{
   state: TuiState;
+  onStartServer: () => void;
+  onStopServer: () => void;
+  onRestartServer: () => void;
   onLogLevelChange: (level: LogLevel) => void;
   onLogsScroll: (scrollTop: number) => void;
 }>;
 
-function buildServerControlsRow(): VNode {
+function serverStateVariant(serverState: TuiState["runtime"]["serverState"]): "success" | "warning" | "info" {
+  if (serverState === "running") return "success";
+  if (serverState === "stopped") return "warning";
+  return "info";
+}
+
+function buildServerControlsRow(deps: LiveBodyDeps): VNode {
+  const serverState = deps.state.runtime.serverState;
   return ui.row({ gap: 1, items: "center" }, [
     ui.text("Server:", { variant: "caption" }),
-    ui.button({ id: "live-start", label: "Start", intent: "success" }),
-    ui.button({ id: "live-stop", label: "Stop", intent: "danger" }),
-    ui.button({ id: "live-restart", label: "Restart", intent: "warning" }),
+    ui.badge(serverState.toUpperCase(), { variant: serverStateVariant(serverState) }),
+    ui.button({ id: "live-start", label: "Start", intent: serverState === "running" ? "secondary" : "success", onPress: deps.onStartServer }),
+    ui.button({ id: "live-stop", label: "Stop", intent: serverState === "stopped" ? "secondary" : "danger", onPress: deps.onStopServer }),
+    ui.button({ id: "live-restart", label: "Restart", intent: "warning", onPress: deps.onRestartServer }),
   ]);
 }
 
@@ -55,10 +66,12 @@ function buildLogsConsole(deps: LiveBodyDeps): VNode {
   const logs = state.live.logs;
 
   if (logs.length === 0) {
-    return ui.box({ border: "single", p: 1, flex: 1 }, [
+    return ui.column({ gap: 1 }, [
+      ui.text("No logs yet", { variant: "heading" }),
+      ui.divider({ color: "muted" }),
       ui.column({ gap: 1 }, [
-        ui.text("No logs yet", { variant: "caption" }),
         ui.text("Logs will appear here when the server processes requests.", { variant: "caption" }),
+        ui.text("Use Start to boot the proxy from the TUI.", { variant: "caption" }),
       ]),
     ]);
   }
@@ -88,12 +101,13 @@ function buildLiveBody(deps: LiveBodyDeps): VNode {
   return ui.column({ gap: 1, flex: 1 }, [
     ui.row({ gap: 2, items: "center", wrap: true }, [
       ui.text(`host ${runtime.host}:${String(runtime.port)}`, { variant: "code" }),
+      ui.text(`state ${runtime.serverState}`, { variant: "caption" }),
       ui.text(`accounts ${String(runtime.accountCount)}`, { variant: "caption" }),
       ui.text(`requests ${String(runtime.requestCount)}`, { variant: "caption" }),
       ui.text(`streams ${String(runtime.streamCount)}`, { variant: "caption" }),
     ]),
     ui.divider({ color: "muted" }),
-    buildServerControlsRow(),
+    buildServerControlsRow(deps),
     buildLogLevelRow(state.live.logLevel, onLogLevelChange),
     ui.divider({ color: "muted" }),
     ui.text("Live stream", { variant: "heading" }),
@@ -104,6 +118,9 @@ function buildLiveBody(deps: LiveBodyDeps): VNode {
 export function renderLiveScreen(
   context: RouteRenderContext<TuiState>,
   deps: ScreenRouteDeps & {
+    onStartServer: () => void;
+    onStopServer: () => void;
+    onRestartServer: () => void;
     onLogLevelChange: (level: LogLevel) => void;
     onLogsScroll: (scrollTop: number) => void;
   },
@@ -113,6 +130,9 @@ export function renderLiveScreen(
     title: "Live",
     body: buildLiveBody({
       state: context.state,
+      onStartServer: deps.onStartServer,
+      onStopServer: deps.onStopServer,
+      onRestartServer: deps.onRestartServer,
       onLogLevelChange: deps.onLogLevelChange,
       onLogsScroll: deps.onLogsScroll,
     }),

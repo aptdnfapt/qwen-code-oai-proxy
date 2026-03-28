@@ -1,26 +1,61 @@
-function createShutdownHandler({ signal, qwenAPI, accountRefreshScheduler, liveLogger }: { signal: string; qwenAPI: any; accountRefreshScheduler: any; liveLogger: any }) {
+async function stopSchedulerAndPersist({ qwenAPI, accountRefreshScheduler, liveLogger, reason }: { qwenAPI: any; accountRefreshScheduler: any; liveLogger: any; reason: string }): Promise<void> {
+  liveLogger.shutdown(reason);
+
+  try {
+    accountRefreshScheduler.stopScheduler();
+    liveLogger.accountRemoved("refresh-scheduler");
+  } catch (error: any) {
+    console.error("Failed to stop scheduler:", error.message);
+  }
+
+  try {
+    await qwenAPI.saveRequestCounts();
+  } catch (error: any) {
+    console.error("Failed to save request counts:", error.message);
+  }
+}
+
+export async function shutdownServerRuntime({
+  qwenAPI,
+  accountRefreshScheduler,
+  liveLogger,
+  server,
+  reason,
+}: {
+  qwenAPI: any;
+  accountRefreshScheduler: any;
+  liveLogger: any;
+  server?: any;
+  reason: string;
+}): Promise<void> {
+  await stopSchedulerAndPersist({ qwenAPI, accountRefreshScheduler, liveLogger, reason });
+
+  if (!server) {
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    server.close((error: any) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
+  });
+}
+
+function createShutdownHandler({ signal, server, qwenAPI, accountRefreshScheduler, liveLogger }: { signal: string; server?: any; qwenAPI: any; accountRefreshScheduler: any; liveLogger: any }) {
   return async (): Promise<void> => {
-    liveLogger.shutdown(`${signal} received`);
-    try {
-      accountRefreshScheduler.stopScheduler();
-      liveLogger.accountRemoved("refresh-scheduler");
-    } catch (error: any) {
-      console.error("Failed to stop scheduler:", error.message);
-    }
-
-    try {
-      await qwenAPI.saveRequestCounts();
-    } catch (error: any) {
-      console.error("Failed to save request counts:", error.message);
-    }
-
+    await shutdownServerRuntime({ server, qwenAPI, accountRefreshScheduler, liveLogger, reason: `${signal} received` });
     process.exit(0);
   };
 }
 
-export function registerShutdownHandlers({ qwenAPI, accountRefreshScheduler, liveLogger }: { qwenAPI: any; accountRefreshScheduler: any; liveLogger: any }): void {
-  process.on("SIGINT", createShutdownHandler({ signal: "SIGINT", qwenAPI, accountRefreshScheduler, liveLogger }));
-  process.on("SIGTERM", createShutdownHandler({ signal: "SIGTERM", qwenAPI, accountRefreshScheduler, liveLogger }));
+export function registerShutdownHandlers({ server, qwenAPI, accountRefreshScheduler, liveLogger }: { server?: any; qwenAPI: any; accountRefreshScheduler: any; liveLogger: any }): void {
+  process.on("SIGINT", createShutdownHandler({ signal: "SIGINT", server, qwenAPI, accountRefreshScheduler, liveLogger }));
+  process.on("SIGTERM", createShutdownHandler({ signal: "SIGTERM", server, qwenAPI, accountRefreshScheduler, liveLogger }));
 }
 
 async function initializeRuntimeLogging(runtimeConfigStore: any, fileLogger: any): Promise<void> {

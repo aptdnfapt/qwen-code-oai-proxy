@@ -31,12 +31,14 @@ function buildAccountDetailPanel(state: TuiState, deps: AccountsBodyDeps): VNode
   const account = state.accounts.accounts.find((a) => a.id === selectedId);
 
   if (!account) {
-    return ui.box({ border: "single", p: 1, flex: 1 }, [
+    return ui.column({ gap: 1, flex: 1 }, [
+      ui.text("Account details", { variant: "heading" }),
+      ui.divider({ color: "muted" }),
       ui.text("Select an account to view details", { variant: "caption" }),
     ]);
   }
 
-  return ui.box({ border: "single", p: 1, flex: 1 }, [
+  return ui.box({ border: "none", p: 0, flex: 1 }, [
     ui.column({ gap: 1 }, [
       ui.text("Account details", { variant: "heading" }),
       ui.divider({ color: "muted" }),
@@ -93,8 +95,8 @@ function buildAccountsBody(deps: AccountsBodyDeps): VNode {
     return ui.column({ gap: 1 }, [
       addAccountRow,
       ui.divider({ color: "muted" }),
-      ui.text("No accounts configured", { variant: "caption" }),
-      ui.callout("Add an account to start using the proxy.", { variant: "info" }),
+      ui.text("No accounts configured", { variant: "heading" }),
+      ui.text("Add an account to start using the proxy.", { variant: "caption" }),
     ]);
   }
 
@@ -112,6 +114,7 @@ function buildAccountsBody(deps: AccountsBodyDeps): VNode {
       ui.box({ border: "none", flex: 1 }, [
         ui.table({
           id: "accounts-table",
+          border: "none",
           columns: [
             { key: "id", header: "ID", flex: 1 },
             { key: "status", header: "Status", width: 10 },
