@@ -98,11 +98,20 @@ export function createInitialState(nowMs = Date.now()): TuiState {
 
 export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
   switch (action.type) {
-    case "tick":
+    case "tick": {
+      // Locally advance uptime every tick so the display doesn't wait for the
+      // async refreshRuntimeSummary round-trip. set-runtime will correct it.
+      const elapsedMs = action.nowMs - state.nowMs;
+      const nextUptimeMs =
+        state.runtime.serverState === "running"
+          ? Math.max(0, state.runtime.uptimeMs + elapsedMs)
+          : state.runtime.uptimeMs;
       return Object.freeze({
         ...state,
         nowMs: action.nowMs,
+        runtime: Object.freeze({ ...state.runtime, uptimeMs: nextUptimeMs }),
       });
+    }
     case "set-viewport":
       return Object.freeze({
         ...state,

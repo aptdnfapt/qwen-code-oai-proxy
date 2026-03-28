@@ -209,8 +209,12 @@ function navigate(screen: ScreenId): void {
 }
 
 async function refreshRuntimeSummary(): Promise<void> {
-  const runtime = await runtimeMonitor.refresh();
-  dispatch({ type: "set-runtime", runtime });
+  try {
+    const runtime = await runtimeMonitor.refresh();
+    dispatch({ type: "set-runtime", runtime });
+  } catch (error: any) {
+    appendSystemLog("error", `Runtime refresh failed: ${String(error?.message ?? error)}`);
+  }
 }
 
 async function refreshAccounts(selectedId?: string | null): Promise<void> {
