@@ -39,7 +39,7 @@ const CAPTURES: readonly CaptureSpec[] = Object.freeze([
     cols: 80,
     rows: 24,
     keys: "q",
-    expectedSnippets: Object.freeze(["QP", "Live", "streams 0", "[ toggle", "theme Dark"]),
+    expectedSnippets: Object.freeze(["QP", "Live", "streams 0", "Tab focus", "theme Dark"]),
   }),
   Object.freeze({
     name: "light",
@@ -47,6 +47,13 @@ const CAPTURES: readonly CaptureSpec[] = Object.freeze([
     rows: 40,
     keys: "tq",
     expectedSnippets: Object.freeze(["qwen-proxy", "Live", "streams 0", "theme Light", "[<] collapse"]),
+  }),
+  Object.freeze({
+    name: "focus-indicator",
+    cols: 160,
+    rows: 40,
+    keys: "q",
+    expectedSnippets: Object.freeze(["focus:sidebar", "Tab focus"]),
   }),
 ]);
 

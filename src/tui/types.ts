@@ -79,6 +79,7 @@ export type TuiState = Readonly<{
   viewportRows: number;
   activeScreen: ScreenId;
   focusRegion: FocusRegion;
+  sidebarIndex: number;
   sidebarMode: SidebarMode;
   themeName: ThemeName;
   iconMode: IconMode;
@@ -94,7 +95,11 @@ export type TuiAction =
   | Readonly<{ type: "toggle-icon-mode" }>
   | Readonly<{ type: "cycle-theme" }>
   | Readonly<{ type: "set-runtime"; runtime: RuntimeSummary }>
-  | Readonly<{ type: "request-quit" }>;
+  | Readonly<{ type: "request-quit" }>
+  | Readonly<{ type: "focus-next-region" }>
+  | Readonly<{ type: "focus-prev-region" }>
+  | Readonly<{ type: "sidebar-move"; direction: "up" | "down" }>
+  | Readonly<{ type: "sidebar-activate" }>;
 
 export type ScreenRouteDeps = Readonly<{
   onNavigate: (screen: ScreenId) => void;

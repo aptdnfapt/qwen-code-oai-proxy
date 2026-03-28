@@ -1,4 +1,4 @@
-import type { RuntimeSummary, TuiAction, TuiState } from "../types.js";
+import { NAV_ITEMS, type RuntimeSummary, type TuiAction, type TuiState } from "../types.js";
 
 function initialViewport(): { cols: number; rows: number } {
   return {
@@ -30,6 +30,7 @@ export function createInitialState(nowMs = Date.now()): TuiState {
     viewportRows: viewport.rows,
     activeScreen: "live",
     focusRegion: "sidebar",
+    sidebarIndex: 0,
     sidebarMode: "expanded",
     themeName: "dark",
     iconMode: "fallback",
@@ -88,6 +89,34 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
         ...state,
         shouldQuit: true,
       });
+    case "focus-next-region":
+      return Object.freeze({
+        ...state,
+        focusRegion: state.focusRegion === "sidebar" ? "main" : "sidebar",
+      });
+    case "focus-prev-region":
+      return Object.freeze({
+        ...state,
+        focusRegion: state.focusRegion === "main" ? "sidebar" : "main",
+      });
+    case "sidebar-move": {
+      const maxIndex = NAV_ITEMS.length - 1;
+      const newIndex =
+        action.direction === "up"
+          ? Math.max(0, state.sidebarIndex - 1)
+          : Math.min(maxIndex, state.sidebarIndex + 1);
+      return Object.freeze({
+        ...state,
+        sidebarIndex: newIndex,
+      });
+    }
+    case "sidebar-activate": {
+      const targetScreen = NAV_ITEMS[state.sidebarIndex]?.id ?? "live";
+      return Object.freeze({
+        ...state,
+        activeScreen: targetScreen,
+      });
+    }
     default:
       return state;
   }

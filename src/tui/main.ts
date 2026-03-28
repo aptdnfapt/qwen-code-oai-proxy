@@ -13,6 +13,7 @@ const initialState = createInitialState();
 const runtimeMonitor = createRuntimeMonitor(initialState.bootMs);
 
 let app!: ReturnType<typeof createNodeApp<TuiState>>;
+let currentState: TuiState = initialState;
 let tickTimer: ReturnType<typeof setInterval> | null = null;
 let stopping = false;
 let stdinCleanup: (() => void) | null = null;
@@ -26,6 +27,7 @@ function dispatch(action: TuiAction): void {
     const next = reduceTuiState(previous, action);
     nextTheme = next.themeName;
     themeChanged = nextTheme !== previous.themeName;
+    currentState = next;
     return next;
   });
 
@@ -147,6 +149,8 @@ app.keys(
       dispatch({ type: "request-quit" });
       void stopApp();
     },
+    onNavigate: navigate,
+    getFocusRegion: () => currentState.focusRegion,
   }),
 );
 

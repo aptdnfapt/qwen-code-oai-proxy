@@ -59,7 +59,8 @@ test("live screen renders full shell markers at 160x40", () => {
   assert.match(output, /LV Live/);
   assert.match(output, /\[<\] collapse/);
   assert.doesNotMatch(output, /\[\[]/);
-  assert.match(output, /click sidebar to navigate/);
+  assert.match(output, /Tab focus/);
+  assert.match(output, /focus:sidebar/);
   assert.match(output, /Workspace details/);
   assert.match(output, /viewport 160x40/);
   assert.doesNotMatch(output, /Shell snapshot/);

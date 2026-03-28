@@ -57,3 +57,59 @@ test("reducer cycles between dark and light themes", () => {
   assert.equal(initial.themeName, "dark");
   assert.equal(next.themeName, "light");
 });
+
+test("reducer switches focus region forward with focus-next-region", () => {
+  const initial = createInitialState(1000);
+  assert.equal(initial.focusRegion, "sidebar");
+
+  const next = reduceTuiState(initial, { type: "focus-next-region" });
+  assert.equal(next.focusRegion, "main");
+
+  const back = reduceTuiState(next, { type: "focus-next-region" });
+  assert.equal(back.focusRegion, "sidebar");
+});
+
+test("reducer switches focus region backward with focus-prev-region", () => {
+  const initial = createInitialState(1000);
+  const toMain = reduceTuiState(initial, { type: "focus-next-region" });
+  assert.equal(toMain.focusRegion, "main");
+
+  const backToSidebar = reduceTuiState(toMain, { type: "focus-prev-region" });
+  assert.equal(backToSidebar.focusRegion, "sidebar");
+});
+
+test("reducer moves sidebar selection up and down", () => {
+  const initial = createInitialState(1000);
+  assert.equal(initial.sidebarIndex, 0);
+
+  const down1 = reduceTuiState(initial, { type: "sidebar-move", direction: "down" });
+  assert.equal(down1.sidebarIndex, 1);
+
+  const down2 = reduceTuiState(down1, { type: "sidebar-move", direction: "down" });
+  assert.equal(down2.sidebarIndex, 2);
+
+  const up1 = reduceTuiState(down2, { type: "sidebar-move", direction: "up" });
+  assert.equal(up1.sidebarIndex, 1);
+});
+
+test("reducer clamps sidebar index at boundaries", () => {
+  const initial = createInitialState(1000);
+  const tryUp = reduceTuiState(initial, { type: "sidebar-move", direction: "up" });
+  assert.equal(tryUp.sidebarIndex, 0);
+
+  // Move to last item (index 5 for 6 items)
+  let state = initial;
+  for (let i = 0; i < 10; i++) {
+    state = reduceTuiState(state, { type: "sidebar-move", direction: "down" });
+  }
+  assert.equal(state.sidebarIndex, 5);
+});
+
+test("reducer activates screen from sidebar index", () => {
+  const initial = createInitialState(1000);
+  const moved = reduceTuiState(initial, { type: "sidebar-move", direction: "down" });
+  assert.equal(moved.sidebarIndex, 1);
+
+  const activated = reduceTuiState(moved, { type: "sidebar-activate" });
+  assert.equal(activated.activeScreen, "artifacts");
+});

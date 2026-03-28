@@ -43,21 +43,25 @@ function renderSidebar(options: ShellOptions): VNode {
   const state = options.context.state;
   const collapsed = state.sidebarMode === "collapsed" || state.viewportCols <= 100;
   const useFallback = state.iconMode === "fallback";
+  const sidebarFocused = state.focusRegion === "sidebar";
 
-  const buttons = NAV_ITEMS.map((item) => {
+  const buttons = NAV_ITEMS.map((item, index) => {
     const icon = navIcon(item, useFallback);
-    const label = collapsed ? icon : `${icon} ${item.title}`;
+    const isActive = state.activeScreen === item.id;
+    const isSelected = index === state.sidebarIndex && sidebarFocused;
+    const prefix = isSelected ? ">" : " ";
+    const label = collapsed ? icon : `${prefix}${icon} ${item.title}`;
     return ui.button({
       id: `sidebar-${item.id}`,
       label,
-      intent: state.activeScreen === item.id ? "primary" : "secondary",
+      intent: isActive ? "primary" : "secondary",
       onPress: () => options.onNavigate(item.id),
     });
   });
 
   return ui.box(
     {
-      border: "none",
+      border: sidebarFocused ? "single" : "none",
       p: 1,
       width: collapsed ? 8 : 22,
       height: "full",
@@ -114,27 +118,27 @@ function renderHeader(state: TuiState): VNode {
 
 function renderFooter(state: TuiState): VNode {
   const compact = state.viewportCols <= 100;
+  const focusLabel = state.focusRegion === "sidebar" ? "focus:sidebar" : "focus:main";
 
   return ui.statusBar({
     left: [
       compact
         ? ui.row({ gap: 1, items: "center" }, [
-            ui.text("[ toggle", { variant: "caption" }),
+            ui.text("Tab focus", { variant: "caption" }),
+            ui.text("↑↓ nav", { variant: "caption" }),
             ui.text("Q quit", { variant: "caption" }),
           ])
         : ui.row({ gap: 1, items: "center" }, [
+            ui.text("Tab focus", { variant: "caption" }),
+            ui.text("↑↓ nav", { variant: "caption" }),
+            ui.text("Enter select", { variant: "caption" }),
             ui.text("[ sidebar", { variant: "caption" }),
-            ui.text(state.iconMode === "fallback" ? "I fallback icons" : "I nerd icons", { variant: "caption" }),
-            ui.text("T theme", { variant: "caption" }),
+            ui.text("? help", { variant: "caption" }),
             ui.text("Q quit", { variant: "caption" }),
-            ui.text("click sidebar to navigate", { variant: "caption" }),
           ]),
     ],
     right: [
-      ui.text(
-        state.sidebarMode === "collapsed" || compact ? "icons" : "icons + labels",
-        { variant: "caption" },
-      ),
+      ui.text(focusLabel, { variant: "caption" }),
     ],
   });
 }
