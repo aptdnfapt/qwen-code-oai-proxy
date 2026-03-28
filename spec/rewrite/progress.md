@@ -148,10 +148,43 @@ Acceptance check:
 - `node dist/authenticate.js --help` -> pass
 - `node dist/usage.js --help` -> pass
 
-## Next Phase
+## Phase 5 — TUI Product Layer (in progress)
 
-Phase 5: TUI product layer.
+### 5A — Shell + Layout (complete)
+
+Done:
+
+- full-screen shell using ui.page() with header/body/footer
+- left sidebar as primary navigation with 6 nav items
+- sidebar collapse/expand toggle via `[` key
+- sidebar shows nerd-font icons with fallback to two-letter codes
+- subtle vertical keyline divider between sidebar and main content
+- header row with runtime status: uptime, host:port, rotation mode, account count, request count, stream count
+- footer row with key hints and sidebar mode indicator
+- wide layout (>=140 cols) shows workspace details card with contextual screen blurb
+- responsive behavior: compact mode at <=100 cols, collapsed sidebar auto-enabled
+- theme toggle via `t` key (dark/light)
+- icon mode toggle via `i` key (nerd/fallback)
+
+Tests added:
+
+- src/tui/__tests__/keybindings.test.ts: quit, sidebar, icon, theme key resolution
+- src/tui/__tests__/reducer.test.ts: sidebar toggle, icon toggle, viewport, navigation, tick, quit, theme cycle
+- src/tui/__tests__/render.test.ts: shell markers at 160x40, compact at 80x24, light theme
+- scripts/validate-tui-pty.ts: PTY captures for wide/narrow/light modes
+
+PTY evidence:
+
+- wide (160x40): shows qwen-proxy, Live, streams 0, [>] after collapse, theme Dark
+- narrow (80x24): shows QP, Live, streams 0, [ toggle, theme Dark
+- light (160x40): shows qwen-proxy, Live, streams 0, theme Light, [<] collapse
+
+Review: pass
+
+### 5B — Navigation + Input Model (in progress)
 
 Work in flight:
 
-- 5A shell/layout implementation is under review before completion is marked.
+- implementing tab/shift+tab focus region switching
+- arrow key navigation within focused region
+- mouse click on sidebar items
