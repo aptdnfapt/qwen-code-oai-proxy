@@ -7,7 +7,7 @@
 - Phase 2: complete
 - Phase 3: complete
 - Phase 4: complete
-- Phase 5: in progress
+- Phase 5: complete
 - Phase 6: not started
 
 ## Phase 0 — Safety Cleanup (complete)
@@ -148,7 +148,7 @@ Acceptance check:
 - `node dist/authenticate.js --help` -> pass
 - `node dist/usage.js --help` -> pass
 
-## Phase 5 — TUI Product Layer (in progress)
+## Phase 5 — TUI Product Layer (complete)
 
 ### 5A — Shell + Layout (complete)
 
@@ -242,6 +242,7 @@ Done:
 - added Accounts add-account flow in a Rezi modal layer
 - account ID input now starts named-account auth directly from the TUI
 - modal shows verification link, device code, and terminal QR block
+- modal waiting state now includes an `Open browser` action alongside close
 - modal exposes clear waiting / success / failure states with status copy
 - successful auth refreshes the Accounts table and selects the new account
 - added `a` shortcut on the Accounts screen to open the add-account modal
@@ -254,11 +255,11 @@ Tests added:
 
 PTY evidence:
 
-- auth-modal capture shows Accounts -> Add account modal -> Account ID -> Start auth
+- auth waiting capture shows Add account modal -> Account ID -> ABCD-EFGH -> Open browser
 - npm run typecheck -> pass
 - npm run test:tui -> pass (30 tests)
 
-Review: not run
+Review: pass (confirmed during the Phase 5 completion sweep)
 
 ### 5E — Usage + Cache Metrics (complete)
 
@@ -292,5 +293,34 @@ PTY evidence captured:
 
 - usage-cache-metrics: dark theme Usage screen with non-zero cache read/write/type values
 - usage-cache-metrics-light: light theme Usage screen with non-zero cache read/write/type values
+
+Review: pass
+
+### 5F — Visual System polish (complete)
+
+Done:
+
+- switched the dark theme to a calmer Nord-based token set while keeping light theme runtime switching
+- sidebar and main-pane focus are now explicit in the shell with stronger NAV / MAIN focus badges
+- sidebar active state is clearer in both expanded and collapsed modes with visible markers (`>`, `*`, `QP>`)
+- Live, Settings, and Accounts action rows now use `ui.actions()` so grouped buttons render as one joined control set
+- Settings pickers now apply exact theme/sidebar/icon selections instead of toggle-only behavior
+- sidebar `Enter` now navigates the real routed screen instead of only mutating local shell state
+- Live main-pane focus now shows a visible default control marker (`> Start` / `> Stop` / `> Restart`) for PTY-verifiable focus state
+- auth modal waiting-state validation now uses a deterministic fixture and verifies the `Open browser` button in the real TUI
+
+Tests added:
+
+- `src/tui/__tests__/reducer.test.ts`: explicit theme/sidebar/icon setter coverage plus an honest running-runtime uptime tick case
+- `src/tui/__tests__/render.test.ts`: NAV FOCUS shell marker, Live main-pane control focus marker, and auth modal `Open browser` coverage
+- `scripts/validate-tui-pty.ts`: added `live-main-controls-focus`, `sidebar-enter-accounts`, and auth-waiting modal captures
+
+PTY evidence captured:
+
+- live-main-focus (160x40, dark): shows `MAIN FOCUS` and `> Start` on the Live control row
+- sidebar-enter-accounts (160x40, dark): `↓`, `↓`, `Enter` lands on the real Accounts body with `Add new account`
+- light theme (160x40): shows `theme Light` with the polished shell and grouped controls intact
+- auth waiting fixture (160x40): shows `Add account`, `ABCD-EFGH`, `Open browser`, and `Close`
+- frame audit: all reviewed runs reported `hash_mismatch_backend_vs_worker=0`
 
 Review: pass
