@@ -183,10 +183,7 @@ export function renderShell(options: ShellOptions): VNode {
       ui.box({ border: "none", width: 1, py: 0 }, [ui.divider({ direction: "vertical", color: "muted" })]),
       ui.box({ border: "none", flex: 1, p: 1 }, [
         ui.column({ gap: 1 }, [
-          ui.row({ gap: 1, items: "center", wrap: true }, [
-            ui.text(options.title, { variant: "heading" }),
-            ui.badge("5A", { variant: "info" }),
-          ]),
+          ui.text(options.title, { variant: "heading" }),
           renderWorkspace(options),
         ]),
       ]),

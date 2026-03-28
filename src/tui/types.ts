@@ -7,6 +7,7 @@ export type ThemeName = "dark" | "light";
 export type IconMode = "fallback" | "nerd";
 export type RotationMode = "RR" | "single" | "none";
 export type RuntimeStatus = "ready" | "unauthenticated";
+export type LogLevel = "off" | "error" | "error-debug" | "debug";
 
 export type RuntimeSummary = Readonly<{
   status: RuntimeStatus;
@@ -17,6 +18,39 @@ export type RuntimeSummary = Readonly<{
   accountCount: number;
   requestCount: number;
   streamCount: number;
+}>;
+
+export type LogEntry = Readonly<{
+  id: string;
+  timestamp: number;
+  level: "info" | "warn" | "error" | "debug";
+  message: string;
+  source?: string;
+}>;
+
+export type ArtifactNode = Readonly<{
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  children?: readonly ArtifactNode[];
+  size?: number;
+}>;
+
+export type AccountInfo = Readonly<{
+  id: string;
+  status: "valid" | "expired" | "unknown";
+  expiresAt?: number;
+  todayRequests: number;
+}>;
+
+export type UsageDay = Readonly<{
+  date: string;
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  cacheHitRate: number;
 }>;
 
 export type NavItem = Readonly<{
@@ -72,6 +106,29 @@ export const NAV_ITEMS: readonly NavItem[] = Object.freeze([
   }),
 ]);
 
+export type LiveScreenState = Readonly<{
+  logLevel: LogLevel;
+  logs: readonly LogEntry[];
+  logsScrollTop: number;
+}>;
+
+export type ArtifactsScreenState = Readonly<{
+  tree: readonly ArtifactNode[];
+  expanded: readonly string[];
+  selected: string | null;
+  previewContent: string | null;
+}>;
+
+export type AccountsScreenState = Readonly<{
+  accounts: readonly AccountInfo[];
+  selectedId: string | null;
+}>;
+
+export type UsageScreenState = Readonly<{
+  days: readonly UsageDay[];
+  selectedDate: string | null;
+}>;
+
 export type TuiState = Readonly<{
   nowMs: number;
   bootMs: number;
@@ -85,6 +142,10 @@ export type TuiState = Readonly<{
   iconMode: IconMode;
   runtime: RuntimeSummary;
   shouldQuit: boolean;
+  live: LiveScreenState;
+  artifacts: ArtifactsScreenState;
+  accounts: AccountsScreenState;
+  usage: UsageScreenState;
 }>;
 
 export type TuiAction =
@@ -99,7 +160,18 @@ export type TuiAction =
   | Readonly<{ type: "focus-next-region" }>
   | Readonly<{ type: "focus-prev-region" }>
   | Readonly<{ type: "sidebar-move"; direction: "up" | "down" }>
-  | Readonly<{ type: "sidebar-activate" }>;
+  | Readonly<{ type: "sidebar-activate" }>
+  | Readonly<{ type: "set-log-level"; level: LogLevel }>
+  | Readonly<{ type: "append-log"; entry: LogEntry }>
+  | Readonly<{ type: "set-logs-scroll"; scrollTop: number }>
+  | Readonly<{ type: "set-artifacts-tree"; tree: readonly ArtifactNode[] }>
+  | Readonly<{ type: "toggle-artifact-expand"; path: string }>
+  | Readonly<{ type: "select-artifact"; path: string | null }>
+  | Readonly<{ type: "set-artifact-preview"; content: string | null }>
+  | Readonly<{ type: "set-accounts"; accounts: readonly AccountInfo[] }>
+  | Readonly<{ type: "select-account"; id: string | null }>
+  | Readonly<{ type: "set-usage-days"; days: readonly UsageDay[] }>
+  | Readonly<{ type: "select-usage-date"; date: string | null }>;
 
 export type ScreenRouteDeps = Readonly<{
   onNavigate: (screen: ScreenId) => void;

@@ -5,7 +5,7 @@ import { createTestRenderer } from "@rezi-ui/core";
 import { createInitialState, reduceTuiState } from "../helpers/state.js";
 import { renderLiveScreen } from "../screens/live.js";
 import { themeSpec } from "../theme.js";
-import type { ScreenId, ScreenRouteDeps, TuiState } from "../types.js";
+import type { LogLevel, ScreenId, ScreenRouteDeps, TuiState } from "../types.js";
 
 function createRouter(initialRoute: ScreenId): RouterApi {
   return {
@@ -27,10 +27,17 @@ function createContext(state: TuiState, routeId: ScreenId): RouteRenderContext<T
   };
 }
 
-function createDeps(): ScreenRouteDeps {
+type LiveScreenDeps = ScreenRouteDeps & {
+  onLogLevelChange: (level: LogLevel) => void;
+  onLogsScroll: (scrollTop: number) => void;
+};
+
+function createLiveDeps(): LiveScreenDeps {
   return {
     onNavigate: () => {},
     onToggleSidebar: () => {},
+    onLogLevelChange: () => {},
+    onLogsScroll: () => {},
   };
 }
 
@@ -51,7 +58,7 @@ test("live screen renders full shell markers at 160x40", () => {
     },
   });
   const renderer = createTestRenderer({ viewport: { cols: 160, rows: 40 } });
-  const output = renderer.render(renderLiveScreen(createContext(state, "live"), createDeps())).toText();
+  const output = renderer.render(renderLiveScreen(createContext(state, "live"), createLiveDeps())).toText();
 
   assert.match(output, /qwen-proxy/);
   assert.match(output, /READY/);
@@ -70,12 +77,12 @@ test("live screen stays compact when sidebar is collapsed at 80x24", () => {
   const base = createInitialState(1000);
   const collapsed = reduceTuiState(base, { type: "toggle-sidebar" });
   const renderer = createTestRenderer({ viewport: { cols: 80, rows: 24 } });
-  const output = renderer.render(renderLiveScreen(createContext(collapsed, "live"), createDeps())).toText();
+  const output = renderer.render(renderLiveScreen(createContext(collapsed, "live"), createLiveDeps())).toText();
 
   assert.match(output, /QP/);
   assert.match(output, /\[>\]/);
   assert.match(output, /NO AUTH/);
-  assert.match(output, /Phase 5A shell scaffold/);
+  assert.match(output, /Log level/);
   assert.match(output, /streams 0/);
 });
 
@@ -86,8 +93,8 @@ test("live screen renders under the light theme", () => {
     viewport: { cols: 120, rows: 32 },
     theme: themeSpec(light.themeName).theme,
   });
-  const output = renderer.render(renderLiveScreen(createContext(light, "live"), createDeps())).toText();
+  const output = renderer.render(renderLiveScreen(createContext(light, "live"), createLiveDeps())).toText();
 
   assert.match(output, /theme Light/);
-  assert.match(output, /Phase 5A shell scaffold/);
+  assert.match(output, /Log level/);
 });

@@ -1,4 +1,13 @@
-import { NAV_ITEMS, type RuntimeSummary, type TuiAction, type TuiState } from "../types.js";
+import {
+  NAV_ITEMS,
+  type AccountsScreenState,
+  type ArtifactsScreenState,
+  type LiveScreenState,
+  type RuntimeSummary,
+  type TuiAction,
+  type TuiState,
+  type UsageScreenState,
+} from "../types.js";
 
 function initialViewport(): { cols: number; rows: number } {
   return {
@@ -7,16 +16,47 @@ function initialViewport(): { cols: number; rows: number } {
   };
 }
 
-function createInitialRuntime(nowMs: number): RuntimeSummary {
+function createInitialRuntime(): RuntimeSummary {
   return Object.freeze({
     status: "unauthenticated",
     host: "localhost",
     port: 8080,
     uptimeMs: 0,
-      rotationMode: "none",
-      accountCount: 0,
-      requestCount: 0,
-      streamCount: 0,
+    rotationMode: "none",
+    accountCount: 0,
+    requestCount: 0,
+    streamCount: 0,
+  });
+}
+
+function createInitialLiveState(): LiveScreenState {
+  return Object.freeze({
+    logLevel: "error-debug",
+    logs: Object.freeze([]),
+    logsScrollTop: 0,
+  });
+}
+
+function createInitialArtifactsState(): ArtifactsScreenState {
+  return Object.freeze({
+    tree: Object.freeze([]),
+    expanded: Object.freeze([]),
+    selected: null,
+    previewContent: null,
+  });
+}
+
+function createInitialAccountsState(): AccountsScreenState {
+  return Object.freeze({
+    accounts: Object.freeze([]),
+    selectedId: null,
+  });
+}
+
+function createInitialUsageState(): UsageScreenState {
+  return Object.freeze({
+    days: Object.freeze([]),
+    selectedDate: null,
   });
 }
 
@@ -34,8 +74,12 @@ export function createInitialState(nowMs = Date.now()): TuiState {
     sidebarMode: "expanded",
     themeName: "dark",
     iconMode: "fallback",
-    runtime: createInitialRuntime(nowMs),
+    runtime: createInitialRuntime(),
     shouldQuit: false,
+    live: createInitialLiveState(),
+    artifacts: createInitialArtifactsState(),
+    accounts: createInitialAccountsState(),
+    usage: createInitialUsageState(),
   });
 }
 
@@ -117,6 +161,99 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
         activeScreen: targetScreen,
       });
     }
+    case "set-log-level":
+      return Object.freeze({
+        ...state,
+        live: Object.freeze({
+          ...state.live,
+          logLevel: action.level,
+        }),
+      });
+    case "append-log":
+      return Object.freeze({
+        ...state,
+        live: Object.freeze({
+          ...state.live,
+          logs: Object.freeze([...state.live.logs, action.entry]),
+        }),
+      });
+    case "set-logs-scroll":
+      return Object.freeze({
+        ...state,
+        live: Object.freeze({
+          ...state.live,
+          logsScrollTop: action.scrollTop,
+        }),
+      });
+    case "set-artifacts-tree":
+      return Object.freeze({
+        ...state,
+        artifacts: Object.freeze({
+          ...state.artifacts,
+          tree: action.tree,
+        }),
+      });
+    case "toggle-artifact-expand": {
+      const expanded = state.artifacts.expanded;
+      const isExpanded = expanded.includes(action.path);
+      return Object.freeze({
+        ...state,
+        artifacts: Object.freeze({
+          ...state.artifacts,
+          expanded: Object.freeze(
+            isExpanded ? expanded.filter((p) => p !== action.path) : [...expanded, action.path],
+          ),
+        }),
+      });
+    }
+    case "select-artifact":
+      return Object.freeze({
+        ...state,
+        artifacts: Object.freeze({
+          ...state.artifacts,
+          selected: action.path,
+        }),
+      });
+    case "set-artifact-preview":
+      return Object.freeze({
+        ...state,
+        artifacts: Object.freeze({
+          ...state.artifacts,
+          previewContent: action.content,
+        }),
+      });
+    case "set-accounts":
+      return Object.freeze({
+        ...state,
+        accounts: Object.freeze({
+          ...state.accounts,
+          accounts: action.accounts,
+        }),
+      });
+    case "select-account":
+      return Object.freeze({
+        ...state,
+        accounts: Object.freeze({
+          ...state.accounts,
+          selectedId: action.id,
+        }),
+      });
+    case "set-usage-days":
+      return Object.freeze({
+        ...state,
+        usage: Object.freeze({
+          ...state.usage,
+          days: action.days,
+        }),
+      });
+    case "select-usage-date":
+      return Object.freeze({
+        ...state,
+        usage: Object.freeze({
+          ...state.usage,
+          selectedDate: action.date,
+        }),
+      });
     default:
       return state;
   }

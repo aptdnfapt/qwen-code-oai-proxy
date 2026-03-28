@@ -5,7 +5,16 @@ import { createRuntimeMonitor } from "./helpers/runtime.js";
 import { createInitialState, reduceTuiState } from "./helpers/state.js";
 import { createTuiRoutes } from "./screens/index.js";
 import { themeSpec } from "./theme.js";
-import { NAV_ITEMS, type ScreenId, type TuiAction, type TuiState } from "./types.js";
+import {
+  NAV_ITEMS,
+  type IconMode,
+  type LogLevel,
+  type ScreenId,
+  type SidebarMode,
+  type ThemeName,
+  type TuiAction,
+  type TuiState,
+} from "./types.js";
 
 const UI_FPS_CAP = 30;
 const TICK_MS = 1000;
@@ -183,6 +192,39 @@ app = createNodeApp({
   routes: createTuiRoutes({
     onNavigate: navigate,
     onToggleSidebar: () => dispatch({ type: "toggle-sidebar" }),
+    // Live screen callbacks
+    onLogLevelChange: (level: LogLevel) => dispatch({ type: "set-log-level", level }),
+    onLogsScroll: (scrollTop: number) => dispatch({ type: "set-logs-scroll", scrollTop }),
+    // Artifacts screen callbacks
+    onToggleArtifactExpand: (path: string) => dispatch({ type: "toggle-artifact-expand", path }),
+    onSelectArtifact: (path: string | null) => dispatch({ type: "select-artifact", path }),
+    onActivateArtifact: (_path: string) => {
+      // TODO: Load preview content for activated artifact
+    },
+    // Accounts screen callbacks
+    onSelectAccount: (id: string | null) => dispatch({ type: "select-account", id }),
+    onAddAccount: () => {
+      // TODO: Open add account modal (5D)
+    },
+    onRefreshAccount: (_id: string) => {
+      // TODO: Refresh account credentials
+    },
+    onRemoveAccount: (_id: string) => {
+      // TODO: Remove account with confirmation
+    },
+    // Usage screen callbacks
+    onSelectUsageDate: (date: string | null) => dispatch({ type: "select-usage-date", date }),
+    // Settings screen callbacks
+    onThemeChange: (theme: ThemeName) => {
+      dispatch({ type: "cycle-theme" });
+      // Only cycle if different from target
+      if (currentState.themeName !== theme) {
+        dispatch({ type: "cycle-theme" });
+      }
+    },
+    onSidebarModeChange: (_mode: SidebarMode) => dispatch({ type: "toggle-sidebar" }),
+    onIconModeChange: (_mode: IconMode) => dispatch({ type: "toggle-icon-mode" }),
+    onDefaultLogLevelChange: (level: LogLevel) => dispatch({ type: "set-log-level", level }),
   }),
   initialRoute: initialState.activeScreen,
   config: {

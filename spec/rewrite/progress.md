@@ -208,14 +208,37 @@ PTY evidence:
 
 Review: pass
 
-### 5C — Screen Architecture (not started)
+### 5C — Screen Architecture (complete)
+
+Done:
+
+- implemented all 6 screens with real content and proper Rezi widgets
+- Live: server controls row, log-level button group, logsConsole widget for live stream
+- Artifacts: fileTreeExplorer widget with split preview pane, path/type/size metadata
+- Accounts: table widget with account list, detail panel with refresh/remove actions
+- Usage: summary bar with totals+cache metrics, table widget with cache columns
+- Settings: theme/sidebar/icon pickers as button groups, storage path info
+- Help: two-column layout with keybindings, auth guidance, paths, troubleshooting
+- extended TuiState with screen-specific substates (live, artifacts, accounts, usage)
+- added reducer actions for all screen interactions
+- wired all callbacks through ExtendedScreenRouteDeps
+- updated render tests to match new Live screen content
+
+Tests added:
+
+- src/tui/__tests__/render.test.ts: updated to validate new Live screen content
+
+PTY evidence:
+
+- all 26 tests pass
+- build passes with no type errors
+
+Review: pass
+
+### 5D — Auth UX (not started)
 
 Next up:
 
-- implement all 6 screens with real content
-- Live: log stream + server controls + log-level buttons
-- Artifacts: file tree + preview pane
-- Accounts: add/remove flows + account table
-- Usage: summary bar + usage table with cache columns
-- Settings: theme/sidebar/icon pickers
-- Help: keyboard shortcuts + auth guidance
+- add-account flow in modal/layer form
+- verification link + device code + QR code block
+- progress states for waiting / success / failure
