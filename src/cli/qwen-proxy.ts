@@ -5,27 +5,29 @@ const { runAuthCommand } = require("../../authenticate.js") as any;
 const { runUsageCommand } = require("../../usage.js") as any;
 const { startHeadlessServer } = require("../server/headless-runtime.js") as any;
 
+async function startTui(): Promise<void> {
+  await new Function("path", "return import(path)")("../tui/main.js");
+}
+
 function printHelp(): void {
   console.log(`qwen-proxy v${packageJson.version}`);
   console.log("");
   console.log("Usage: qwen-proxy <command> [options]");
   console.log("");
   console.log("Commands:");
-  console.log("  serve --headless [--host <host>] [--port <port>]  Start proxy server");
+  console.log("  serve [--headless] [--host <host>] [--port <port>] Start proxy server or TUI");
   console.log("  auth [list|add <id>|remove <id>|counts]            Manage auth accounts");
   console.log("  usage                                               Show usage report");
   console.log("  tokens                                              Alias for usage");
   console.log("  help                                                Show this help");
   console.log("  version                                             Show CLI version");
-  console.log("");
-  console.log("Note: TUI mode is planned for a later phase.");
 }
 
 function printServeHelp(): void {
-  console.log("Usage: qwen-proxy serve --headless [--host <host>] [--port <port>]");
+  console.log("Usage: qwen-proxy serve [--headless] [--host <host>] [--port <port>]");
   console.log("");
   console.log("Options:");
-  console.log("  --headless     Required in phase 2");
+  console.log("  --headless     Start the classic headless server instead of the TUI");
   console.log("  --host <host>  Override HOST env value for this run");
   console.log("  --port <port>  Override PORT env value for this run");
 }
@@ -125,7 +127,8 @@ async function handleServeCommand(args: string[]): Promise<void> {
   }
 
   if (!parsed.headless) {
-    throw new Error("Only headless mode is available now. Use `qwen-proxy serve --headless`.");
+    await startTui();
+    return;
   }
 
   await startHeadlessServer({

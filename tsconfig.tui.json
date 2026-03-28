@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "include": [
+    "src/tui/**/*.ts"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules",
+    "qwen-code"
+  ]
+}

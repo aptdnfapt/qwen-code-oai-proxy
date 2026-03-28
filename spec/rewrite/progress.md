@@ -7,7 +7,7 @@
 - Phase 2: complete
 - Phase 3: complete
 - Phase 4: complete
-- Phase 5: not started
+- Phase 5: in progress
 - Phase 6: not started
 
 ## Phase 0 — Safety Cleanup (complete)
@@ -151,3 +151,7 @@ Acceptance check:
 ## Next Phase
 
 Phase 5: TUI product layer.
+
+Work in flight:
+
+- 5A shell/layout implementation is under review before completion is marked.

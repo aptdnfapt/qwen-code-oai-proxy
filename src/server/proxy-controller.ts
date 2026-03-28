@@ -1,6 +1,8 @@
 type RequestLike = any;
 type ResponseLike = any;
 
+const runtimeActivity = require("../utils/runtimeActivity.js") as typeof import("../utils/runtimeActivity.js");
+
 type ProxyDependencies = {
   qwenAPI: any;
   authService?: any;
@@ -178,6 +180,18 @@ export class QwenOpenAIProxy {
 
       let qwenId: string | null = null;
       let buffer = "";
+      let streamSettled = false;
+
+      runtimeActivity.incrementActiveStreams();
+
+      const settleStream = (): void => {
+        if (streamSettled) {
+          return;
+        }
+
+        streamSettled = true;
+        runtimeActivity.decrementActiveStreams();
+      };
 
       stream.on("data", (chunk: Buffer) => {
         buffer += chunk.toString();
@@ -203,6 +217,7 @@ export class QwenOpenAIProxy {
       });
 
       stream.on("end", () => {
+        settleStream();
         const latency = Date.now() - startTime;
         const qwenIdShort = qwenId ? qwenId.substring(0, 8) : null;
         this.liveLogger.proxyResponse(requestId, 200, displayAccount, latency, 0, 0, qwenIdShort, loggingState);
@@ -210,6 +225,7 @@ export class QwenOpenAIProxy {
       });
 
       stream.on("error", (error: any) => {
+          settleStream();
           this.fileLogger.logError(requestId, displayAccount, 500, error, undefined, loggingState);
           this.liveLogger.proxyError(requestId, 500, displayAccount, error.message, loggingState);
         if (!res.headersSent) {
@@ -220,6 +236,7 @@ export class QwenOpenAIProxy {
       });
 
       req.on("close", () => {
+        settleStream();
         stream.destroy();
       });
     } catch (error: any) {

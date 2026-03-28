@@ -11,6 +11,12 @@ const BIN_PATHS = [
   nodePath.join(process.cwd(), "dist", "authenticate.js"),
   nodePath.join(process.cwd(), "dist", "usage.js"),
 ];
+const COPY_FILE_PAIRS = [
+  {
+    source: nodePath.join(process.cwd(), "src", "tui", "package.json"),
+    target: nodePath.join(process.cwd(), "dist", "src", "tui", "package.json"),
+  },
+];
 
 async function ensureShebang(filePath: string): Promise<void> {
   const current = await fs.readFile(filePath, "utf8");
@@ -23,8 +29,21 @@ async function ensureShebang(filePath: string): Promise<void> {
   }
 }
 
+async function copyFileIfPresent(source: string, target: string): Promise<void> {
+  try {
+    const content = await fs.readFile(source, "utf8");
+    await fs.mkdir(nodePath.dirname(target), { recursive: true });
+    await fs.writeFile(target, content, "utf8");
+  } catch (error: any) {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
+  }
+}
+
 async function main(): Promise<void> {
   await Promise.all(BIN_PATHS.map((filePath) => ensureShebang(filePath)));
+  await Promise.all(COPY_FILE_PAIRS.map(({ source, target }) => copyFileIfPresent(source, target)));
 }
 
 main().catch((error: any) => {

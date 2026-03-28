@@ -45,21 +45,30 @@ Users might face errors or 504 Gateway Timeout issues when using contexts with 1
     *   Run `npm run auth:add <account>` to authenticate with your Qwen account
     *   This will create the `~/.qwen/oauth_creds.json` file needed by the proxy server
     *   Alternatively, you can use the official `qwen-code` CLI tool from [QwenLM/qwen-code](https://github.com/QwenLM/qwen-code)
-3.  **Start the Server (Headless)**:
+3.  **Start the Operator UI**:
+    ```bash
+    qwen-proxy serve
+    ```
+    This launches the Phase 5 TUI shell scaffold with the shared operator layout.
+
+4.  **Start the Server (Headless)**:
     ```bash
     npm run serve:headless
     ```
-4.  **Use the Proxy**: Point your OpenAI-compatible client to `http://localhost:8080/v1`.
+5.  **Use the Proxy**: Point your OpenAI-compatible client to `http://localhost:8080/v1`.
 
 **Note**: API key can be any random string - it doesn't matter for this proxy.
 
 ## CLI Entry (Rewrite Phase 2)
 
-The package now exposes a CLI command:
+The package now exposes both TUI and headless CLI entrypoints:
 
 ```bash
+qwen-proxy serve
 qwen-proxy serve --headless
 ```
+
+`qwen-proxy serve` currently opens the Phase 5 shell scaffold; deeper screen features continue to land across later 5B-5F slices.
 
 Fallback utility commands are also available:
 
