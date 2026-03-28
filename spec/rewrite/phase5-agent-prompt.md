@@ -22,18 +22,40 @@ Before writing a single line of code, complete this checklist in order. Do not s
 
 Do both of these before anything else.
 
-**1a. Check the last git commit:**
+**1a. Check the last git commit and working tree:**
 
 Run:
 ```bash
 git log --oneline -5
 git status --porcelain
+git diff
 ```
 
-This tells you:
-- What was last committed (confirms what phase/sub-sector was finished before you)
-- Whether there are any uncommitted changes left over from a previous run that you need to understand before proceeding
-- If uncommitted changes exist, read them with `git diff` before touching anything
+Work through these scenarios in order:
+
+---
+
+**Scenario A — git diff shows uncommitted work:**
+
+Do NOT ignore it. Do NOT start fresh. Read the diff fully and understand what was partially done.
+
+- If the uncommitted work belongs to a sub-sector that is not yet marked complete in progress.md → you are picking up an in-progress sub-sector. Continue from where it left off. Finish it, run tests, PTY validate, review, then commit. That is your one sub-sector for this run.
+- If the uncommitted work looks complete but was never committed → treat it as done work that needs to be closed out. Run the tests and PTY validation on it now. If it passes review, commit it properly with a full detailed commit message. Then update progress.md. That counts as your one sub-sector for this run — stop after.
+- Do NOT just stage and commit unreviewed leftover work blindly. Always validate first.
+
+---
+
+**Scenario B — git diff is clean, git log shows no `phase5` commits:**
+
+You are the first agent to touch Phase 5. Nothing was done before you. Your target is **5A — Shell + Layout**. Start there.
+
+---
+
+**Scenario C — git diff is clean, git log shows prior `phase5` commits:**
+
+A previous agent finished at least one sub-sector. Read progress.md to find the next incomplete one. Cross-check that the last `phase5` commit matches what progress.md says is done. If they agree, your target is the next incomplete sub-sector. If they disagree, stop and report the inconsistency — do not guess.
+
+---
 
 **1b. Read progress.md:**
 
@@ -49,11 +71,11 @@ The sub-sectors in order are:
 - 5E — Usage + Cache Metrics
 - 5F — Visual System polish
 
-**Cross-check:** The last git commit message should match what progress.md says is done. If they disagree, stop and report the inconsistency — do not guess or proceed blindly.
+**Special case — sub-sector looks done in code but not marked complete in progress.md:**
 
-**Special case — no phase5 commits found:** If `git log` shows no commit message containing `phase5`, you are the first agent to run on Phase 5. No previous agent has touched this. Skip the cross-check, trust progress.md as-is, and your target is **5A — Shell + Layout**. Start there.
+Do not stop. Do not be lazy. If you inspect the code and git diff and it is clear a sub-sector is fully implemented but progress.md was never updated — validate it properly (run tests, PTY, review), then mark it complete in progress.md, commit the progress.md update, and carry on to the next sub-sector. You are allowed to do this chain in one run only if the already-done sub-sector genuinely passes review. Do not rubber-stamp it — actually check it.
 
-**Your target is the first incomplete sub-sector.** If all 5A–5F are complete, stop — Phase 5 is done.
+**Your target is the first incomplete sub-sector.** If all 5A–5F are complete in progress.md and confirmed in code, stop — Phase 5 is done.
 
 Write down your target sub-sector before continuing.
 
