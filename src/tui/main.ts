@@ -26,90 +26,88 @@ const qrcode = require("qrcode-terminal") as {
   generate: (text: string, options: { small?: boolean }, callback: (qrText: string) => void) => void;
 };
 
-// Strip ANSI escape codes and carriage returns so raw terminal sequences
-// don't appear as garbage in the TUI log panel.
-const ANSI_RE = /\x1b\[[0-9;]*[mGKHFABCDJsuhl]/g;
+// Strip ANSI/control sequences. Returns empty string if nothing readable remains.
+const ANSI_RE = /\x1b[\x20-\x2f]*[\x40-\x7e]|\x1b\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]|\x1b[\x40-\x5f][^\x1b]*/g;
 function stripAnsi(text: string): string {
-  return text.replace(ANSI_RE, "").replace(/\r/g, "").trim();
+  return text.replace(ANSI_RE, "").replace(/[\r\x00-\x08\x0b-\x1f\x7f]/g, "").trim();
 }
 
-// Intercept process.stdout.write so that NOTHING — not winston, not
-// console.log, not any third-party logger — can write raw bytes to the
-// terminal while the TUI owns it.  All text is funnelled into the TUI's
-// logsConsole dispatch instead.
-function installStdoutCapture(): void {
-  const originalWrite = process.stdout.write.bind(process.stdout);
-  let lineBuffer = "";
+// Pending log lines queued from the stdout interceptor. Flushed via
+// queueMicrotask so dispatch never fires synchronously during Rezi's render.
+const pendingLogLines: Array<{ level: "info" | "warn" | "error"; message: string }> = [];
+let logFlushScheduled = false;
 
-  function flushLine(line: string): void {
-    const message = stripAnsi(line);
-    if (!message) return;
-    dispatch({
-      type: "append-log",
-      entry: {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        timestamp: Date.now(),
-        level: "info",
-        message,
-        source: "server",
-      },
-    });
-  }
-
-  // Wrap write — accumulate partial lines, emit on newline.
-  (process.stdout.write as any) = (chunk: string | Buffer, encodingOrCb?: unknown, cb?: unknown): boolean => {
-    const text = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
-    lineBuffer += text;
-    const parts = lineBuffer.split("\n");
-    // Everything except the last element is a complete line
-    for (let i = 0; i < parts.length - 1; i++) {
-      flushLine(parts[i]);
-    }
-    lineBuffer = parts[parts.length - 1];
-
-    // Call the original callback if provided (node stream protocol)
-    const callback = typeof encodingOrCb === "function" ? encodingOrCb : cb;
-    if (typeof callback === "function") {
-      (callback as () => void)();
-    }
-    return true;
-  };
-
-  // Also capture stderr the same way (some loggers write there)
-  const originalErrWrite = process.stderr.write.bind(process.stderr);
-  let errBuffer = "";
-
-  (process.stderr.write as any) = (chunk: string | Buffer, encodingOrCb?: unknown, cb?: unknown): boolean => {
-    const text = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
-    errBuffer += text;
-    const parts = errBuffer.split("\n");
-    for (let i = 0; i < parts.length - 1; i++) {
-      const message = stripAnsi(parts[i]);
-      if (message) {
+function scheduleLogFlush(): void {
+  if (logFlushScheduled) return;
+  logFlushScheduled = true;
+  queueMicrotask(() => {
+    logFlushScheduled = false;
+    const lines = pendingLogLines.splice(0);
+    for (const { level, message } of lines) {
+      try {
         dispatch({
           type: "append-log",
           entry: {
             id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             timestamp: Date.now(),
-            level: "error",
+            level,
             message,
             source: "server",
           },
         });
+      } catch {
+        // Never let log dispatch crash the TUI
       }
     }
-    errBuffer = parts[parts.length - 1];
+  });
+}
 
-    const callback = typeof encodingOrCb === "function" ? encodingOrCb : cb;
-    if (typeof callback === "function") {
-      (callback as () => void)();
-    }
-    return true;
-  };
+// Intercept process.stdout.write / process.stderr.write so that nothing
+// (winston, console.log, any logger) writes raw bytes to the terminal while
+// the TUI owns it. Dispatch is deferred via queueMicrotask to avoid calling
+// app.update() synchronously inside Rezi's render cycle.
+function installStdoutCapture(): void {
+  let outBuffer = "";
+  let errBuffer = "";
 
-  // Keep a reference to originals so the TUI renderer can still use them
-  (process.stdout as any).__tuiOriginalWrite = originalWrite;
-  (process.stderr as any).__tuiOriginalWrite = originalErrWrite;
+  function pushLine(level: "info" | "error", line: string): void {
+    const message = stripAnsi(line);
+    if (!message) return;
+    pendingLogLines.push({ level, message });
+    scheduleLogFlush();
+  }
+
+  function interceptWrite(
+    getBuffer: () => string,
+    setBuffer: (s: string) => void,
+    level: "info" | "error",
+  ) {
+    return (chunk: string | Buffer, encodingOrCb?: unknown, cb?: unknown): boolean => {
+      const text = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
+      let buf = getBuffer() + text;
+      const parts = buf.split("\n");
+      for (let i = 0; i < parts.length - 1; i++) {
+        pushLine(level, parts[i]);
+      }
+      setBuffer(parts[parts.length - 1]);
+
+      const callback = typeof encodingOrCb === "function" ? encodingOrCb : cb;
+      if (typeof callback === "function") (callback as () => void)();
+      return true;
+    };
+  }
+
+  (process.stdout.write as any) = interceptWrite(
+    () => outBuffer,
+    (s) => { outBuffer = s; },
+    "info",
+  );
+
+  (process.stderr.write as any) = interceptWrite(
+    () => errBuffer,
+    (s) => { errBuffer = s; },
+    "error",
+  );
 }
 
 let app!: ReturnType<typeof createNodeApp<TuiState>>;
