@@ -181,10 +181,41 @@ PTY evidence:
 
 Review: pass
 
-### 5B — Navigation + Input Model (in progress)
+### 5B — Navigation + Input Model (complete)
 
-Work in flight:
+Done:
 
-- implementing tab/shift+tab focus region switching
-- arrow key navigation within focused region
-- mouse click on sidebar items
+- tab switches focus region (sidebar -> main)
+- shift+tab reverses focus region (main -> sidebar)
+- arrow up/down moves sidebar selection when sidebar is focused
+- enter activates selected sidebar item and navigates to that screen
+- ? and h keys navigate to help screen
+- sidebar shows visual selection indicator (> prefix) when focused
+- sidebar has border when focused to indicate active focus region
+- footer shows current focus region (focus:sidebar or focus:main)
+- mouse click on sidebar items works via Rezi button onPress handlers
+
+Tests added:
+
+- src/tui/__tests__/keybindings.test.ts: 11 tests covering all keybindings
+- src/tui/__tests__/reducer.test.ts: 5 new tests for focus and sidebar navigation
+- src/tui/__tests__/render.test.ts: updated to check focus:sidebar indicator
+
+PTY evidence:
+
+- focus-indicator capture verifies focus:sidebar and Tab focus hints
+- all 26 tests pass
+
+Review: pass
+
+### 5C — Screen Architecture (not started)
+
+Next up:
+
+- implement all 6 screens with real content
+- Live: log stream + server controls + log-level buttons
+- Artifacts: file tree + preview pane
+- Accounts: add/remove flows + account table
+- Usage: summary bar + usage table with cache columns
+- Settings: theme/sidebar/icon pickers
+- Help: keyboard shortcuts + auth guidance
