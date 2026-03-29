@@ -1,12 +1,15 @@
 import chalk from "chalk";
-import { truncateToWidth } from "@mariozechner/pi-tui";
 import type { LogEntry, LogLevel, TuiState } from "../types.js";
 import {
+  type ButtonTone,
   caption, danger, formatDuration, formatTime, hRule,
-  muted, padRight, sectionHeader, success, truncLine, warning,
+  layoutButtonGroup,
+  muted, sectionHeader, success, truncLine, warning,
 } from "../render.js";
 
 const LOG_LEVELS: readonly LogLevel[] = ["off", "error", "error-debug", "debug"];
+export const LIVE_SERVER_ROW = 6;
+export const LIVE_LOG_LEVEL_ROW = 10;
 
 function levelColor(level: string): (s: string) => string {
   if (level === "error") return danger;
@@ -26,29 +29,44 @@ function renderServerStatus(runtime: TuiState["runtime"], width: number): string
   return [truncLine(line, width)];
 }
 
-function renderServerControls(serverState: TuiState["runtime"]["serverState"], focusMain: boolean, width: number): string[] {
-  const actions = [
-    { key: "S", label: "Start", active: serverState !== "running" },
-    { key: "X", label: "Stop",  active: serverState === "running" },
-    { key: "R", label: "Restart", active: true },
+export function liveServerButtons(serverState: TuiState["runtime"]["serverState"]) {
+  return [
+    { id: "start", label: "Start", tone: "success", disabled: serverState === "running" },
+    { id: "stop", label: "Stop", tone: "danger", disabled: serverState !== "running" },
+    { id: "restart", label: "Restart", tone: "accent" },
+  ] as const;
+}
+
+function renderServerControls(serverState: TuiState["runtime"]["serverState"], width: number): string[] {
+  const group = layoutButtonGroup(liveServerButtons(serverState));
+  return [
+    truncLine(caption("  Server"), width),
+    ...group.lines.map((line) => truncLine(`  ${line}`, width)),
   ];
-  const parts = actions.map(({ key, label, active }) => {
-    const s = `[${key}] ${label}`;
-    return active ? chalk.white(s) : muted(s);
-  });
-  return [truncLine(caption("  Server: ") + parts.join("  "), width)];
+}
+
+export function liveLogLevelButtons(current: LogLevel) {
+  return LOG_LEVELS.map((level) => ({
+    id: level,
+    label: level,
+    tone: (level === "off" ? "neutral" : level === "error" ? "danger" : level === "debug" ? "success" : "accent") as ButtonTone,
+    selected: level === current,
+  }));
 }
 
 function renderLogLevelBar(current: LogLevel, width: number): string[] {
-  const parts = LOG_LEVELS.map((level) => {
-    const s = `[${level === current ? "*" : " "}] ${level}`;
-    return level === current ? chalk.cyan(s) : muted(s);
-  });
-  return [truncLine(caption("  Log:    ") + parts.join("  "), width)];
+  const group = layoutButtonGroup(liveLogLevelButtons(current));
+  return [
+    truncLine(caption("  Log level"), width),
+    ...group.lines.map((line) => truncLine(`  ${line}`, width)),
+  ];
 }
 
 function renderLogEntry(log: LogEntry, width: number): string {
   const time = muted(formatTime(log.timestamp));
+  if (log.formattedMessage) {
+    return truncLine(`${time}  ${log.formattedMessage}`, width);
+  }
   const col = levelColor(log.level);
   const level = col(log.level.padEnd(5));
   const msg = log.level === "error" ? danger(log.message) :
@@ -67,7 +85,7 @@ export function renderLiveScreen(
   lines.push(hRule(width));
   lines.push(...renderServerStatus(state.runtime, width));
   lines.push(hRule(width));
-  lines.push(...renderServerControls(state.runtime.serverState, state.focusRegion === "main", width));
+  lines.push(...renderServerControls(state.runtime.serverState, width));
   lines.push(...renderLogLevelBar(state.live.logLevel, width));
   lines.push(hRule(width));
 
@@ -91,8 +109,8 @@ export function renderLiveScreen(
 
   const total = logs.length;
   const hint = total > 0
-    ? caption(`  ↑↓ scroll  ${String(scrollTop + 1)}-${String(Math.min(scrollTop + availRows, total))}/${String(total)}  S start  X stop  R restart  1-4 log level`)
-    : caption("  S start  X stop  R restart  1-4 log level");
+    ? caption(`  ↑↓ or wheel  ${String(scrollTop + 1)}-${String(Math.min(scrollTop + availRows, total))}/${String(total)}  Click buttons or use S/X/R + 1-4`)
+    : caption("  Click buttons or use S/X/R + 1-4");
   lines.push(truncLine(hint, width));
 
   return lines;

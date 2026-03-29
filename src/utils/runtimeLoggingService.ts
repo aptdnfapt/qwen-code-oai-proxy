@@ -60,6 +60,8 @@ class RuntimeLoggingService {
 
   private cleanupStarted = false;
 
+  private consoleEnabled = true;
+
   attachRuntimeConfigStore(runtimeConfigStore: RuntimeConfigStoreLike | null | undefined): void {
     this.runtimeConfigStore = runtimeConfigStore ?? null;
     const paths = runtimeConfigStore?.getPaths?.();
@@ -100,7 +102,7 @@ class RuntimeLoggingService {
   }
 
   private emitControlLog(message: string): void {
-    if (this.currentLogLevel === "off") {
+    if (this.currentLogLevel === "off" || !this.consoleEnabled) {
       return;
     }
 
@@ -136,6 +138,10 @@ class RuntimeLoggingService {
 
   shouldEmitLive(): boolean {
     return this.captureState().liveEnabled;
+  }
+
+  setConsoleEnabled(enabled: boolean): void {
+    this.consoleEnabled = enabled;
   }
 
   getLogDir(): string {

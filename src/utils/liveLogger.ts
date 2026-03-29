@@ -4,6 +4,13 @@ import { runtimeLoggingService } from "./runtimeLoggingService";
 
 type ColorName = "red" | "green" | "blue" | "yellow" | "cyan" | "magenta" | "gray" | "white";
 
+type LiveLogEvent = Readonly<{
+  timestamp: number;
+  message: string;
+}>;
+
+type LiveLogListener = (event: LiveLogEvent) => void;
+
 const colors: Record<ColorName, (text: string) => string> = {
   red: (text) => `\x1b[31m${text}\x1b[0m`,
   green: (text) => `\x1b[32m${text}\x1b[0m`,
@@ -17,7 +24,11 @@ const colors: Record<ColorName, (text: string) => string> = {
 
 const accountColors = new Map<string, ColorName>();
 const availableColors: ColorName[] = ["blue", "green", "yellow", "magenta", "cyan", "white"];
+const liveLogListeners = new Set<LiveLogListener>();
+const liveLogHistory: LiveLogEvent[] = [];
+const MAX_HISTORY = 400;
 let colorIndex = 0;
+let consoleEnabled = true;
 
 function getAccountColor(accountId: string | null | undefined): ColorName {
   if (!accountId) {
@@ -63,7 +74,25 @@ function log(message: string, loggingState?: { liveEnabled?: boolean }): void {
     return;
   }
 
-  logger.info(message);
+  const event = Object.freeze({
+    timestamp: Date.now(),
+    message,
+  });
+
+  liveLogHistory.push(event);
+  if (liveLogHistory.length > MAX_HISTORY) {
+    liveLogHistory.splice(0, liveLogHistory.length - MAX_HISTORY);
+  }
+
+  for (const listener of liveLogListeners) {
+    try {
+      listener(event);
+    } catch {}
+  }
+
+  if (consoleEnabled) {
+    logger.info(message);
+  }
 }
 
 function maskAccountId(accountId: string | null | undefined): string {
@@ -75,6 +104,10 @@ function maskAccountId(accountId: string | null | undefined): string {
 }
 
 const liveLogger = {
+  emit(message: string, loggingState?: { liveEnabled?: boolean }): void {
+    log(message, loggingState);
+  },
+
   proxyRequest(requestId: string, model: string, accountId: string | null | undefined, tokenCount: number, requestNum?: number, isStreaming?: boolean, loggingState?: { liveEnabled?: boolean }): void {
     const reqNumStr = requestNum ? colors.gray(`#${requestNum}`) : "";
     const streamStr = isStreaming ? colors.cyan("{streaming}") : "";
@@ -123,6 +156,21 @@ const liveLogger = {
 
   shutdown(reason: string): void {
     log(`${colors.yellow("■")} Shutdown | ${colors.gray(reason)}`);
+  },
+
+  subscribe(listener: LiveLogListener): () => void {
+    liveLogListeners.add(listener);
+    return () => {
+      liveLogListeners.delete(listener);
+    };
+  },
+
+  getRecentEntries(limit = 200): readonly LiveLogEvent[] {
+    return Object.freeze(liveLogHistory.slice(-Math.max(0, limit)));
+  },
+
+  setConsoleEnabled(enabled: boolean): void {
+    consoleEnabled = enabled;
   },
 };
 

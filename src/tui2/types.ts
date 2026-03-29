@@ -25,6 +25,7 @@ export type LogEntry = Readonly<{
   timestamp: number;
   level: "info" | "warn" | "error" | "debug";
   message: string;
+  formattedMessage?: string;
   source?: string;
 }>;
 
@@ -184,6 +185,7 @@ export type TuiAction =
   | Readonly<{ type: "set-theme"; theme: ThemeName }>
   | Readonly<{ type: "set-runtime"; runtime: RuntimeSummary }>
   | Readonly<{ type: "request-quit" }>
+  | Readonly<{ type: "set-focus-region"; region: FocusRegion }>
   | Readonly<{ type: "focus-next-region" }>
   | Readonly<{ type: "focus-prev-region" }>
   | Readonly<{ type: "sidebar-move"; direction: "up" | "down" }>
@@ -212,5 +214,4 @@ export type ScreenRouteDeps = Readonly<{
   onNavigate: (screen: ScreenId) => void;
   onToggleSidebar: () => void;
 }>;
-
 

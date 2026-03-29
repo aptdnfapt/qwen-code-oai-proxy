@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import { Input, type Component, type Focusable, Key, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
 import type { AccountsAuthModalState } from "./types.js";
-import { danger, hRule, muted, padRight, success, truncLine, warning } from "./render.js";
+import { danger, hRule, layoutButtonGroup, muted, padRight, success, truncLine, warning } from "./render.js";
 
 function phaseColor(phase: AccountsAuthModalState["phase"]): (s: string) => string {
   if (phase === "success") return success;
@@ -29,6 +29,7 @@ export class AuthOverlay implements Component, Focusable {
   public onStartAuth?: () => void;
   public onClose?: () => void;
   public onAccountIdChange?: (id: string) => void;
+  public onOpenBrowser?: () => void;
 
   constructor(modal: AccountsAuthModalState) {
     this.modal = modal;
@@ -66,6 +67,11 @@ export class AuthOverlay implements Component, Focusable {
 
     if (matchesKey(data, Key.enter) && modal.phase === "success") {
       this.onClose?.();
+      return;
+    }
+
+    if ((data === "o" || data === "O") && modal.flow) {
+      this.onOpenBrowser?.();
       return;
     }
 
@@ -134,11 +140,37 @@ export class AuthOverlay implements Component, Focusable {
     lines.push(row(hRule(innerW)));
 
     if (modal.phase === "success") {
-      lines.push(row(chalk.green("[Enter] close")));
+      const buttons = layoutButtonGroup([
+        { id: "close", label: "Close", tone: "success", selected: true },
+      ]);
+      for (const buttonLine of buttons.lines) {
+        lines.push(row(buttonLine));
+      }
+      lines.push(row(muted("Enter close")));
     } else if (!busy) {
-      lines.push(row(chalk.white("[Enter] start auth") + "   " + muted("[Esc] cancel")));
+      const buttons = layoutButtonGroup([
+        { id: "start", label: "Start auth", tone: "accent", selected: true },
+        { id: "close", label: "Close", tone: "neutral" },
+      ]);
+      for (const buttonLine of buttons.lines) {
+        lines.push(row(buttonLine));
+      }
+      lines.push(row(muted("Enter start  Esc close")));
     } else {
-      lines.push(row(muted("waiting... [Esc] to cancel")));
+      const buttons = modal.flow
+        ? layoutButtonGroup([
+            { id: "open", label: "Open browser", tone: "accent", selected: true },
+            { id: "close", label: "Close", tone: "neutral" },
+          ]).lines
+        : null;
+      if (buttons) {
+        for (const buttonLine of buttons) {
+          lines.push(row(buttonLine));
+        }
+        lines.push(row(muted("O open browser")));
+      } else {
+        lines.push(row(muted("waiting...")));
+      }
     }
 
     lines.push(bot);

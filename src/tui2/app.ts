@@ -1,18 +1,26 @@
 import chalk from "chalk";
-import { type Component, type Focusable, type TUI, Key, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
+import { type Component, type Focusable, type TUI, Key, matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import type { LogLevel, ScreenId, TuiAction, TuiState } from "./types.js";
 import { NAV_ITEMS } from "./types.js";
 import {
+  buttonHitAt,
   caption, formatDuration, hRule, muted, padRight,
-  sectionHeader, success, truncLine, warning, SIDEBAR_W, SIDEBAR_W_COLLAPSED,
+  layoutButtonGroup,
+  success, truncLine, warning, SIDEBAR_W, SIDEBAR_W_COLLAPSED,
 } from "./render.js";
-import { parseMouse } from "./mouse.js";
+import { disableMouse, enableMouse, parseMouse } from "./mouse.js";
 import { AuthOverlay } from "./auth-overlay.js";
-import { renderLiveScreen } from "./screens/live.js";
-import { renderAccountsScreen } from "./screens/accounts.js";
+import { LIVE_LOG_LEVEL_ROW, LIVE_SERVER_ROW, liveLogLevelButtons, liveServerButtons, renderLiveScreen } from "./screens/live.js";
+import { ACCOUNTS_ADD_BUTTON_ROW, ACCOUNTS_TABLE_START_ROW, renderAccountsScreen } from "./screens/accounts.js";
 import { renderUsageScreen } from "./screens/usage.js";
-import { renderArtifactsScreen } from "./screens/artifacts.js";
-import { renderSettingsScreen } from "./screens/settings.js";
+import { ARTIFACT_TREE_START_ROW, artifactPaneWidths, flattenArtifactRows, renderArtifactsScreen } from "./screens/artifacts.js";
+import {
+  renderSettingsScreen,
+  SETTINGS_ICONS_ROW,
+  SETTINGS_LOG_LEVEL_ROW,
+  SETTINGS_SIDEBAR_ROW,
+  SETTINGS_THEME_ROW,
+} from "./screens/settings.js";
 import { renderHelpScreen } from "./screens/help.js";
 
 export type AppCallbacks = {
@@ -86,6 +94,10 @@ export class AppView implements Component, Focusable {
       this.cb.onCloseAuthModal();
     };
 
+    overlay.onOpenBrowser = () => {
+      this.cb.onOpenAuthBrowser();
+    };
+
     this.authOverlay = overlay;
     this.authOverlayHandle = this.tui.showOverlay(overlay, {
       width: "60%",
@@ -116,6 +128,48 @@ export class AppView implements Component, Focusable {
     return SIDEBAR_W;
   }
 
+  private setFocusRegion(region: TuiState["focusRegion"]): void {
+    this.cb.dispatch({ type: "set-focus-region", region });
+  }
+
+  private moveLiveLogs(delta: number): void {
+    this.cb.dispatch({
+      type: "set-logs-scroll",
+      scrollTop: Math.max(0, this.state.live.logsScrollTop + delta),
+    });
+  }
+
+  private stepAccounts(delta: number): void {
+    const accounts = this.state.accounts.accounts;
+    const idx = accounts.findIndex((account) => account.id === this.state.accounts.selectedId);
+    const next = accounts[Math.max(0, Math.min(accounts.length - 1, idx + delta))];
+    if (next) {
+      this.cb.onSelectAccount(next.id);
+    }
+  }
+
+  private stepUsage(delta: number): void {
+    const days = this.state.usage.days;
+    const idx = days.findIndex((day) => day.date === this.state.usage.selectedDate);
+    const next = days[Math.max(0, Math.min(days.length - 1, idx + delta))];
+    if (next) {
+      this.cb.onSelectUsageDate(next.date);
+    }
+  }
+
+  private stepArtifacts(delta: number): void {
+    const rows = flattenArtifactRows(this.state.artifacts.tree, this.state.artifacts.expanded);
+    const idx = rows.findIndex((row) => row.path === this.state.artifacts.selected);
+    const next = rows[Math.max(0, Math.min(rows.length - 1, idx + delta))];
+    if (next) {
+      this.cb.onSelectArtifact(next.path);
+    }
+  }
+
+  private mainWidth(totalWidth: number): number {
+    return Math.max(20, totalWidth - this.sidebarWidth() - 1);
+  }
+
   handleInput(data: string): void {
     if (this.filterMode) {
       if (matchesKey(data, Key.escape)) {
@@ -136,8 +190,10 @@ export class AppView implements Component, Focusable {
     }
 
     const mouse = parseMouse(data);
-    if (mouse) {
-      if (!mouse.release && mouse.button === 0) {
+    if (mouse && this.mouseEnabled) {
+      if (mouse.wheel) {
+        this.handleWheel(mouse.wheel, mouse.col, mouse.row);
+      } else if (!mouse.release && !mouse.move && mouse.button === 0) {
         this.handleClick(mouse.col, mouse.row);
       }
       return;
@@ -169,9 +225,9 @@ export class AppView implements Component, Focusable {
     if (data === "m") {
       this.mouseEnabled = !this.mouseEnabled;
       if (this.mouseEnabled) {
-        this.tui["terminal"]?.write?.("\x1b[?1000h\x1b[?1006h");
+        enableMouse((s) => this.tui["terminal"]?.write?.(s));
       } else {
-        this.tui["terminal"]?.write?.("\x1b[?1000l\x1b[?1006l");
+        disableMouse((s) => this.tui["terminal"]?.write?.(s));
       }
       return;
     }
@@ -216,13 +272,11 @@ export class AppView implements Component, Focusable {
       if (data === "3") { this.cb.onLogLevelChange("error-debug"); return; }
       if (data === "4") { this.cb.onLogLevelChange("debug"); return; }
       if (matchesKey(data, Key.up)) {
-        const next = Math.max(0, this.state.live.logsScrollTop - 1);
-        this.cb.dispatch({ type: "set-logs-scroll", scrollTop: next });
+        this.moveLiveLogs(-1);
         return;
       }
       if (matchesKey(data, Key.down)) {
-        const next = this.state.live.logsScrollTop + 1;
-        this.cb.dispatch({ type: "set-logs-scroll", scrollTop: next });
+        this.moveLiveLogs(1);
         return;
       }
     }
@@ -230,17 +284,11 @@ export class AppView implements Component, Focusable {
     if (screen === "accounts") {
       if (data === "a" || data === "A") { this.cb.onAddAccount(); return; }
       if (matchesKey(data, Key.up)) {
-        const accounts = this.state.accounts.accounts;
-        const idx = accounts.findIndex((a) => a.id === this.state.accounts.selectedId);
-        const next = accounts[Math.max(0, idx - 1)];
-        if (next) this.cb.onSelectAccount(next.id);
+        this.stepAccounts(-1);
         return;
       }
       if (matchesKey(data, Key.down)) {
-        const accounts = this.state.accounts.accounts;
-        const idx = accounts.findIndex((a) => a.id === this.state.accounts.selectedId);
-        const next = accounts[Math.min(accounts.length - 1, idx + 1)];
-        if (next) this.cb.onSelectAccount(next.id);
+        this.stepAccounts(1);
         return;
       }
     }
@@ -258,22 +306,24 @@ export class AppView implements Component, Focusable {
         return;
       }
       if (matchesKey(data, Key.up)) {
-        const days = this.state.usage.days;
-        const idx = days.findIndex((d) => d.date === this.state.usage.selectedDate);
-        const next = days[Math.max(0, idx - 1)];
-        if (next) this.cb.onSelectUsageDate(next.date);
+        this.stepUsage(-1);
         return;
       }
       if (matchesKey(data, Key.down)) {
-        const days = this.state.usage.days;
-        const idx = days.findIndex((d) => d.date === this.state.usage.selectedDate);
-        const next = days[Math.min(days.length - 1, idx + 1)];
-        if (next) this.cb.onSelectUsageDate(next.date);
+        this.stepUsage(1);
         return;
       }
     }
 
     if (screen === "artifacts") {
+      if (matchesKey(data, Key.up)) {
+        this.stepArtifacts(-1);
+        return;
+      }
+      if (matchesKey(data, Key.down)) {
+        this.stepArtifacts(1);
+        return;
+      }
       if (matchesKey(data, Key.enter)) {
         const sel = this.state.artifacts.selected;
         if (sel) this.cb.onToggleArtifactExpand(sel);
@@ -290,18 +340,179 @@ export class AppView implements Component, Focusable {
     }
   }
 
+  private handleWheel(direction: "up" | "down", col: number, _row: number): void {
+    const sbW = this.sidebarWidth();
+    const delta = direction === "up" ? -3 : 3;
+
+    if (col < sbW) {
+      this.setFocusRegion("sidebar");
+      this.cb.dispatch({ type: "sidebar-move", direction: direction === "up" ? "up" : "down" });
+      return;
+    }
+
+    this.setFocusRegion("main");
+
+    switch (this.state.activeScreen) {
+      case "live":
+        this.moveLiveLogs(delta);
+        break;
+      case "accounts":
+        this.stepAccounts(direction === "up" ? -1 : 1);
+        break;
+      case "usage":
+        this.stepUsage(direction === "up" ? -1 : 1);
+        break;
+      case "artifacts":
+        this.stepArtifacts(direction === "up" ? -1 : 1);
+        break;
+      default:
+        break;
+    }
+  }
+
+  private handleLiveClick(localCol: number, localRow: number): void {
+    if (localRow >= LIVE_SERVER_ROW - 1 && localRow <= LIVE_SERVER_ROW + 1) {
+      const prefix = 2;
+      const hit = buttonHitAt(layoutButtonGroup(liveServerButtons(this.state.runtime.serverState)).hits, localCol - prefix);
+      if (hit === "start") this.cb.onStartServer();
+      if (hit === "stop") this.cb.onStopServer();
+      if (hit === "restart") this.cb.onRestartServer();
+      return;
+    }
+
+    if (localRow >= LIVE_LOG_LEVEL_ROW - 1 && localRow <= LIVE_LOG_LEVEL_ROW + 1) {
+      const prefix = 2;
+      const hit = buttonHitAt(layoutButtonGroup(liveLogLevelButtons(this.state.live.logLevel)).hits, localCol - prefix);
+      if (hit) this.cb.onLogLevelChange(hit as LogLevel);
+    }
+  }
+
+  private handleAccountsClick(localRow: number): void {
+    if (localRow >= ACCOUNTS_ADD_BUTTON_ROW - 1 && localRow <= ACCOUNTS_ADD_BUTTON_ROW + 1) {
+      this.cb.onAddAccount();
+      return;
+    }
+
+    const index = localRow - ACCOUNTS_TABLE_START_ROW;
+    const account = this.state.accounts.accounts[index];
+    if (account) {
+      this.cb.onSelectAccount(account.id);
+    }
+  }
+
+  private handleUsageClick(localRow: number): void {
+    const index = localRow - 8;
+    const selected = this.state.usage.days[index];
+    if (selected) {
+      this.cb.onSelectUsageDate(selected.date);
+    }
+  }
+
+  private handleArtifactsClick(localCol: number, localRow: number, mainWidth: number): void {
+    const { treeWidth } = artifactPaneWidths(mainWidth);
+    if (localRow < ARTIFACT_TREE_START_ROW || localCol >= treeWidth) {
+      return;
+    }
+
+    const rows = flattenArtifactRows(this.state.artifacts.tree, this.state.artifacts.expanded);
+    const selected = rows[localRow - ARTIFACT_TREE_START_ROW];
+    if (!selected) {
+      return;
+    }
+
+    this.cb.onSelectArtifact(selected.path);
+    if (selected.type === "directory") {
+      this.cb.onToggleArtifactExpand(selected.path);
+    }
+  }
+
+  private handleSettingsClick(localRow: number, localCol: number): void {
+    const rowCol = localCol - 2;
+    if (rowCol < 0) {
+      return;
+    }
+
+    if (localRow >= SETTINGS_THEME_ROW - 1 && localRow <= SETTINGS_THEME_ROW + 1) {
+      const hit = buttonHitAt(layoutButtonGroup([
+        { id: "dark", label: "dark", selected: this.state.themeName === "dark", tone: "accent" },
+        { id: "light", label: "light", selected: this.state.themeName === "light", tone: "accent" },
+      ]).hits, rowCol);
+      if (hit) this.cb.onThemeChange(hit as TuiState["themeName"]);
+      return;
+    }
+
+    if (localRow >= SETTINGS_SIDEBAR_ROW - 1 && localRow <= SETTINGS_SIDEBAR_ROW + 1) {
+      const hit = buttonHitAt(layoutButtonGroup([
+        { id: "expanded", label: "expanded", selected: this.state.sidebarMode === "expanded", tone: "accent" },
+        { id: "collapsed", label: "collapsed", selected: this.state.sidebarMode === "collapsed", tone: "accent" },
+      ]).hits, rowCol);
+      if (hit) this.cb.dispatch({ type: "set-sidebar-mode", mode: hit as TuiState["sidebarMode"] });
+      return;
+    }
+
+    if (localRow >= SETTINGS_ICONS_ROW - 1 && localRow <= SETTINGS_ICONS_ROW + 1) {
+      const hit = buttonHitAt(layoutButtonGroup([
+        { id: "fallback", label: "fallback", selected: this.state.iconMode === "fallback", tone: "accent" },
+        { id: "nerd", label: "nerd", selected: this.state.iconMode === "nerd", tone: "accent" },
+      ]).hits, rowCol);
+      if (hit) this.cb.dispatch({ type: "set-icon-mode", mode: hit as TuiState["iconMode"] });
+      return;
+    }
+
+    if (localRow >= SETTINGS_LOG_LEVEL_ROW - 1 && localRow <= SETTINGS_LOG_LEVEL_ROW + 1) {
+      const hit = buttonHitAt(layoutButtonGroup([
+        { id: "off", label: "off", selected: this.state.live.logLevel === "off", tone: "neutral" },
+        { id: "error", label: "error", selected: this.state.live.logLevel === "error", tone: "danger" },
+        { id: "error-debug", label: "error-debug", selected: this.state.live.logLevel === "error-debug", tone: "accent" },
+        { id: "debug", label: "debug", selected: this.state.live.logLevel === "debug", tone: "success" },
+      ]).hits, rowCol);
+      if (hit) this.cb.onLogLevelChange(hit as LogLevel);
+    }
+  }
+
   private handleClick(col: number, row: number): void {
     const sbW = this.sidebarWidth();
+    const termRows = this.tui["terminal"]?.rows ?? this.state.viewportRows;
+
     if (col < sbW) {
-      const headerRows = 2;
-      const itemRow = row - headerRows;
+      this.setFocusRegion("sidebar");
+      const itemRow = row - 2;
       if (itemRow >= 0 && itemRow < NAV_ITEMS.length) {
         const item = NAV_ITEMS[itemRow];
         if (item) {
           this.navigate(item.id);
-          this.cb.dispatch({ type: "sidebar-activate" });
         }
+        return;
       }
+      if (row === termRows - 1) {
+        this.cb.dispatch({ type: "toggle-sidebar" });
+      }
+      return;
+    }
+
+    this.setFocusRegion("main");
+    const localCol = col - sbW - 1;
+    const localRow = row - 1;
+    const mainWidth = this.mainWidth(this.state.viewportCols);
+
+    switch (this.state.activeScreen) {
+      case "live":
+        this.handleLiveClick(localCol, localRow);
+        break;
+      case "accounts":
+        this.handleAccountsClick(localRow);
+        break;
+      case "usage":
+        this.handleUsageClick(localRow);
+        break;
+      case "artifacts":
+        this.handleArtifactsClick(localCol, localRow, mainWidth);
+        break;
+      case "settings":
+        this.handleSettingsClick(localRow, localCol);
+        break;
+      default:
+        break;
     }
   }
 
@@ -350,14 +561,13 @@ export class AppView implements Component, Focusable {
       chalk.cyan("⟳ " + runtime.serverState);
     const authStr = runtime.status === "ready" ? success("auth:ok") : warning("auth:none");
     const mouseStr = this.mouseEnabled ? chalk.cyan("mouse:on") : muted("mouse:off");
-    const line = `${stateStr}  ${runtime.host}:${String(runtime.port)}  up ${formatDuration(runtime.uptimeMs)}  ${String(runtime.accountCount)} acc  ${runtime.rotationMode}  ${authStr}  ${mouseStr}`;
+    const line = `${stateStr}  ${runtime.host}:${String(runtime.port)}  up ${formatDuration(runtime.uptimeMs)}  ${runtime.rotationMode}  ${String(runtime.accountCount)} acc  req ${String(runtime.requestCount)}  streams ${String(runtime.streamCount)}  ${authStr}  ${mouseStr}`;
     return truncLine(line, mainW);
   }
 
   private renderFooter(mainW: number): string {
-    const screen = this.state.activeScreen;
     const focusStr = this.state.focusRegion === "sidebar" ? chalk.cyan("sidebar") : chalk.cyan("main");
-    const base = caption(`Tab focus(${focusStr})  [ sidebar  t theme  m mouse  q quit  ? help`);
+    const base = caption(`Tab focus(${focusStr})  click select  wheel scroll  [ sidebar  t theme  m mouse  q quit  ? help`);
     const filterHint = this.filterMode ? chalk.yellow("  [FILTER MODE] type to filter, Enter/Esc done") : "";
     return truncLine(base + filterHint, mainW);
   }

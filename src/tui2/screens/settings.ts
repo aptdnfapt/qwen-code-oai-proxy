@@ -1,23 +1,32 @@
 import chalk from "chalk";
 import type { IconMode, LogLevel, SidebarMode, ThemeName, TuiState } from "../types.js";
-import { caption, hRule, muted, padRight, sectionHeader, truncLine } from "../render.js";
+import { caption, hRule, layoutButtonGroup, muted, sectionHeader, truncLine } from "../render.js";
 
-function optionRow<T extends string>(
+export const SETTINGS_THEME_ROW = 6;
+export const SETTINGS_SIDEBAR_ROW = 10;
+export const SETTINGS_ICONS_ROW = 14;
+export const SETTINGS_LOG_LEVEL_ROW = 21;
+
+function optionBlock<T extends string>(
   label: string,
   options: readonly T[],
   current: T,
-  labelW: number,
-  width: number,
-): string {
-  const opts = options.map((o) =>
-    o === current ? chalk.cyan(`[*] ${o}`) : muted(`[ ] ${o}`)
-  ).join("  ");
-  return truncLine(padRight(caption(label), labelW) + opts, width);
+): string[] {
+  const opts = layoutButtonGroup(options.map((option) => ({
+    id: option,
+    label: option,
+    selected: option === current,
+    tone: option === current ? "accent" : "neutral",
+  })));
+
+  return [
+    caption(`  ${label}`),
+    ...opts.lines.map((line) => `  ${line}`),
+  ];
 }
 
 export function renderSettingsScreen(state: TuiState, width: number): string[] {
   const lines: string[] = [];
-  const labelW = 20;
 
   lines.push(sectionHeader("Settings", width));
   lines.push(hRule(width));
@@ -25,20 +34,20 @@ export function renderSettingsScreen(state: TuiState, width: number): string[] {
   lines.push(hRule(width));
 
   const themes: ThemeName[] = ["dark", "light"];
-  lines.push(optionRow("Theme", themes, state.themeName, labelW, width));
+  lines.push(...optionBlock("Theme", themes, state.themeName).map((line) => truncLine(line, width)));
 
   const sidebarModes: SidebarMode[] = ["expanded", "collapsed"];
-  lines.push(optionRow("Sidebar", sidebarModes, state.sidebarMode, labelW, width));
+  lines.push(...optionBlock("Sidebar", sidebarModes, state.sidebarMode).map((line) => truncLine(line, width)));
 
   const iconModes: IconMode[] = ["fallback", "nerd"];
-  lines.push(optionRow("Icons", iconModes, state.iconMode, labelW, width));
+  lines.push(...optionBlock("Icons", iconModes, state.iconMode).map((line) => truncLine(line, width)));
 
   lines.push(hRule(width));
   lines.push(truncLine(chalk.bold("Runtime defaults"), width));
   lines.push(hRule(width));
 
   const logLevels: LogLevel[] = ["off", "error", "error-debug", "debug"];
-  lines.push(optionRow("Default log level", logLevels, state.live.logLevel, labelW, width));
+  lines.push(...optionBlock("Default log level", logLevels, state.live.logLevel).map((line) => truncLine(line, width)));
 
   lines.push(hRule(width));
   lines.push(truncLine(chalk.bold("Storage paths"), width));

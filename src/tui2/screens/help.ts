@@ -20,6 +20,7 @@ export function renderHelpScreen(width: number): string[] {
   lines.push(kb("i", "toggle icon mode", kw, width));
   lines.push(kb("m", "toggle mouse support", kw, width));
   lines.push(kb("? / h", "this help screen", kw, width));
+  lines.push(kb("mouse / wheel", "click buttons, rows, sidebar; wheel scrolls lists", kw, width));
 
   lines.push(hRule(width));
   lines.push(truncLine(chalk.bold("Live screen"), width));
@@ -41,7 +42,7 @@ export function renderHelpScreen(width: number): string[] {
   lines.push(hRule(width));
   lines.push(muted("  1. Go to Accounts → press A"));
   lines.push(muted("  2. Enter account ID → Start auth"));
-  lines.push(muted("  3. Scan QR or visit the URL shown"));
+  lines.push(muted("  3. Scan QR or press O to open the browser link"));
   lines.push(muted("  4. Approve in browser — done"));
 
   lines.push(hRule(width));

@@ -1,3 +1,5 @@
+const liveLogger = require("./liveLogger.js") as { emit: (message: string) => void };
+
 export class AccountRefreshScheduler {
   qwenAPI: any;
   refreshInterval: NodeJS.Timeout | null;
@@ -10,7 +12,7 @@ export class AccountRefreshScheduler {
   }
 
   async initialize(): Promise<void> {
-    console.log("\x1b[36m%s\x1b[0m", "Initializing account refresh scheduler...");
+    liveLogger.emit("\x1b[36m●\x1b[0m Refresh | \x1b[36mscheduler\x1b[0m | init");
     await this.startScheduler();
   }
 
@@ -71,16 +73,16 @@ export class AccountRefreshScheduler {
         if (this.qwenAPI.authManager.shouldRefreshToken(credentials, refreshAccountId)) {
           accountsToRefresh.push(target);
           if (isExpired) {
-            console.log(`\x1b[31m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[31mexpired\x1b[0m`);
+            liveLogger.emit(`\x1b[31m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[31mexpired\x1b[0m`);
           } else {
             const thresholdMinutes = this.qwenAPI.authManager.getRefreshThresholdMinutes(refreshAccountId);
-            console.log(`\x1b[35m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[35mexpiring\x1b[0m | ${minutesLeft.toFixed(0)}m <= ${thresholdMinutes}m`);
+            liveLogger.emit(`\x1b[35m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[35mexpiring\x1b[0m | ${minutesLeft.toFixed(0)}m <= ${thresholdMinutes}m`);
           }
         }
       }
 
       if (accountsToRefresh.length === 0) {
-        console.log(`\x1b[32m●\x1b[0m Refresh | \x1b[32midle\x1b[0m | ${refreshTargets.length} accounts`);
+        liveLogger.emit(`\x1b[32m●\x1b[0m Refresh | \x1b[32midle\x1b[0m | ${refreshTargets.length} accounts`);
         return;
       }
 
@@ -94,22 +96,22 @@ export class AccountRefreshScheduler {
             : this.qwenAPI.authManager.getAccountCredentials(accountId);
 
           if (!credentials) {
-            console.log("\x1b[31m%s\x1b[0m", `No credentials found for account ${accountId}`);
+            liveLogger.emit(`\x1b[31m✗\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[31mmissing credentials\x1b[0m`);
             return;
           }
 
           try {
             await this.qwenAPI.authManager.refreshCredentialsIfNeeded(credentials, isDefault ? null : accountId);
-            console.log(`\x1b[32m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[32mrefreshed\x1b[0m`);
+            liveLogger.emit(`\x1b[32m●\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[32mrefreshed\x1b[0m`);
           } catch (refreshError: any) {
-            console.warn(`\x1b[31m✗\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[31mfailed\x1b[0m: ${refreshError.message.substring(0, 30)}`);
+            liveLogger.emit(`\x1b[31m✗\x1b[0m Refresh | \x1b[36m${accountId}\x1b[0m | \x1b[31mfailed\x1b[0m: ${refreshError.message.substring(0, 30)}`);
           }
         });
 
         await Promise.allSettled(batchPromises);
       }
     } catch (error: any) {
-      console.warn(`\x1b[31m!\x1b[0m Refresh | \x1b[31merror\x1b[0m: ${error.message.substring(0, 30)}`);
+      liveLogger.emit(`\x1b[31m!\x1b[0m Refresh | \x1b[31merror\x1b[0m: ${error.message.substring(0, 30)}`);
     } finally {
       this.isRefreshing = false;
     }

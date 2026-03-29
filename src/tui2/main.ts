@@ -1,15 +1,25 @@
 import { exit } from "process";
 import { createRequire } from "module";
+import chalk from "chalk";
 import { ProcessTerminal, TUI } from "@mariozechner/pi-tui";
 import { createInitialState, reduceTuiState } from "./state.js";
 import { createRuntimeMonitor } from "./runtime.js";
-import type { LogLevel, TuiAction, TuiState } from "./types.js";
+import type { ArtifactNode, LogLevel, TuiAction, TuiState } from "./types.js";
 import { AppView } from "./app.js";
 import { enableMouse, disableMouse } from "./mouse.js";
 
 const require = createRequire(import.meta.url);
 const qrcode = require("qrcode-terminal") as {
   generate: (text: string, options: { small?: boolean }, cb: (qr: string) => void) => void;
+};
+const openUrl = require("open") as (target: string) => Promise<unknown>;
+const liveLogger = require("../utils/liveLogger.js") as {
+  subscribe: (listener: (entry: { timestamp: number; message: string }) => void) => () => void;
+  getRecentEntries: (limit?: number) => readonly { timestamp: number; message: string }[];
+  setConsoleEnabled: (enabled: boolean) => void;
+};
+const fileLogger = require("../utils/fileLogger.js") as {
+  setConsoleEnabled: (enabled: boolean) => void;
 };
 
 const TICK_MS = 1000;
@@ -34,62 +44,46 @@ const tui = new TUI(terminal);
 let stopping = false;
 let tickTimer: ReturnType<typeof setInterval> | null = null;
 let authRunId = 0;
+let unsubscribeLiveLogs: (() => void) | null = null;
 
-function appendLog(level: "info" | "warn" | "error" | "debug", message: string): void {
+function appendLog(level: "info" | "warn" | "error" | "debug", message: string, formattedMessage?: string, timestamp = Date.now()): void {
   dispatch({
     type: "append-log",
     entry: {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      timestamp: Date.now(),
+      id: `${timestamp}-${Math.random().toString(36).slice(2, 8)}`,
+      timestamp,
       level,
       message,
+      formattedMessage,
       source: "tui",
     },
   });
 }
 
-const pendingLines: Array<{ level: "info" | "warn" | "error"; message: string }> = [];
-let flushScheduled = false;
-
-function scheduleFlush(): void {
-  if (flushScheduled) return;
-  flushScheduled = true;
-  queueMicrotask(() => {
-    flushScheduled = false;
-    for (const { level, message } of pendingLines.splice(0)) {
-      try { appendLog(level, message); } catch {}
-    }
-  });
+function appendClassicLog(level: "info" | "warn" | "error" | "debug", symbol: string, label: string, detail: string): void {
+  const icon = level === "error" ? chalk.red(symbol) : level === "warn" ? chalk.yellow(symbol) : chalk.cyan(symbol);
+  const formatted = `${icon} ${chalk.white(label)} | ${detail}`;
+  appendLog(level, `${label} | ${stripAnsi(detail)}`, formatted);
 }
 
-function installStdoutCapture(): void {
-  const realStdoutWrite = process.stdout.write.bind(process.stdout);
-  const realStderrWrite = process.stderr.write.bind(process.stderr);
-  let outBuf = "", errBuf = "";
+function classifyLogLine(message: string): "info" | "warn" | "error" | "debug" {
+  if (message.startsWith("✗")) return "error";
+  if (message.startsWith("↻") || message.startsWith("■")) return "warn";
+  if (message.startsWith("[LOG]")) return "debug";
+  return "info";
+}
 
-  function interceptWrite(
-    getBuf: () => string,
-    setBuf: (s: string) => void,
-    level: "info" | "error",
-    realWrite: typeof process.stdout.write,
-  ) {
-    return (chunk: string | Buffer, enc?: unknown, cb?: unknown): boolean => {
-      const text = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
-      const buf = getBuf() + text;
-      const parts = buf.split("\n");
-      for (let i = 0; i < parts.length - 1; i++) {
-        const msg = stripAnsi(parts[i]!);
-        if (msg) pendingLines.push({ level, message: msg });
-      }
-      setBuf(parts[parts.length - 1]!);
-      scheduleFlush();
-      if (typeof cb === "function") (cb as () => void)();
+function artifactExists(tree: readonly ArtifactNode[], target: string): boolean {
+  for (const node of tree) {
+    if (node.path === target) {
       return true;
-    };
+    }
+    if (node.children && artifactExists(node.children, target)) {
+      return true;
+    }
   }
 
-  (process.stdout.write as any) = interceptWrite(() => outBuf, (s) => { outBuf = s; }, "info", realStdoutWrite);
-  (process.stderr.write as any) = interceptWrite(() => errBuf, (s) => { errBuf = s; }, "error", realStderrWrite);
+  return false;
 }
 
 let appView!: AppView;
@@ -106,6 +100,10 @@ async function stopApp(): Promise<void> {
   if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
   disableMouse((s) => terminal.write(s));
   try {
+    unsubscribeLiveLogs?.();
+    unsubscribeLiveLogs = null;
+    liveLogger.setConsoleEnabled(true);
+    fileLogger.setConsoleEnabled(true);
     await runtimeMonitor.dispose();
     tui.stop();
   } catch {}
@@ -134,38 +132,60 @@ async function refreshUsage(): Promise<void> {
   dispatch({ type: "set-usage-days", days });
 }
 
+async function refreshArtifacts(): Promise<void> {
+  try {
+    const tree = await runtimeMonitor.loadArtifacts();
+    const selectedBefore = currentState.artifacts.selected;
+    dispatch({ type: "set-artifacts-tree", tree });
+    const selected = currentState.artifacts.selected;
+
+    if (!selected || !artifactExists(tree, selected)) {
+      dispatch({ type: "set-artifact-preview", content: null });
+      return;
+    }
+
+    const preview = await runtimeMonitor.loadArtifactPreview(selected);
+    dispatch({ type: "set-artifact-preview", content: preview });
+    if (selectedBefore !== selected && !preview) {
+      dispatch({ type: "set-artifact-preview", content: null });
+    }
+  } catch (e: any) {
+    appendClassicLog("error", "✗", "Artifacts", String(e?.message ?? e));
+  }
+}
+
 async function handleStartServer(): Promise<void> {
-  appendLog("info", "Starting proxy server...");
+  appendClassicLog("info", "●", "Server", "start requested");
   try {
     const runtime = await runtimeMonitor.startServer();
     dispatch({ type: "set-runtime", runtime });
-    appendLog("info", `Server running on http://${runtime.host}:${String(runtime.port)}`);
+    await refreshArtifacts();
   } catch (e: any) {
-    appendLog("error", `Start failed: ${String(e?.message ?? e)}`);
+    appendClassicLog("error", "✗", "Server", `start failed: ${String(e?.message ?? e)}`);
     await refreshRuntimeSummary();
   }
 }
 
 async function handleStopServer(): Promise<void> {
-  appendLog("warn", "Stopping proxy server...");
+  appendClassicLog("warn", "■", "Server", "stop requested");
   try {
     const runtime = await runtimeMonitor.stopServer();
     dispatch({ type: "set-runtime", runtime });
-    appendLog("info", "Server stopped");
+    appendClassicLog("warn", "■", "Server", "stopped");
   } catch (e: any) {
-    appendLog("error", `Stop failed: ${String(e?.message ?? e)}`);
+    appendClassicLog("error", "✗", "Server", `stop failed: ${String(e?.message ?? e)}`);
     await refreshRuntimeSummary();
   }
 }
 
 async function handleRestartServer(): Promise<void> {
-  appendLog("warn", "Restarting proxy server...");
+  appendClassicLog("warn", "↻", "Server", "restart requested");
   try {
     const runtime = await runtimeMonitor.restartServer();
     dispatch({ type: "set-runtime", runtime });
-    appendLog("info", `Server restarted on http://${runtime.host}:${String(runtime.port)}`);
+    await refreshArtifacts();
   } catch (e: any) {
-    appendLog("error", `Restart failed: ${String(e?.message ?? e)}`);
+    appendClassicLog("error", "✗", "Server", `restart failed: ${String(e?.message ?? e)}`);
     await refreshRuntimeSummary();
   }
 }
@@ -175,9 +195,9 @@ async function handleLogLevelChange(level: LogLevel): Promise<void> {
   try {
     const runtime = await runtimeMonitor.setLogLevel(level);
     dispatch({ type: "set-runtime", runtime });
-    appendLog("info", `Log level → ${level}`);
+    appendClassicLog("info", "↻", "Log", `level ${level}`);
   } catch (e: any) {
-    appendLog("error", `Log level change failed: ${String(e?.message ?? e)}`);
+    appendClassicLog("error", "✗", "Log", `change failed: ${String(e?.message ?? e)}`);
   }
 }
 
@@ -190,7 +210,7 @@ async function handleStartAccountAuth(): Promise<void> {
 
   const runId = ++authRunId;
   dispatch({ type: "auth-start", message: "Requesting device code..." });
-  appendLog("info", `Starting auth for ${accountId}`);
+  appendClassicLog("info", "✓", "Auth", `starting ${accountId}`);
 
   try {
     const flow = await runtimeMonitor.initiateAddAccountFlow();
@@ -213,14 +233,29 @@ async function handleStartAccountAuth(): Promise<void> {
     await runtimeMonitor.completeAddAccountFlow(flow.deviceCode, flow.codeVerifier, accountId);
     if (runId !== authRunId) return;
 
-    await Promise.all([refreshAccounts(accountId), refreshRuntimeSummary()]);
+    await Promise.all([refreshAccounts(accountId), refreshRuntimeSummary(), refreshArtifacts()]);
     dispatch({ type: "auth-success", message: `Account ${accountId} added.` });
-    appendLog("info", `Account ${accountId} authenticated`);
+    appendClassicLog("info", "✓", "Auth", `account ${accountId} added`);
   } catch (e: any) {
     if (runId !== authRunId) return;
     const msg = e instanceof Error ? e.message : String(e);
     dispatch({ type: "auth-failure", message: msg });
-    appendLog("error", `Auth failed: ${msg}`);
+    appendClassicLog("error", "✗", "Auth", msg);
+  }
+}
+
+async function handleOpenAuthBrowser(): Promise<void> {
+  const url = currentState.accounts.authModal.flow?.verificationUriComplete;
+  if (!url) {
+    appendClassicLog("warn", "■", "Auth", "browser link not ready yet");
+    return;
+  }
+
+  try {
+    await openUrl(url);
+    appendClassicLog("info", "✓", "Auth", "browser opened");
+  } catch (e: any) {
+    appendClassicLog("error", "✗", "Auth", `open failed: ${String(e?.message ?? e)}`);
   }
 }
 
@@ -232,7 +267,7 @@ appView = new AppView(tui, currentState, {
   onRestartServer: () => { void handleRestartServer(); },
   onLogLevelChange: (level) => { void handleLogLevelChange(level); },
   onAddAccount: () => { dispatch({ type: "open-auth-modal" }); },
-  onOpenAuthBrowser: () => {},
+  onOpenAuthBrowser: () => { void handleOpenAuthBrowser(); },
   onCloseAuthModal: () => {
     authRunId++;
     dispatch({ type: "close-auth-modal" });
@@ -242,8 +277,17 @@ appView = new AppView(tui, currentState, {
   onSelectAccount: (id) => { dispatch({ type: "select-account", id }); },
   onSelectUsageDate: (date) => { dispatch({ type: "select-usage-date", date }); },
   onUsageFilterChange: (value) => { dispatch({ type: "set-usage-filter", value }); },
-  onToggleArtifactExpand: (path) => { dispatch({ type: "toggle-artifact-expand", path }); },
-  onSelectArtifact: (path) => { dispatch({ type: "select-artifact", path }); },
+  onToggleArtifactExpand: (path) => {
+    dispatch({ type: "toggle-artifact-expand", path });
+    void refreshArtifacts();
+  },
+  onSelectArtifact: (path) => {
+    dispatch({ type: "select-artifact", path });
+    void (async () => {
+      const preview = path ? await runtimeMonitor.loadArtifactPreview(path) : null;
+      dispatch({ type: "set-artifact-preview", content: preview });
+    })();
+  },
   onThemeChange: (theme) => { dispatch({ type: "set-theme", theme }); },
 });
 
@@ -267,10 +311,28 @@ tickTimer = setInterval(() => {
   });
   void refreshRuntimeSummary();
   void refreshUsage();
+  if (currentState.activeScreen === "artifacts") {
+    void refreshArtifacts();
+  }
 }, TICK_MS);
+
+liveLogger.setConsoleEnabled(false);
+fileLogger.setConsoleEnabled(false);
+for (const entry of liveLogger.getRecentEntries(200)) {
+  const stripped = stripAnsi(entry.message);
+  if (stripped) {
+    appendLog(classifyLogLine(stripped), stripped, entry.message, entry.timestamp);
+  }
+}
+unsubscribeLiveLogs = liveLogger.subscribe((entry) => {
+  const stripped = stripAnsi(entry.message);
+  if (stripped) {
+    appendLog(classifyLogLine(stripped), stripped, entry.message, entry.timestamp);
+  }
+});
 
 tui.start();
 
 enableMouse((s) => terminal.write(s));
 
-await Promise.all([refreshRuntimeSummary(), refreshAccounts(), refreshUsage()]);
+await Promise.all([refreshRuntimeSummary(), refreshAccounts(), refreshUsage(), refreshArtifacts()]);

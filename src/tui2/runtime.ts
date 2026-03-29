@@ -1,5 +1,10 @@
 import { createRequire } from "module";
-import type { AccountInfo, LogLevel, RotationMode, RuntimeSummary, ServerState, UsageDay } from "./types.js";
+import type { AccountInfo, ArtifactNode, LogLevel, RotationMode, RuntimeSummary, ServerState, UsageDay } from "./types.js";
+
+const require = createRequire(import.meta.url);
+const fs = require("node:fs") as typeof import("node:fs");
+const fsPromises = fs.promises;
+const nodePath = require("node:path") as typeof import("node:path");
 
 type ConfigModule = {
   host?: string;
@@ -57,9 +62,9 @@ type HeadlessRuntimeModule = {
 type FileLoggerLike = {
   getRuntimeStatus: () => Promise<{ currentLogLevel?: LogLevel }>;
   setRuntimeLogLevel: (level: LogLevel, persist?: boolean) => Promise<unknown>;
+  LOG_DIR: string;
 };
 
-const require = createRequire(import.meta.url);
 const config = require("../config.js") as ConfigModule;
 const { QwenAPI } = require("../qwen/api.js") as QwenApiModule;
 const { startHeadlessServer } = require("../server/headless-runtime.js") as HeadlessRuntimeModule;
@@ -112,6 +117,73 @@ function resolveCacheTypeLabel(cacheTypes: Set<string>): string {
   }
 
   return "mixed";
+}
+
+function sortArtifactEntries(a: { name: string; isDirectory: () => boolean }, b: { name: string; isDirectory: () => boolean }): number {
+  if (a.isDirectory() !== b.isDirectory()) {
+    return a.isDirectory() ? -1 : 1;
+  }
+
+  return a.name.localeCompare(b.name);
+}
+
+async function buildArtifactTree(rootDir: string, relativePath = ""): Promise<readonly ArtifactNode[]> {
+  const dirPath = relativePath.length > 0 ? nodePath.join(rootDir, relativePath) : rootDir;
+
+  let entries: readonly any[] = [];
+  try {
+    entries = await fsPromises.readdir(dirPath, { withFileTypes: true });
+  } catch (error: any) {
+    if (error?.code === "ENOENT") {
+      return Object.freeze([]);
+    }
+    throw error;
+  }
+
+  const nodes = await Promise.all(
+    [...entries]
+      .filter((entry) => !entry.name.startsWith("."))
+      .sort(sortArtifactEntries)
+      .map(async (entry) => {
+        const nextPath = relativePath.length > 0 ? nodePath.join(relativePath, entry.name) : entry.name;
+        const fullPath = nodePath.join(rootDir, nextPath);
+
+        if (entry.isDirectory()) {
+          return Object.freeze({
+            name: entry.name,
+            path: nextPath,
+            type: "directory" as const,
+            children: await buildArtifactTree(rootDir, nextPath),
+          });
+        }
+
+        const stat = await fsPromises.stat(fullPath).catch(() => null);
+        return Object.freeze({
+          name: entry.name,
+          path: nextPath,
+          type: "file" as const,
+          size: stat?.size,
+        });
+      }),
+  );
+
+  return Object.freeze(nodes);
+}
+
+async function readArtifactPreview(rootDir: string, relativePath: string): Promise<string | null> {
+  const resolvedRoot = nodePath.resolve(rootDir);
+  const resolvedPath = nodePath.resolve(rootDir, relativePath);
+  if (!resolvedPath.startsWith(`${resolvedRoot}${nodePath.sep}`) && resolvedPath !== resolvedRoot) {
+    return null;
+  }
+
+  const stat = await fsPromises.stat(resolvedPath).catch(() => null);
+  if (!stat?.isFile()) {
+    return null;
+  }
+
+  const content = await fsPromises.readFile(resolvedPath, "utf8");
+  return content.length > 24_000 ? `${content.slice(0, 24_000)}\n\n... truncated ...` : content;
 }
 
 export function aggregateUsageDays(
@@ -218,6 +290,8 @@ export function createRuntimeMonitor(_bootMs: number): {
   refresh: () => Promise<RuntimeSummary>;
   loadAccounts: () => Promise<readonly AccountInfo[]>;
   loadUsage: () => Promise<readonly UsageDay[]>;
+  loadArtifacts: () => Promise<readonly ArtifactNode[]>;
+  loadArtifactPreview: (path: string) => Promise<string | null>;
   initiateAddAccountFlow: () => Promise<{
     deviceCode: string;
     userCode: string;
@@ -289,6 +363,12 @@ export function createRuntimeMonitor(_bootMs: number): {
     async loadUsage(): Promise<readonly UsageDay[]> {
       await qwenAPI.loadRequestCounts();
       return aggregateUsageDays(qwenAPI.tokenUsage, qwenAPI.requestCount, qwenAPI.lastResetDate);
+    },
+    async loadArtifacts(): Promise<readonly ArtifactNode[]> {
+      return buildArtifactTree(fileLogger.LOG_DIR);
+    },
+    async loadArtifactPreview(path: string): Promise<string | null> {
+      return readArtifactPreview(fileLogger.LOG_DIR, path);
     },
     async initiateAddAccountFlow(): Promise<{
       deviceCode: string;

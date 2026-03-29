@@ -1,6 +1,7 @@
 import {
   NAV_ITEMS,
   type AccountsScreenState,
+  type ArtifactNode,
   type ArtifactsScreenState,
   type LiveScreenState,
   type RuntimeSummary,
@@ -8,6 +9,38 @@ import {
   type TuiState,
   type UsageScreenState,
 } from "./types.js";
+
+function findNavIndex(screen: TuiState["activeScreen"]): number {
+  const index = NAV_ITEMS.findIndex((item) => item.id === screen);
+  return index >= 0 ? index : 0;
+}
+
+function findFirstArtifactPath(nodes: readonly ArtifactNode[]): string | null {
+  for (const node of nodes) {
+    if (node?.path) {
+      return node.path;
+    }
+  }
+
+  return null;
+}
+
+function artifactPathExists(nodes: readonly ArtifactNode[], target: string | null): boolean {
+  if (!target) {
+    return false;
+  }
+
+  for (const node of nodes) {
+    if (node.path === target) {
+      return true;
+    }
+    if (node.children && artifactPathExists(node.children, target)) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 function initialViewport(): { cols: number; rows: number } {
   return {
@@ -122,6 +155,7 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
       return Object.freeze({
         ...state,
         activeScreen: action.screen,
+        sidebarIndex: findNavIndex(action.screen),
       });
     case "toggle-sidebar":
       return Object.freeze({
@@ -163,6 +197,11 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
         ...state,
         shouldQuit: true,
       });
+    case "set-focus-region":
+      return Object.freeze({
+        ...state,
+        focusRegion: action.region,
+      });
     case "focus-next-region":
       return Object.freeze({
         ...state,
@@ -200,13 +239,16 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
         }),
       });
     case "append-log":
+      {
+        const logs = [...state.live.logs, action.entry].slice(-400);
       return Object.freeze({
         ...state,
         live: Object.freeze({
           ...state.live,
-          logs: Object.freeze([...state.live.logs, action.entry]),
+          logs: Object.freeze(logs),
         }),
       });
+      }
     case "set-logs-scroll":
       return Object.freeze({
         ...state,
@@ -216,13 +258,20 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
         }),
       });
     case "set-artifacts-tree":
+      {
+        const selected =
+          artifactPathExists(action.tree, state.artifacts.selected)
+            ? state.artifacts.selected
+            : findFirstArtifactPath(action.tree);
       return Object.freeze({
         ...state,
         artifacts: Object.freeze({
           ...state.artifacts,
           tree: action.tree,
+          selected,
         }),
       });
+      }
     case "toggle-artifact-expand": {
       const expanded = state.artifacts.expanded;
       const isExpanded = expanded.includes(action.path);

@@ -4,6 +4,27 @@ import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 export const SIDEBAR_W = 20;
 export const SIDEBAR_W_COLLAPSED = 6;
 
+export type ButtonTone = "accent" | "neutral" | "danger" | "success";
+
+export type ButtonRowItem<T extends string = string> = Readonly<{
+  id: T;
+  label: string;
+  selected?: boolean;
+  disabled?: boolean;
+  tone?: ButtonTone;
+}>;
+
+export type ButtonHit<T extends string = string> = Readonly<{
+  id: T;
+  start: number;
+  end: number;
+}>;
+
+export type ButtonGroupLayout<T extends string = string> = Readonly<{
+  lines: readonly [string, string, string];
+  hits: readonly ButtonHit<T>[];
+}>;
+
 export function padRight(s: string, width: number): string {
   const vw = visibleWidth(s);
   if (vw >= width) return truncateToWidth(s, width, "");
@@ -52,6 +73,139 @@ export function muted(s: string): string {
 
 export function selected(s: string): string {
   return chalk.inverse(s);
+}
+
+function toneColor(tone: ButtonTone): typeof chalk.cyan {
+  switch (tone) {
+    case "danger":
+      return chalk.red;
+    case "success":
+      return chalk.green;
+    case "neutral":
+      return chalk.white;
+    default:
+      return chalk.cyan;
+  }
+}
+
+function toneFill(tone: ButtonTone): typeof chalk.bgCyan {
+  switch (tone) {
+    case "danger":
+      return chalk.bgRed;
+    case "success":
+      return chalk.bgGreen;
+    case "neutral":
+      return chalk.bgWhite;
+    default:
+      return chalk.bgCyan;
+  }
+}
+
+function centerText(text: string, width: number): string {
+  const clean = truncateToWidth(text, width, "");
+  const gap = Math.max(0, width - visibleWidth(clean));
+  const left = Math.floor(gap / 2);
+  const right = gap - left;
+  return `${" ".repeat(left)}${clean}${" ".repeat(right)}`;
+}
+
+function renderButton<T extends string>(item: ButtonRowItem<T>): string {
+  const tone = item.tone ?? "accent";
+  const fill = toneFill(tone);
+  const content = centerText(item.label, Math.max(visibleWidth(item.label) + 2, 6));
+
+  if (item.disabled) {
+    return chalk.dim("│") + muted(content) + chalk.dim("│");
+  }
+
+  if (item.selected) {
+    return chalk.dim("│") + fill.black(content) + chalk.dim("│");
+  }
+
+  return chalk.dim("│") + toneColor(tone)(content) + chalk.dim("│");
+}
+
+export function layoutButtonRow<T extends string>(items: readonly ButtonRowItem<T>[], gap = 1): { line: string; hits: readonly ButtonHit<T>[] } {
+  const parts: string[] = [];
+  const hits: ButtonHit<T>[] = [];
+  let offset = 0;
+
+  for (let index = 0; index < items.length; index++) {
+    const part = renderButton(items[index]!);
+    const width = visibleWidth(part);
+    hits.push(Object.freeze({
+      id: items[index]!.id,
+      start: offset,
+      end: offset + width,
+    }));
+    parts.push(part);
+    offset += width;
+    if (index < items.length - 1) {
+      parts.push(" ".repeat(gap));
+      offset += gap;
+    }
+  }
+
+  return {
+    line: parts.join(""),
+    hits: Object.freeze(hits),
+  };
+}
+
+export function layoutButtonGroup<T extends string>(items: readonly ButtonRowItem<T>[]): ButtonGroupLayout<T> {
+  const widths = items.map((item) => Math.max(visibleWidth(item.label) + 2, 6));
+  const top = chalk.dim("┌") + widths.map((width) => "─".repeat(width)).join(chalk.dim("┬")) + chalk.dim("┐");
+  const bottom = chalk.dim("└") + widths.map((width) => "─".repeat(width)).join(chalk.dim("┴")) + chalk.dim("┘");
+
+  const parts: string[] = [chalk.dim("│")];
+  const hits: ButtonHit<T>[] = [];
+  let offset = 1;
+
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index]!;
+    const tone = item.tone ?? "accent";
+    const width = widths[index]!;
+    const content = centerText(item.label, width);
+    let cell = content;
+
+    if (item.disabled) {
+      cell = muted(content);
+    } else if (item.selected) {
+      cell = toneFill(tone).black(content);
+    } else {
+      cell = toneColor(tone)(content);
+    }
+
+    hits.push(Object.freeze({
+      id: item.id,
+      start: offset,
+      end: offset + width,
+    }));
+    parts.push(cell);
+    offset += width;
+
+    if (index < items.length - 1) {
+      parts.push(chalk.dim("│"));
+      offset += 1;
+    }
+  }
+
+  parts.push(chalk.dim("│"));
+
+  return Object.freeze({
+    lines: Object.freeze([top, parts.join(""), bottom]) as [string, string, string],
+    hits: Object.freeze(hits),
+  });
+}
+
+export function buttonHitAt<T extends string>(hits: readonly ButtonHit<T>[], col: number): T | null {
+  for (const hit of hits) {
+    if (col >= hit.start && col < hit.end) {
+      return hit.id;
+    }
+  }
+
+  return null;
 }
 
 export function formatDuration(ms: number): string {

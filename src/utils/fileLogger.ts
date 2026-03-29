@@ -223,6 +223,9 @@ const fileLogger = {
   async setRuntimeLogLevel(level: any, persist?: boolean): Promise<any> {
     return runtimeLoggingService.setRuntimeLogLevel(level, persist);
   },
+  setConsoleEnabled(enabled: boolean): void {
+    runtimeLoggingService.setConsoleEnabled(enabled);
+  },
   get isErrorLogging(): boolean {
     return runtimeLoggingService.captureState().isErrorLogging;
   },
