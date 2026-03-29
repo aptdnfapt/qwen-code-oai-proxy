@@ -1,6 +1,6 @@
 import type { RouteRenderContext, VNode } from "@rezi-ui/core";
 import { ui } from "@rezi-ui/core";
-import { PRODUCT_NAME, PRODUCT_TAGLINE, themeSpec } from "../theme.js";
+import { PRODUCT_NAME, PRODUCT_TAGLINE, themeBgBase, themeFgPrimary, themeSpec } from "../theme.js";
 import { NAV_ITEMS, type NavItem, type ScreenId, type TuiState } from "../types.js";
 
 type ShellOptions = Readonly<{
@@ -200,25 +200,32 @@ export function renderShell(options: ShellOptions): VNode {
   const state = options.context.state;
   const currentItem = activeNavItem(state.activeScreen);
   const mainFocused = state.focusRegion === "main";
+  const bgColor = themeBgBase(state.themeName);
+  const fgColor = themeFgPrimary(state.themeName);
 
-  return ui.page({
-    p: 1,
-    gap: 0,
-    header: renderHeader(state),
-    body: ui.row({ gap: 0, items: "stretch" }, [
-      renderSidebar(options),
-      ui.box({ border: "none", width: 1, py: 0 }, [ui.divider({ direction: "vertical", color: "muted" })]),
-      ui.box({ border: "none", flex: 1, p: 1 }, [
-        ui.column({ gap: 1 }, [
-          ui.row({ gap: 1, items: "center", wrap: true }, [
-            ui.text(options.title, { variant: "heading" }),
-            ui.badge(mainFocused ? "MAIN FOCUS" : "MAIN", { variant: mainFocused ? "info" : "default" }),
-            ui.text(currentItem.blurb, { variant: "caption" }),
+  return ui.box(
+    { border: "none", width: "full", height: "full", style: { bg: bgColor, fg: fgColor } },
+    [
+      ui.page({
+        p: 1,
+        gap: 0,
+        header: renderHeader(state),
+        body: ui.row({ gap: 0, items: "stretch" }, [
+          renderSidebar(options),
+          ui.box({ border: "none", width: 1, py: 0 }, [ui.divider({ direction: "vertical", color: "muted" })]),
+          ui.box({ border: "none", flex: 1, p: 1 }, [
+            ui.column({ gap: 1 }, [
+              ui.row({ gap: 1, items: "center", wrap: true }, [
+                ui.text(options.title, { variant: "heading" }),
+                ui.badge(mainFocused ? "MAIN FOCUS" : "MAIN", { variant: mainFocused ? "info" : "default" }),
+                ui.text(currentItem.blurb, { variant: "caption" }),
+              ]),
+              renderWorkspace(options),
+            ]),
           ]),
-          renderWorkspace(options),
         ]),
-      ]),
-    ]),
-    footer: renderFooter(state),
-  });
+        footer: renderFooter(state),
+      }),
+    ],
+  );
 }

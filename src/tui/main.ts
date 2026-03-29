@@ -182,19 +182,16 @@ function appendSystemLog(level: "info" | "warn" | "error" | "debug", message: st
 }
 
 function dispatch(action: TuiAction): void {
-  let nextTheme = initialState.themeName;
-  let themeChanged = false;
+  // Apply reducer synchronously to detect theme changes immediately
+  // (app.update enqueues the updater, doesn't run it synchronously)
+  const previousTheme = currentState.themeName;
+  const nextState = reduceTuiState(currentState, action);
+  currentState = nextState;
 
-  app.update((previous) => {
-    const next = reduceTuiState(previous, action);
-    nextTheme = next.themeName;
-    themeChanged = nextTheme !== previous.themeName;
-    currentState = next;
-    return next;
-  });
+  app.update(() => nextState);
 
-  if (themeChanged) {
-    app.setTheme(themeSpec(nextTheme).theme);
+  if (nextState.themeName !== previousTheme) {
+    app.setTheme(themeSpec(nextState.themeName).theme);
   }
 }
 
