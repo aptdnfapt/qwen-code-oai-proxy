@@ -7,7 +7,7 @@
     "outDir": "dist"
   },
   "include": [
-    "src/tui/**/*.ts"
+    "src/tui2/**/*.ts"
   ],
   "exclude": [
     "dist",

@@ -1,5 +1,3 @@
-import type { RouteDefinition } from "@rezi-ui/core";
-
 export type ScreenId = "live" | "artifacts" | "accounts" | "usage" | "settings" | "help";
 export type FocusRegion = "sidebar" | "main";
 export type SidebarMode = "expanded" | "collapsed";
@@ -215,4 +213,4 @@ export type ScreenRouteDeps = Readonly<{
   onToggleSidebar: () => void;
 }>;
 
-export type TuiRouteDefinition = RouteDefinition<TuiState>;
+

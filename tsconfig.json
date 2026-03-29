@@ -24,6 +24,7 @@
     "dist",
     "node_modules",
     "qwen-code",
-    "src/tui/**/*"
+    
+    "src/tui2/**/*"
   ]
 }

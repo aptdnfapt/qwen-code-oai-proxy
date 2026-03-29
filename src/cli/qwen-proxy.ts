@@ -6,7 +6,9 @@ const { runUsageCommand } = require("../../usage.js") as any;
 const { startHeadlessServer } = require("../server/headless-runtime.js") as any;
 
 async function startTui(): Promise<void> {
-  await new Function("path", "return import(path)")("../tui/main.js");
+  const path = require("path") as typeof import("path");
+  const tuiPath = path.resolve(__dirname, "../tui2/main.js");
+  await new Function("path", "return import(path)")(tuiPath);
 }
 
 function printHelp(): void {

@@ -7,7 +7,7 @@ import {
   type TuiAction,
   type TuiState,
   type UsageScreenState,
-} from "../types.js";
+} from "./types.js";
 
 function initialViewport(): { cols: number; rows: number } {
   return {

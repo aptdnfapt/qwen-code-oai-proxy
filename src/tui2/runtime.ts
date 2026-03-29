@@ -1,5 +1,5 @@
 import { createRequire } from "module";
-import type { AccountInfo, LogLevel, RotationMode, RuntimeSummary, ServerState, UsageDay } from "../types.js";
+import type { AccountInfo, LogLevel, RotationMode, RuntimeSummary, ServerState, UsageDay } from "./types.js";
 
 type ConfigModule = {
   host?: string;
@@ -60,11 +60,11 @@ type FileLoggerLike = {
 };
 
 const require = createRequire(import.meta.url);
-const config = require("../../config.js") as ConfigModule;
-const { QwenAPI } = require("../../qwen/api.js") as QwenApiModule;
-const { startHeadlessServer } = require("../../server/headless-runtime.js") as HeadlessRuntimeModule;
-const fileLogger = require("../../utils/fileLogger.js") as FileLoggerLike;
-const runtimeActivity = require("../../utils/runtimeActivity.js") as typeof import("../../utils/runtimeActivity.js");
+const config = require("../config.js") as ConfigModule;
+const { QwenAPI } = require("../qwen/api.js") as QwenApiModule;
+const { startHeadlessServer } = require("../server/headless-runtime.js") as HeadlessRuntimeModule;
+const fileLogger = require("../utils/fileLogger.js") as FileLoggerLike;
+const runtimeActivity = require("../utils/runtimeActivity.js") as typeof import("../utils/runtimeActivity.js");
 
 function resolveRotationMode(accountCount: number): RotationMode {
   if (accountCount > 1) {

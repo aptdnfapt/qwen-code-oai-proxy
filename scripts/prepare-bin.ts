@@ -13,8 +13,8 @@ const BIN_PATHS = [
 ];
 const COPY_FILE_PAIRS = [
   {
-    source: nodePath.join(process.cwd(), "src", "tui", "package.json"),
-    target: nodePath.join(process.cwd(), "dist", "src", "tui", "package.json"),
+    source: nodePath.join(process.cwd(), "src", "tui2", "package.json"),
+    target: nodePath.join(process.cwd(), "dist", "src", "tui2", "package.json"),
   },
 ];
 
