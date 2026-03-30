@@ -326,11 +326,6 @@ export class QwenAuthManager {
   }
 
   async performTokenRefresh(credentials: QwenCredentials, accountId: string | null = null): Promise<QwenCredentials> {
-    const lockAcquired = await this.qwenAPI.acquireAccountLock(accountId);
-    if (!lockAcquired) {
-      throw new Error(accountId ? `Account ${accountId} is currently in use, cannot refresh token now` : "Default account is currently in use, cannot refresh token now");
-    }
-
     try {
       const newCredentials = await this.refreshAccessToken(credentials);
       if (accountId) {
@@ -341,8 +336,6 @@ export class QwenAuthManager {
       return newCredentials;
     } catch (error: any) {
       throw new Error(error instanceof Error ? error.message : String(error));
-    } finally {
-      this.qwenAPI.releaseAccountLock(accountId);
     }
   }
 
