@@ -440,8 +440,7 @@ export class QwenAPI {
   requestCount: Map<string, number>;
   tokenUsage: Map<string, RequestUsageEntry[]>;
   lastResetDate: string;
-  accountLocks: Map<string, boolean>;
-  accountQueues: Map<string, unknown>;
+
   webSearchRequestCounts: Map<string, number>;
   webSearchResultCounts: Map<string, number>;
   private storeReady: Promise<void>;
@@ -451,8 +450,7 @@ export class QwenAPI {
     this.requestCount = new Map();
     this.tokenUsage = new Map();
     this.lastResetDate = new Date().toISOString().split("T")[0] as string;
-    this.accountLocks = new Map();
-    this.accountQueues = new Map();
+
     this.webSearchRequestCounts = new Map();
     this.webSearchResultCounts = new Map();
     this.storeReady = usageStore.openUsageStore().then(async () => {
@@ -589,36 +587,13 @@ export class QwenAPI {
     return accountIds.slice(startIndex).concat(accountIds.slice(0, startIndex));
   }
 
-  async executeAttemptWithLock(accountInfo: AccountInfo, executeAttempt: (accountInfo: AccountInfo) => Promise<any>): Promise<any> {
-    const lockAcquired = await this.acquireAccountLock(accountInfo.accountId);
-    if (!lockAcquired) {
-      const lockError: any = new Error(`Account ${accountInfo.accountId} is currently in use`);
-      lockError.code = "ACCOUNT_LOCKED";
-      throw lockError;
-    }
-
-    try {
-      return await executeAttempt(accountInfo);
-    } finally {
-      this.releaseAccountLock(accountInfo.accountId);
-    }
-  }
-
   async executeOperationWithAccount(accountInfo: AccountInfo, executeAttempt: (accountInfo: AccountInfo) => Promise<any>): Promise<any> {
     try {
-      return await this.executeAttemptWithLock(accountInfo, executeAttempt);
+      return await executeAttempt(accountInfo);
     } catch (error: any) {
-      if (error.code === "ACCOUNT_LOCKED") {
-        throw { error, rotate: true, locked: true };
-      }
-
       const errorType = classifyRequestError(error);
       if (errorType !== "auth") {
-        throw {
-          error,
-          rotate: errorType !== "client",
-          locked: false,
-        };
+        throw { error, rotate: errorType !== "client" };
       }
 
       console.log(`\x1b[33mAuth error for ${accountInfo.accountId}, attempting refresh...\x1b[0m`);
@@ -630,22 +605,14 @@ export class QwenAPI {
           { force: true },
         );
       } catch (refreshError) {
-        throw { error: refreshError, rotate: true, locked: false };
+        throw { error: refreshError, rotate: true };
       }
 
       try {
-        return await this.executeAttemptWithLock({ ...accountInfo, credentials: refreshedCredentials }, executeAttempt);
+        return await executeAttempt({ ...accountInfo, credentials: refreshedCredentials });
       } catch (retryError: any) {
-        if (retryError.code === "ACCOUNT_LOCKED") {
-          throw { error: retryError, rotate: true, locked: true };
-        }
-
         const retryErrorType = classifyRequestError(retryError);
-        throw {
-          error: retryError,
-          rotate: retryErrorType !== "client",
-          locked: false,
-        };
+        throw { error: retryError, rotate: retryErrorType !== "client" };
       }
     }
   }
@@ -673,9 +640,7 @@ export class QwenAPI {
         return result;
       } catch (outcome: any) {
         lastError = outcome.error || outcome;
-        if (outcome.rotate === false) {
-          throw lastError;
-        }
+        if (outcome.rotate === false) throw lastError;
       }
     }
 
@@ -752,22 +717,6 @@ export class QwenAPI {
       return parseJsonResponseBody(response.data, "chat completions upstream");
     } catch (error: any) {
       throw await attachUpstreamErrorDetails(error);
-    }
-  }
-  async acquireAccountLock(accountId: string | null | undefined): Promise<boolean> {
-    const normalizedId = this.normalizeAccountId(accountId);
-    if (!this.accountLocks.has(normalizedId)) {
-      this.accountLocks.set(normalizedId, true);
-      return true;
-    }
-
-    return false;
-  }
-
-  releaseAccountLock(accountId: string | null | undefined): void {
-    const normalizedId = this.normalizeAccountId(accountId);
-    if (this.accountLocks.has(normalizedId)) {
-      this.accountLocks.delete(normalizedId);
     }
   }
 
