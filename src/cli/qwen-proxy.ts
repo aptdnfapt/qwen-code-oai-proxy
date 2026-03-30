@@ -141,7 +141,7 @@ async function handleServeCommand(args: string[]): Promise<void> {
 
 export async function run(argv: string[] = process.argv.slice(2)): Promise<void> {
   if (argv.length === 0) {
-    printHelp();
+    await startTui();
     return;
   }
 

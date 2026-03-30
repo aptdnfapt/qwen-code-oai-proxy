@@ -2,6 +2,9 @@ const config = require("../config.js") as any;
 const fs = require("node:fs") as typeof import("node:fs");
 const path = require("node:path") as typeof import("node:path");
 
+declare const __BUNDLED_SYSTEM_PROMPT__: string;
+const BUNDLED_SYSTEM_PROMPT = typeof __BUNDLED_SYSTEM_PROMPT__ !== "undefined" ? __BUNDLED_SYSTEM_PROMPT__ : "";
+
 type MessagePart = {
   type: string;
   text?: string;
@@ -21,7 +24,9 @@ function readSystemPromptFromFile(): string {
     const content = fs.readFileSync(filePath, "utf-8");
     return content.trim();
   } catch {
-    console.warn("[System Prompt] Could not read sys-prompt.txt, using fallback");
+    if (BUNDLED_SYSTEM_PROMPT) {
+      return BUNDLED_SYSTEM_PROMPT;
+    }
     return "";
   }
 }

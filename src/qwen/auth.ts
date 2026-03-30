@@ -3,6 +3,8 @@ const { promises: fs } = require("node:fs") as typeof import("node:fs");
 const { fetch } = require("undici") as { fetch: typeof globalThis.fetch };
 const crypto = require("node:crypto") as typeof import("node:crypto");
 
+let _conflictWarningShown = false;
+
 const QWEN_DIR = ".qwen";
 const QWEN_CREDENTIAL_FILENAME = "oauth_creds.json";
 const QWEN_MULTI_ACCOUNT_PREFIX = "oauth_creds_";
@@ -106,7 +108,8 @@ export class QwenAuthManager {
       const config = require("../config.js") as any;
       try {
         const defaultAuthExists = await fs.access(this.credentialsPath).then(() => true).catch(() => false);
-        if (defaultAuthExists && accountFiles.length > 0 && config.qwenCodeAuthUse !== false) {
+        if (defaultAuthExists && accountFiles.length > 0 && config.qwenCodeAuthUse !== false && !_conflictWarningShown) {
+          _conflictWarningShown = true;
           console.log("\n\x1b[31m%s\x1b[0m", "[PROXY WARNING] Conflicting authentication files detected!");
           console.log("\x1b[31m%s\x1b[0m", "Found both default ~/.qwen/oauth_creds.json (created by qwen-code) and named account file(s) ~/.qwen/oauth_creds_<name>.json");
           console.log("\x1b[31m%s\x1b[0m", "If these were created with the same account, token refresh conflicts will occur, invalidating the other file.");
