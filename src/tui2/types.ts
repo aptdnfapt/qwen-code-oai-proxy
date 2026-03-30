@@ -74,6 +74,8 @@ export type UsageDay = Readonly<{
   cacheWriteTokens: number;
   cacheTypeLabel: string;
   cacheHitRate: number;
+  webSearchRequests: number;
+  webSearchResults: number;
 }>;
 
 export type NavItem = Readonly<{

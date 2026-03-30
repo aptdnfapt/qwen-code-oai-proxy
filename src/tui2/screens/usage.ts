@@ -39,6 +39,15 @@ export function renderUsageScreen(state: TuiState, width: number): string[] {
   } else {
     lines.push(muted("  no data for today yet"));
   }
+
+  const totalWebSearchRequests = days.reduce((a, d) => a + d.webSearchRequests, 0);
+  const totalWebSearchResults = days.reduce((a, d) => a + d.webSearchResults, 0);
+  lines.push(truncLine(
+    caption("  web-search  ") +
+    `searches ${chalk.white(String(totalWebSearchRequests))}  ` +
+    `results ${chalk.white(String(totalWebSearchResults))}`,
+    width,
+  ));
   lines.push(hRule(width));
 
   const filterLabel = filterQuery

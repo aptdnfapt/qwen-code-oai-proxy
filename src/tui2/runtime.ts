@@ -5,6 +5,7 @@ const require = createRequire(import.meta.url);
 const fs = require("node:fs") as typeof import("node:fs");
 const fsPromises = fs.promises;
 const nodePath = require("node:path") as typeof import("node:path");
+const usageStore = require("../utils/usageStore.js") as typeof import("../utils/usageStore.js");
 
 type ConfigModule = {
   host?: string;
@@ -201,6 +202,8 @@ export function aggregateUsageDays(
   }>>,
   requestCounts: Map<string, number>,
   lastResetDate: string,
+  webSearchRequests = 0,
+  webSearchResults = 0,
 ): readonly UsageDay[] {
   const days = new Map<string, {
     date: string;
@@ -264,7 +267,7 @@ export function aggregateUsageDays(
   return Object.freeze(
     Array.from(days.values())
       .sort((a, b) => b.date.localeCompare(a.date))
-      .map((day) => {
+      .map((day, index) => {
         if (day.date === lastResetDate && !day.requestsKnown) {
           day.requests = sumRequestCounts(requestCounts);
           day.requestsKnown = true;
@@ -282,6 +285,8 @@ export function aggregateUsageDays(
           cacheWriteTokens: day.cacheWriteTokens,
           cacheTypeLabel: resolveCacheTypeLabel(day.cacheTypes),
           cacheHitRate: cacheTotal > 0 ? day.cacheReadTokens / cacheTotal : 0,
+          webSearchRequests: index === 0 ? webSearchRequests : 0,
+          webSearchResults: index === 0 ? webSearchResults : 0,
         });
       }),
   );
@@ -364,7 +369,8 @@ export function createRuntimeMonitor(_bootMs: number): {
     },
     async loadUsage(): Promise<readonly UsageDay[]> {
       await qwenAPI.loadRequestCounts();
-      return aggregateUsageDays(qwenAPI.tokenUsage, qwenAPI.requestCount, qwenAPI.lastResetDate);
+      const webSearchTotals = usageStore.getTotalWebSearchCounts();
+      return aggregateUsageDays(qwenAPI.tokenUsage, qwenAPI.requestCount, qwenAPI.lastResetDate, webSearchTotals.requests, webSearchTotals.results);
     },
     async loadArtifacts(): Promise<readonly ArtifactNode[]> {
       return buildArtifactTree(fileLogger.LOG_DIR);

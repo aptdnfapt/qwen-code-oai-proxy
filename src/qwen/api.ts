@@ -444,12 +444,14 @@ export class QwenAPI {
   webSearchRequestCounts: Map<string, number>;
   webSearchResultCounts: Map<string, number>;
   private storeReady: Promise<void>;
+  private accountLocks: Map<string, boolean>;
 
   constructor() {
     this.authManager = new QwenAuthManager();
     this.requestCount = new Map();
     this.tokenUsage = new Map();
     this.lastResetDate = new Date().toISOString().split("T")[0] as string;
+    this.accountLocks = new Map();
 
     this.webSearchRequestCounts = new Map();
     this.webSearchResultCounts = new Map();
@@ -547,6 +549,20 @@ export class QwenAPI {
 
   normalizeAccountId(accountId: string | null | undefined): string {
     return accountId || "default";
+  }
+
+  acquireAccountLock(accountId: string | null): boolean {
+    const key = accountId || "default";
+    if (this.accountLocks.get(key)) {
+      return false;
+    }
+    this.accountLocks.set(key, true);
+    return true;
+  }
+
+  releaseAccountLock(accountId: string | null): void {
+    const key = accountId || "default";
+    this.accountLocks.delete(key);
   }
 
   async loadCredentialsForAccount(accountId: string): Promise<any> {

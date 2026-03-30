@@ -319,6 +319,14 @@ export function getWebSearchCounts(accountId: string): { requests: number; resul
   return { requests: row?.request_count ?? 0, results: row?.result_count ?? 0 };
 }
 
+export function getTotalWebSearchCounts(): { requests: number; results: number } {
+  const db = getDb();
+  const row = db.prepare(
+    "SELECT COALESCE(SUM(request_count),0) as requests, COALESCE(SUM(result_count),0) as results FROM web_search_counts"
+  ).get() as any;
+  return { requests: row?.requests ?? 0, results: row?.results ?? 0 };
+}
+
 export function closeUsageStore(): void {
   if (_db) {
     _db.close();
