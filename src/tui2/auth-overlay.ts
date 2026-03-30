@@ -1,7 +1,8 @@
 import chalk from "chalk";
 import { Input, type Component, type Focusable, Key, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
 import type { AccountsAuthModalState } from "./types.js";
-import { danger, hRule, layoutButtonGroup, muted, padRight, success, truncLine, warning } from "./render.js";
+import { parseMouse } from "./mouse.js";
+import { buttonHitAt, danger, hRule, layoutLabeledButtonGrid, muted, padRight, success, type ButtonHit, truncLine, warning } from "./render.js";
 
 function phaseColor(phase: AccountsAuthModalState["phase"]): (s: string) => string {
   if (phase === "success") return success;
@@ -25,6 +26,10 @@ export class AuthOverlay implements Component, Focusable {
 
   private input: Input;
   private modal: AccountsAuthModalState;
+  private lastRenderWidth = 0;
+  private lastRenderHeight = 0;
+  private lastButtonRow = -1;
+  private lastButtonHits: readonly ButtonHit<string>[] = Object.freeze([]);
 
   public onStartAuth?: () => void;
   public onClose?: () => void;
@@ -54,19 +59,30 @@ export class AuthOverlay implements Component, Focusable {
   handleInput(data: string): void {
     const modal = this.modal;
     const busy = modal.phase === "initiating" || modal.phase === "waiting";
+    const mouse = parseMouse(data);
 
-    if (matchesKey(data, Key.escape)) {
-      if (!busy) this.onClose?.();
+    if (mouse && !mouse.release && !mouse.move && mouse.button === 0) {
+      this.handleMouseClick(mouse.col, mouse.row);
       return;
     }
 
-    if (matchesKey(data, Key.enter) && !busy && modal.phase !== "success") {
-      this.onStartAuth?.();
+    if (matchesKey(data, Key.escape)) {
+      this.onClose?.();
       return;
     }
 
     if (matchesKey(data, Key.enter) && modal.phase === "success") {
       this.onClose?.();
+      return;
+    }
+
+    if (matchesKey(data, Key.enter) && busy) {
+      this.onClose?.();
+      return;
+    }
+
+    if (matchesKey(data, Key.enter) && modal.phase !== "success") {
+      this.onStartAuth?.();
       return;
     }
 
@@ -82,6 +98,31 @@ export class AuthOverlay implements Component, Focusable {
       if (prev !== next) {
         this.onAccountIdChange?.(next);
       }
+    }
+  }
+
+  private handleMouseClick(col: number, row: number): void {
+    if (this.lastButtonRow < 0) {
+      return;
+    }
+
+    const cols = process.stdout.columns ?? 120;
+    const rows = process.stdout.rows ?? 40;
+    const overlayCol = Math.max(0, Math.floor((cols - this.lastRenderWidth) / 2));
+    const overlayRow = Math.max(0, Math.floor((rows - this.lastRenderHeight) / 2));
+    const localCol = col - overlayCol;
+    const localRow = row - overlayRow;
+    if (localRow !== this.lastButtonRow) {
+      return;
+    }
+
+    const hit = buttonHitAt(this.lastButtonHits, localCol - 2);
+    if (hit === "close") {
+      this.onClose?.();
+    } else if (hit === "start") {
+      this.onStartAuth?.();
+    } else if (hit === "open") {
+      this.onOpenBrowser?.();
     }
   }
 
@@ -101,6 +142,10 @@ export class AuthOverlay implements Component, Focusable {
     function row(content: string): string {
       return side + " " + truncateToWidth(padRight(content, innerW), innerW, "") + " " + side;
     }
+
+    this.lastRenderWidth = width;
+    this.lastButtonRow = -1;
+    this.lastButtonHits = Object.freeze([]);
 
     lines.push(top);
     lines.push(row(chalk.bold("Add account")));
@@ -140,40 +185,51 @@ export class AuthOverlay implements Component, Focusable {
     lines.push(row(hRule(innerW)));
 
     if (modal.phase === "success") {
-      const buttons = layoutButtonGroup([
-        { id: "close", label: "Close", tone: "success", selected: true },
-      ]);
+      const buttons = layoutLabeledButtonGrid([
+        { label: "Actions", items: [{ id: "close", label: "Close", tone: "success", selected: true }] },
+      ], 10);
+      this.lastButtonRow = lines.length + 1;
+      this.lastButtonHits = buttons.hitRows[0]?.hits ?? Object.freeze([]);
       for (const buttonLine of buttons.lines) {
         lines.push(row(buttonLine));
       }
       lines.push(row(muted("Enter close")));
     } else if (!busy) {
-      const buttons = layoutButtonGroup([
-        { id: "start", label: "Start auth", tone: "accent", selected: true },
-        { id: "close", label: "Close", tone: "neutral" },
-      ]);
+      const buttons = layoutLabeledButtonGrid([
+        { label: "Actions", items: [
+          { id: "start", label: "Start auth", tone: "accent", selected: true },
+          { id: "close", label: "Close", tone: "neutral" },
+        ] },
+      ], 10);
+      this.lastButtonRow = lines.length + 1;
+      this.lastButtonHits = buttons.hitRows[0]?.hits ?? Object.freeze([]);
       for (const buttonLine of buttons.lines) {
         lines.push(row(buttonLine));
       }
       lines.push(row(muted("Enter start  Esc close")));
     } else {
       const buttons = modal.flow
-        ? layoutButtonGroup([
-            { id: "open", label: "Open browser", tone: "accent", selected: true },
-            { id: "close", label: "Close", tone: "neutral" },
-          ]).lines
+        ? layoutLabeledButtonGrid([
+            { label: "Actions", items: [
+              { id: "open", label: "Open browser", tone: "accent", selected: true },
+              { id: "close", label: "Close", tone: "neutral" },
+            ] },
+          ], 10)
         : null;
       if (buttons) {
-        for (const buttonLine of buttons) {
+        this.lastButtonRow = lines.length + 1;
+        this.lastButtonHits = buttons.hitRows[0]?.hits ?? Object.freeze([]);
+        for (const buttonLine of buttons.lines) {
           lines.push(row(buttonLine));
         }
-        lines.push(row(muted("O open browser")));
+        lines.push(row(muted("O open browser  Enter/Esc close")));
       } else {
         lines.push(row(muted("waiting...")));
       }
     }
 
     lines.push(bot);
+    this.lastRenderHeight = lines.length;
 
     return lines;
   }

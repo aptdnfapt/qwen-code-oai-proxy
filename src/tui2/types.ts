@@ -140,6 +140,9 @@ export type ArtifactsScreenState = Readonly<{
   expanded: readonly string[];
   selected: string | null;
   previewContent: string | null;
+  filterQuery: string;
+  previewScrollTop: number;
+  activePane: "tree" | "preview";
 }>;
 
 export type AccountsScreenState = Readonly<{
@@ -197,6 +200,9 @@ export type TuiAction =
   | Readonly<{ type: "toggle-artifact-expand"; path: string }>
   | Readonly<{ type: "select-artifact"; path: string | null }>
   | Readonly<{ type: "set-artifact-preview"; content: string | null }>
+  | Readonly<{ type: "set-artifact-filter"; value: string }>
+  | Readonly<{ type: "set-artifact-preview-scroll"; scrollTop: number }>
+  | Readonly<{ type: "set-artifact-pane"; pane: "tree" | "preview" }>
   | Readonly<{ type: "set-accounts"; accounts: readonly AccountInfo[] }>
   | Readonly<{ type: "select-account"; id: string | null }>
   | Readonly<{ type: "open-auth-modal" }>
@@ -214,4 +220,3 @@ export type ScreenRouteDeps = Readonly<{
   onNavigate: (screen: ScreenId) => void;
   onToggleSidebar: () => void;
 }>;
-

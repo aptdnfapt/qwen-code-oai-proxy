@@ -1,11 +1,11 @@
 import chalk from "chalk";
-import { type Component, type Focusable, type TUI, Key, matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { type Component, type Focusable, type TUI, Key, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
 import type { LogLevel, ScreenId, TuiAction, TuiState } from "./types.js";
 import { NAV_ITEMS } from "./types.js";
 import {
   buttonHitAt,
   caption, formatDuration, hRule, muted, padRight,
-  layoutButtonGroup,
+  layoutLabeledButtonGrid,
   success, truncLine, warning, SIDEBAR_W, SIDEBAR_W_COLLAPSED,
 } from "./render.js";
 import { disableMouse, enableMouse, parseMouse } from "./mouse.js";
@@ -13,7 +13,7 @@ import { AuthOverlay } from "./auth-overlay.js";
 import { LIVE_LOG_LEVEL_ROW, LIVE_SERVER_ROW, liveLogLevelButtons, liveServerButtons, renderLiveScreen } from "./screens/live.js";
 import { ACCOUNTS_ADD_BUTTON_ROW, ACCOUNTS_TABLE_START_ROW, renderAccountsScreen } from "./screens/accounts.js";
 import { renderUsageScreen } from "./screens/usage.js";
-import { ARTIFACT_TREE_START_ROW, artifactPaneWidths, flattenArtifactRows, renderArtifactsScreen } from "./screens/artifacts.js";
+import { ARTIFACT_BODY_START_ROW, artifactPaneWidths, getVisibleArtifactRows, renderArtifactsScreen } from "./screens/artifacts.js";
 import {
   renderSettingsScreen,
   SETTINGS_ICONS_ROW,
@@ -52,8 +52,8 @@ export class AppView implements Component, Focusable {
   private mouseEnabled = true;
   private authOverlayHandle: ReturnType<TUI["showOverlay"]> | null = null;
   private authOverlay: AuthOverlay | null = null;
-  private filterMode = false;
-  private filterBuffer = "";
+  private inputMode: "usage-filter" | "artifact-filter" | null = null;
+  private inputBuffer = "";
 
   constructor(tui: TUI, initialState: TuiState, cb: AppCallbacks) {
     this.tui = tui;
@@ -158,11 +158,44 @@ export class AppView implements Component, Focusable {
   }
 
   private stepArtifacts(delta: number): void {
-    const rows = flattenArtifactRows(this.state.artifacts.tree, this.state.artifacts.expanded);
+    const rows = getVisibleArtifactRows(
+      this.state.artifacts.tree,
+      this.state.artifacts.expanded,
+      this.state.artifacts.filterQuery,
+    );
     const idx = rows.findIndex((row) => row.path === this.state.artifacts.selected);
     const next = rows[Math.max(0, Math.min(rows.length - 1, idx + delta))];
     if (next) {
       this.cb.onSelectArtifact(next.path);
+    }
+  }
+
+  private setArtifactPane(pane: "tree" | "preview"): void {
+    this.cb.dispatch({ type: "set-artifact-pane", pane });
+  }
+
+  private moveArtifactPreview(delta: number): void {
+    this.cb.dispatch({
+      type: "set-artifact-preview-scroll",
+      scrollTop: this.state.artifacts.previewScrollTop + delta,
+    });
+  }
+
+  private setArtifactFilter(value: string): void {
+    this.cb.dispatch({ type: "set-artifact-filter", value });
+    const rows = getVisibleArtifactRows(this.state.artifacts.tree, this.state.artifacts.expanded, value);
+    const selectedStillVisible = rows.some((row) => row.path === this.state.artifacts.selected);
+    if (!selectedStillVisible) {
+      this.cb.onSelectArtifact(rows[0]?.path ?? null);
+    }
+  }
+
+  private applyInputValue(value: string): void {
+    this.inputBuffer = value;
+    if (this.inputMode === "usage-filter") {
+      this.cb.onUsageFilterChange(value);
+    } else if (this.inputMode === "artifact-filter") {
+      this.setArtifactFilter(value);
     }
   }
 
@@ -171,19 +204,16 @@ export class AppView implements Component, Focusable {
   }
 
   handleInput(data: string): void {
-    if (this.filterMode) {
+    if (this.inputMode) {
       if (matchesKey(data, Key.escape)) {
-        this.filterMode = false;
-        this.filterBuffer = "";
-        this.cb.onUsageFilterChange("");
+        this.applyInputValue("");
+        this.inputMode = null;
       } else if (matchesKey(data, Key.enter)) {
-        this.filterMode = false;
+        this.inputMode = null;
       } else if (matchesKey(data, Key.backspace)) {
-        this.filterBuffer = this.filterBuffer.slice(0, -1);
-        this.cb.onUsageFilterChange(this.filterBuffer);
+        this.applyInputValue(this.inputBuffer.slice(0, -1));
       } else if (data.length === 1 && data >= " ") {
-        this.filterBuffer += data;
-        this.cb.onUsageFilterChange(this.filterBuffer);
+        this.applyInputValue(this.inputBuffer + data);
       }
       this.tui.requestRender();
       return;
@@ -295,13 +325,12 @@ export class AppView implements Component, Focusable {
 
     if (screen === "usage") {
       if (data === "/" ) {
-        this.filterMode = true;
-        this.filterBuffer = this.state.usage.filterQuery;
+        this.inputMode = "usage-filter";
+        this.inputBuffer = this.state.usage.filterQuery;
         this.tui.requestRender();
         return;
       }
       if (matchesKey(data, Key.escape)) {
-        this.filterBuffer = "";
         this.cb.onUsageFilterChange("");
         return;
       }
@@ -316,14 +345,65 @@ export class AppView implements Component, Focusable {
     }
 
     if (screen === "artifacts") {
-      if (matchesKey(data, Key.up)) {
-        this.stepArtifacts(-1);
+      if (data === "/") {
+        this.inputMode = "artifact-filter";
+        this.inputBuffer = this.state.artifacts.filterQuery;
+        this.tui.requestRender();
         return;
       }
-      if (matchesKey(data, Key.down)) {
-        this.stepArtifacts(1);
+      if (matchesKey(data, Key.escape) && this.state.artifacts.filterQuery) {
+        this.setArtifactFilter("");
         return;
       }
+      if (matchesKey(data, Key.left)) {
+        this.setArtifactPane("tree");
+        return;
+      }
+      if (matchesKey(data, Key.right)) {
+        this.setArtifactPane("preview");
+        return;
+      }
+      if (this.state.artifacts.activePane === "tree") {
+        if (matchesKey(data, Key.up)) {
+          this.stepArtifacts(-1);
+          return;
+        }
+        if (matchesKey(data, Key.down)) {
+          this.stepArtifacts(1);
+          return;
+        }
+        if (matchesKey(data, Key.enter)) {
+          const sel = this.state.artifacts.selected;
+          if (sel) this.cb.onToggleArtifactExpand(sel);
+          return;
+        }
+      } else {
+        if (matchesKey(data, Key.up)) {
+          this.moveArtifactPreview(-1);
+          return;
+        }
+        if (matchesKey(data, Key.down)) {
+          this.moveArtifactPreview(1);
+          return;
+        }
+        if (matchesKey(data, Key.pageUp)) {
+          this.moveArtifactPreview(-10);
+          return;
+        }
+        if (matchesKey(data, Key.pageDown)) {
+          this.moveArtifactPreview(10);
+          return;
+        }
+        if (matchesKey(data, Key.home)) {
+          this.cb.dispatch({ type: "set-artifact-preview-scroll", scrollTop: 0 });
+          return;
+        }
+        if (matchesKey(data, Key.end)) {
+          this.cb.dispatch({ type: "set-artifact-preview-scroll", scrollTop: Number.MAX_SAFE_INTEGER });
+          return;
+        }
+      }
+
       if (matchesKey(data, Key.enter)) {
         const sel = this.state.artifacts.selected;
         if (sel) this.cb.onToggleArtifactExpand(sel);
@@ -362,27 +442,41 @@ export class AppView implements Component, Focusable {
       case "usage":
         this.stepUsage(direction === "up" ? -1 : 1);
         break;
-      case "artifacts":
-        this.stepArtifacts(direction === "up" ? -1 : 1);
+      case "artifacts": {
+        const localCol = col - sbW - 1;
+        const { treeWidth } = artifactPaneWidths(this.mainWidth(this.state.viewportCols));
+        if (localCol > treeWidth || this.state.artifacts.activePane === "preview") {
+          this.setArtifactPane("preview");
+          this.moveArtifactPreview(direction === "up" ? -3 : 3);
+        } else {
+          this.setArtifactPane("tree");
+          this.stepArtifacts(direction === "up" ? -1 : 1);
+        }
         break;
+      }
       default:
         break;
     }
   }
 
   private handleLiveClick(localCol: number, localRow: number): void {
-    if (localRow >= LIVE_SERVER_ROW - 1 && localRow <= LIVE_SERVER_ROW + 1) {
+    const liveGrid = layoutLabeledButtonGrid([
+      { label: "Server", items: liveServerButtons(this.state.runtime.serverState) },
+      { label: "Log level", items: liveLogLevelButtons(this.state.live.logLevel) },
+    ]);
+
+    if (localRow === LIVE_SERVER_ROW) {
       const prefix = 2;
-      const hit = buttonHitAt(layoutButtonGroup(liveServerButtons(this.state.runtime.serverState)).hits, localCol - prefix);
+      const hit = buttonHitAt(liveGrid.hitRows[0]?.hits ?? [], localCol - prefix);
       if (hit === "start") this.cb.onStartServer();
       if (hit === "stop") this.cb.onStopServer();
       if (hit === "restart") this.cb.onRestartServer();
       return;
     }
 
-    if (localRow >= LIVE_LOG_LEVEL_ROW - 1 && localRow <= LIVE_LOG_LEVEL_ROW + 1) {
+    if (localRow === LIVE_LOG_LEVEL_ROW) {
       const prefix = 2;
-      const hit = buttonHitAt(layoutButtonGroup(liveLogLevelButtons(this.state.live.logLevel)).hits, localCol - prefix);
+      const hit = buttonHitAt(liveGrid.hitRows[1]?.hits ?? [], localCol - prefix);
       if (hit) this.cb.onLogLevelChange(hit as LogLevel);
     }
   }
@@ -410,12 +504,30 @@ export class AppView implements Component, Focusable {
 
   private handleArtifactsClick(localCol: number, localRow: number, mainWidth: number): void {
     const { treeWidth } = artifactPaneWidths(mainWidth);
-    if (localRow < ARTIFACT_TREE_START_ROW || localCol >= treeWidth) {
+    const contentRows = Math.max(0, (this.tui["terminal"]?.rows ?? this.state.viewportRows) - 2);
+    const bodyRows = Math.max(8, contentRows - 8);
+    const rows = getVisibleArtifactRows(
+      this.state.artifacts.tree,
+      this.state.artifacts.expanded,
+      this.state.artifacts.filterQuery,
+    );
+    const selectedPath = rows.some((row) => row.path === this.state.artifacts.selected)
+      ? this.state.artifacts.selected
+      : (rows[0]?.path ?? null);
+    const selectedIndex = Math.max(0, rows.findIndex((row) => row.path === selectedPath));
+    const treeScrollTop = Math.max(0, Math.min(rows.length - bodyRows, selectedIndex - Math.floor(bodyRows / 2)));
+
+    if (localRow < ARTIFACT_BODY_START_ROW || localRow >= ARTIFACT_BODY_START_ROW + bodyRows) {
       return;
     }
 
-    const rows = flattenArtifactRows(this.state.artifacts.tree, this.state.artifacts.expanded);
-    const selected = rows[localRow - ARTIFACT_TREE_START_ROW];
+    if (localCol > treeWidth) {
+      this.setArtifactPane("preview");
+      return;
+    }
+
+    this.setArtifactPane("tree");
+    const selected = rows[treeScrollTop + (localRow - ARTIFACT_BODY_START_ROW)];
     if (!selected) {
       return;
     }
@@ -432,40 +544,49 @@ export class AppView implements Component, Focusable {
       return;
     }
 
-    if (localRow >= SETTINGS_THEME_ROW - 1 && localRow <= SETTINGS_THEME_ROW + 1) {
-      const hit = buttonHitAt(layoutButtonGroup([
+    const appearanceGrid = layoutLabeledButtonGrid([
+      { label: "Theme", items: [
         { id: "dark", label: "dark", selected: this.state.themeName === "dark", tone: "accent" },
         { id: "light", label: "light", selected: this.state.themeName === "light", tone: "accent" },
-      ]).hits, rowCol);
-      if (hit) this.cb.onThemeChange(hit as TuiState["themeName"]);
-      return;
-    }
-
-    if (localRow >= SETTINGS_SIDEBAR_ROW - 1 && localRow <= SETTINGS_SIDEBAR_ROW + 1) {
-      const hit = buttonHitAt(layoutButtonGroup([
+      ] },
+      { label: "Sidebar", items: [
         { id: "expanded", label: "expanded", selected: this.state.sidebarMode === "expanded", tone: "accent" },
         { id: "collapsed", label: "collapsed", selected: this.state.sidebarMode === "collapsed", tone: "accent" },
-      ]).hits, rowCol);
-      if (hit) this.cb.dispatch({ type: "set-sidebar-mode", mode: hit as TuiState["sidebarMode"] });
-      return;
-    }
-
-    if (localRow >= SETTINGS_ICONS_ROW - 1 && localRow <= SETTINGS_ICONS_ROW + 1) {
-      const hit = buttonHitAt(layoutButtonGroup([
-        { id: "fallback", label: "fallback", selected: this.state.iconMode === "fallback", tone: "accent" },
+      ] },
+      { label: "Sidebar icons", items: [
         { id: "nerd", label: "nerd", selected: this.state.iconMode === "nerd", tone: "accent" },
-      ]).hits, rowCol);
-      if (hit) this.cb.dispatch({ type: "set-icon-mode", mode: hit as TuiState["iconMode"] });
-      return;
-    }
-
-    if (localRow >= SETTINGS_LOG_LEVEL_ROW - 1 && localRow <= SETTINGS_LOG_LEVEL_ROW + 1) {
-      const hit = buttonHitAt(layoutButtonGroup([
+        { id: "fallback", label: "fallback", selected: this.state.iconMode === "fallback", tone: "accent" },
+      ] },
+    ], 18);
+    const runtimeGrid = layoutLabeledButtonGrid([
+      { label: "Default log level", items: [
         { id: "off", label: "off", selected: this.state.live.logLevel === "off", tone: "neutral" },
         { id: "error", label: "error", selected: this.state.live.logLevel === "error", tone: "danger" },
         { id: "error-debug", label: "error-debug", selected: this.state.live.logLevel === "error-debug", tone: "accent" },
         { id: "debug", label: "debug", selected: this.state.live.logLevel === "debug", tone: "success" },
-      ]).hits, rowCol);
+      ] },
+    ], 18);
+
+    if (localRow === SETTINGS_THEME_ROW) {
+      const hit = buttonHitAt(appearanceGrid.hitRows[0]?.hits ?? [], rowCol);
+      if (hit) this.cb.onThemeChange(hit as TuiState["themeName"]);
+      return;
+    }
+
+    if (localRow === SETTINGS_SIDEBAR_ROW) {
+      const hit = buttonHitAt(appearanceGrid.hitRows[1]?.hits ?? [], rowCol);
+      if (hit) this.cb.dispatch({ type: "set-sidebar-mode", mode: hit as TuiState["sidebarMode"] });
+      return;
+    }
+
+    if (localRow === SETTINGS_ICONS_ROW) {
+      const hit = buttonHitAt(appearanceGrid.hitRows[2]?.hits ?? [], rowCol);
+      if (hit) this.cb.dispatch({ type: "set-icon-mode", mode: hit as TuiState["iconMode"] });
+      return;
+    }
+
+    if (localRow === SETTINGS_LOG_LEVEL_ROW) {
+      const hit = buttonHitAt(runtimeGrid.hitRows[0]?.hits ?? [], rowCol);
       if (hit) this.cb.onLogLevelChange(hit as LogLevel);
     }
   }
@@ -568,14 +689,14 @@ export class AppView implements Component, Focusable {
   private renderFooter(mainW: number): string {
     const focusStr = this.state.focusRegion === "sidebar" ? chalk.cyan("sidebar") : chalk.cyan("main");
     const base = caption(`Tab focus(${focusStr})  click select  wheel scroll  [ sidebar  t theme  m mouse  q quit  ? help`);
-    const filterHint = this.filterMode ? chalk.yellow("  [FILTER MODE] type to filter, Enter/Esc done") : "";
+    const filterHint = this.inputMode ? chalk.yellow(`  [${this.inputMode === "usage-filter" ? "USAGE FILTER" : "ARTIFACT SEARCH"}] type, Enter/Esc done`) : "";
     return truncLine(base + filterHint, mainW);
   }
 
   render(width: number): string[] {
     const state = this.state;
     const terminal = this.tui["terminal"];
-    const termRows: number = (terminal?.rows ?? process.stdout.rows ?? 40);
+    const termRows: number = terminal?.rows ?? state.viewportRows ?? 40;
 
     const sbW = this.sidebarWidth();
     const mainW = Math.max(20, width - sbW - 1);
@@ -614,16 +735,16 @@ export class AppView implements Component, Focusable {
     screenLines = screenLines.slice(0, contentRows);
 
     const allLines: string[] = [];
-    allLines.push(padRight(sidebarLines[0] ?? "", sbW) + chalk.dim("│") + header);
+    allLines.push(padRight(sidebarLines[0] ?? "", sbW) + chalk.dim("│") + padRight(header, mainW));
 
     for (let i = 1; i < contentRows + 1; i++) {
       const sLine = padRight(sidebarLines[i] ?? "", sbW);
-      const mLine = screenLines[i - 1] ?? "";
+      const mLine = padRight(screenLines[i - 1] ?? "", mainW);
       allLines.push(sLine + chalk.dim("│") + mLine);
     }
 
-    allLines.push(padRight(sidebarLines[contentRows + 1] ?? "", sbW) + chalk.dim("│") + footer);
+    allLines.push(padRight(sidebarLines[contentRows + 1] ?? "", sbW) + chalk.dim("│") + padRight(footer, mainW));
 
-    return allLines.map((l) => truncateToWidth(l, width));
+    return allLines.map((l) => padRight(truncateToWidth(l, width, ""), width));
   }
 }

@@ -25,6 +25,24 @@ export type ButtonGroupLayout<T extends string = string> = Readonly<{
   hits: readonly ButtonHit<T>[];
 }>;
 
+export type LabeledButtonGroupLayout<T extends string = string> = Readonly<{
+  lines: readonly [string, string, string];
+  hits: readonly ButtonHit<T>[];
+}>;
+
+export type ButtonGridRow<T extends string = string> = Readonly<{
+  label: string;
+  items: readonly ButtonRowItem<T>[];
+}>;
+
+export type LabeledButtonGridLayout<T extends string = string> = Readonly<{
+  lines: readonly string[];
+  hitRows: readonly Readonly<{
+    lineIndex: number;
+    hits: readonly ButtonHit<T>[];
+  }>[];
+}>;
+
 export function padRight(s: string, width: number): string {
   const vw = visibleWidth(s);
   if (vw >= width) return truncateToWidth(s, width, "");
@@ -125,6 +143,36 @@ function renderButton<T extends string>(item: ButtonRowItem<T>): string {
   return chalk.dim("│") + toneColor(tone)(content) + chalk.dim("│");
 }
 
+function renderButtonCell<T extends string>(item: ButtonRowItem<T>, width: number): string {
+  const tone = item.tone ?? "accent";
+  const content = centerText(item.label, width);
+
+  if (item.disabled) {
+    return muted(content);
+  }
+
+  if (item.selected) {
+    return toneFill(tone).black(content);
+  }
+
+  return toneColor(tone)(content);
+}
+
+function renderButtonChip<T extends string>(item: ButtonRowItem<T>): string {
+  const tone = item.tone ?? "accent";
+  const content = ` ${item.label} `;
+
+  if (item.disabled) {
+    return muted(content);
+  }
+
+  if (item.selected) {
+    return toneFill(tone).black(content);
+  }
+
+  return toneColor(tone)(content);
+}
+
 export function layoutButtonRow<T extends string>(items: readonly ButtonRowItem<T>[], gap = 1): { line: string; hits: readonly ButtonHit<T>[] } {
   const parts: string[] = [];
   const hits: ButtonHit<T>[] = [];
@@ -195,6 +243,109 @@ export function layoutButtonGroup<T extends string>(items: readonly ButtonRowIte
   return Object.freeze({
     lines: Object.freeze([top, parts.join(""), bottom]) as [string, string, string],
     hits: Object.freeze(hits),
+  });
+}
+
+export function layoutLabeledButtonGroup<T extends string>(
+  label: string,
+  items: readonly ButtonRowItem<T>[],
+  minLabelWidth = 12,
+): LabeledButtonGroupLayout<T> {
+  const labelWidth = Math.max(minLabelWidth, visibleWidth(label) + 2);
+  const widths = items.map((item) => Math.max(visibleWidth(item.label) + 2, 6));
+  const top =
+    chalk.dim("┌") +
+    "─".repeat(labelWidth) +
+    chalk.dim("┬") +
+    widths.map((width) => "─".repeat(width)).join(chalk.dim("┬")) +
+    chalk.dim("┐");
+  const bottom =
+    chalk.dim("└") +
+    "─".repeat(labelWidth) +
+    chalk.dim("┴") +
+    widths.map((width) => "─".repeat(width)).join(chalk.dim("┴")) +
+    chalk.dim("┘");
+
+  const parts: string[] = [chalk.dim("│"), centerText(label, labelWidth), chalk.dim("│")];
+  const hits: ButtonHit<T>[] = [];
+  let offset = labelWidth + 2;
+
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index]!;
+    const tone = item.tone ?? "accent";
+    const width = widths[index]!;
+    const content = centerText(item.label, width);
+    let cell = content;
+
+    if (item.disabled) {
+      cell = muted(content);
+    } else if (item.selected) {
+      cell = toneFill(tone).black(content);
+    } else {
+      cell = toneColor(tone)(content);
+    }
+
+    hits.push(Object.freeze({
+      id: item.id,
+      start: offset,
+      end: offset + width,
+    }));
+    parts.push(cell);
+    offset += width;
+
+    if (index < items.length - 1) {
+      parts.push(chalk.dim("│"));
+      offset += 1;
+    }
+  }
+
+  parts.push(chalk.dim("│"));
+
+  return Object.freeze({
+    lines: Object.freeze([top, parts.join(""), bottom]) as [string, string, string],
+    hits: Object.freeze(hits),
+  });
+}
+
+export function layoutLabeledButtonGrid<T extends string>(
+  rows: readonly ButtonGridRow<T>[],
+  minLabelWidth = 12,
+): LabeledButtonGridLayout<T> {
+  const labelWidth = Math.max(minLabelWidth, ...rows.map((row) => visibleWidth(row.label)));
+  const lines: string[] = [];
+  const hitRows: Array<{ lineIndex: number; hits: readonly ButtonHit<T>[] }> = [];
+
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+    const row = rows[rowIndex]!;
+    const parts: string[] = [];
+    const hits: ButtonHit<T>[] = [];
+    let offset = labelWidth + 2;
+
+    for (let itemIndex = 0; itemIndex < row.items.length; itemIndex++) {
+      const item = row.items[itemIndex]!;
+      const chip = renderButtonChip(item);
+      const width = visibleWidth(chip);
+      parts.push(chip);
+      hits.push(Object.freeze({
+        id: item.id,
+        start: offset,
+        end: offset + width,
+      }));
+      offset += width;
+
+      if (itemIndex < row.items.length - 1) {
+        parts.push("  ");
+        offset += 2;
+      }
+    }
+
+    lines.push(`${caption(padRight(row.label, labelWidth))}  ${parts.join("")}`);
+    hitRows.push(Object.freeze({ lineIndex: lines.length - 1, hits: Object.freeze(hits) }));
+  }
+
+  return Object.freeze({
+    lines: Object.freeze(lines),
+    hitRows: Object.freeze(hitRows),
   });
 }
 

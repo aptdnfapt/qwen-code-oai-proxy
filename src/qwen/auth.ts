@@ -448,14 +448,12 @@ export class QwenAuthManager {
             const errorData = await response.json() as any;
 
             if (response.status === 400 && errorData.error === "authorization_pending") {
-              console.log(`Polling attempt ${attempt + 1}/${maxAttempts}...`);
               await new Promise((resolve) => setTimeout(resolve, pollInterval));
               continue;
             }
 
             if (response.status === 400 && errorData.error === "slow_down") {
               pollInterval = Math.min(pollInterval * 1.5, 10000);
-              console.log(`Server requested to slow down, increasing poll interval to ${pollInterval}ms`);
               await new Promise((resolve) => setTimeout(resolve, pollInterval));
               continue;
             }
@@ -492,7 +490,6 @@ export class QwenAuthManager {
           throw error;
         }
 
-        console.log(`Polling attempt ${attempt + 1}/${maxAttempts} failed:`, errorMessage);
         await new Promise((resolve) => setTimeout(resolve, pollInterval));
       }
     }

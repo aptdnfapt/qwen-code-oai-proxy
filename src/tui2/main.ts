@@ -91,7 +91,7 @@ let appView!: AppView;
 function dispatch(action: TuiAction): void {
   currentState = reduceTuiState(currentState, action);
   appView?.setState(currentState);
-  tui.requestRender();
+  tui.requestRender(true);
 }
 
 async function stopApp(): Promise<void> {

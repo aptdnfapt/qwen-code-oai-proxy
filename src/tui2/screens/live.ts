@@ -1,15 +1,16 @@
 import chalk from "chalk";
 import type { LogEntry, LogLevel, TuiState } from "../types.js";
 import {
+  type ButtonGridRow,
   type ButtonTone,
   caption, danger, formatDuration, formatTime, hRule,
-  layoutButtonGroup,
+  layoutLabeledButtonGrid,
   muted, sectionHeader, success, truncLine, warning,
 } from "../render.js";
 
 const LOG_LEVELS: readonly LogLevel[] = ["off", "error", "error-debug", "debug"];
-export const LIVE_SERVER_ROW = 6;
-export const LIVE_LOG_LEVEL_ROW = 10;
+export const LIVE_SERVER_ROW = 4;
+export const LIVE_LOG_LEVEL_ROW = 5;
 
 function levelColor(level: string): (s: string) => string {
   if (level === "error") return danger;
@@ -37,14 +38,6 @@ export function liveServerButtons(serverState: TuiState["runtime"]["serverState"
   ] as const;
 }
 
-function renderServerControls(serverState: TuiState["runtime"]["serverState"], width: number): string[] {
-  const group = layoutButtonGroup(liveServerButtons(serverState));
-  return [
-    truncLine(caption("  Server"), width),
-    ...group.lines.map((line) => truncLine(`  ${line}`, width)),
-  ];
-}
-
 export function liveLogLevelButtons(current: LogLevel) {
   return LOG_LEVELS.map((level) => ({
     id: level,
@@ -54,12 +47,12 @@ export function liveLogLevelButtons(current: LogLevel) {
   }));
 }
 
-function renderLogLevelBar(current: LogLevel, width: number): string[] {
-  const group = layoutButtonGroup(liveLogLevelButtons(current));
-  return [
-    truncLine(caption("  Log level"), width),
-    ...group.lines.map((line) => truncLine(`  ${line}`, width)),
-  ];
+function renderControlGrid(state: TuiState, width: number): string[] {
+  const rows: readonly ButtonGridRow<string>[] = Object.freeze([
+    Object.freeze({ label: "Server", items: liveServerButtons(state.runtime.serverState) }),
+    Object.freeze({ label: "Log level", items: liveLogLevelButtons(state.live.logLevel) }),
+  ]);
+  return layoutLabeledButtonGrid(rows).lines.map((line) => truncLine(`  ${line}`, width));
 }
 
 function renderLogEntry(log: LogEntry, width: number): string {
@@ -85,8 +78,7 @@ export function renderLiveScreen(
   lines.push(hRule(width));
   lines.push(...renderServerStatus(state.runtime, width));
   lines.push(hRule(width));
-  lines.push(...renderServerControls(state.runtime.serverState, width));
-  lines.push(...renderLogLevelBar(state.live.logLevel, width));
+  lines.push(...renderControlGrid(state, width));
   lines.push(hRule(width));
 
   const headerLines = lines.length;

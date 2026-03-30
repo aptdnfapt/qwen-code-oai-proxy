@@ -1,12 +1,12 @@
 import chalk from "chalk";
 import type { AccountInfo, TuiState } from "../types.js";
 import {
-  caption, danger, formatExpiry, hRule, layoutButtonGroup, muted, padRight,
+  caption, danger, formatExpiry, hRule, layoutLabeledButtonGrid, muted, padRight,
   sectionHeader, success, truncLine, warning,
 } from "../render.js";
 
-export const ACCOUNTS_ADD_BUTTON_ROW = 4;
-export const ACCOUNTS_TABLE_START_ROW = 9;
+export const ACCOUNTS_ADD_BUTTON_ROW = 2;
+export const ACCOUNTS_TABLE_START_ROW = 6;
 
 function statusColor(status: AccountInfo["status"]): (s: string) => string {
   if (status === "valid") return success;
@@ -20,11 +20,10 @@ export function renderAccountsScreen(state: TuiState, width: number): string[] {
 
   lines.push(sectionHeader("Accounts", width));
   lines.push(hRule(width));
-  const addGroup = layoutButtonGroup([
-    { id: "add", label: "Add account", tone: "accent" },
-  ]);
-  lines.push(truncLine(caption("  Add new account"), width));
-  lines.push(...addGroup.lines.map((line) => truncLine(`  ${line}`, width)));
+  const addGrid = layoutLabeledButtonGrid([
+    { label: "New account", items: [{ id: "add", label: "Add", tone: "accent" }] },
+  ], 14);
+  lines.push(...addGrid.lines.map((line) => truncLine(`  ${line}`, width)));
   lines.push(hRule(width));
 
   if (accounts.length === 0) {

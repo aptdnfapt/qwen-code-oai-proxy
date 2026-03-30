@@ -77,6 +77,9 @@ function createInitialArtifactsState(): ArtifactsScreenState {
     expanded: Object.freeze([]),
     selected: null,
     previewContent: null,
+    filterQuery: "",
+    previewScrollTop: 0,
+    activePane: "tree",
   });
 }
 
@@ -119,7 +122,7 @@ export function createInitialState(nowMs = Date.now()): TuiState {
     sidebarIndex: 0,
     sidebarMode: "expanded",
     themeName: "dark",
-    iconMode: "fallback",
+    iconMode: "nerd",
     runtime: createInitialRuntime(),
     shouldQuit: false,
     live: createInitialLiveState(),
@@ -269,6 +272,7 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
           ...state.artifacts,
           tree: action.tree,
           selected,
+          previewScrollTop: 0,
         }),
       });
       }
@@ -291,6 +295,7 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
         artifacts: Object.freeze({
           ...state.artifacts,
           selected: action.path,
+          previewScrollTop: 0,
         }),
       });
     case "set-artifact-preview":
@@ -299,6 +304,31 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
         artifacts: Object.freeze({
           ...state.artifacts,
           previewContent: action.content,
+          previewScrollTop: 0,
+        }),
+      });
+    case "set-artifact-filter":
+      return Object.freeze({
+        ...state,
+        artifacts: Object.freeze({
+          ...state.artifacts,
+          filterQuery: action.value,
+        }),
+      });
+    case "set-artifact-preview-scroll":
+      return Object.freeze({
+        ...state,
+        artifacts: Object.freeze({
+          ...state.artifacts,
+          previewScrollTop: Math.max(0, action.scrollTop),
+        }),
+      });
+    case "set-artifact-pane":
+      return Object.freeze({
+        ...state,
+        artifacts: Object.freeze({
+          ...state.artifacts,
+          activePane: action.pane,
         }),
       });
     case "set-accounts":

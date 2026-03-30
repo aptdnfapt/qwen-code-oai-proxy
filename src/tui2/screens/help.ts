@@ -37,6 +37,13 @@ export function renderHelpScreen(width: number): string[] {
   lines.push(kb("A", "add account (opens popup)", kw, width));
   lines.push(kb("↑ / ↓", "select account", kw, width));
 
+   lines.push(hRule(width));
+   lines.push(truncLine(chalk.bold("Artifacts screen"), width));
+   lines.push(hRule(width));
+   lines.push(kb("/", "filter request folders/files", kw, width));
+   lines.push(kb("← / →", "switch tree and preview pane", kw, width));
+   lines.push(kb("PgUp / PgDn", "scroll preview content", kw, width));
+
   lines.push(hRule(width));
   lines.push(truncLine(chalk.bold("Authentication flow"), width));
   lines.push(hRule(width));
