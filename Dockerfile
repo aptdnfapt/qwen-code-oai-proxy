@@ -1,26 +1,22 @@
 FROM node:20-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+RUN npm ci
 
-# Copy source code
 COPY . .
 
-# Create directory for qwen credentials
-RUN mkdir -p /root/.qwen
+RUN npm run build:core
 
-# Expose port
+RUN mkdir -p /root/.qwen /root/.local/share/qwen-proxy
+
 EXPOSE ${PORT:-8080}
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:${PORT:-8080}/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || 8080) + '/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
-# Start the application
-CMD ["npm", "start"]
+ENV HOST=0.0.0.0
+
+CMD ["node", "dist/src/cli/qwen-proxy.js", "serve", "--headless"]

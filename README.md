@@ -1,78 +1,82 @@
-# Qwen OpenAI-Compatible Proxy Server - Works with opencode, crush, claude code router, roo code, cline mostly everything
+# qwen-proxy — OpenAI-Compatible Proxy for Qwen Models
 
-A proxy server that exposes Qwen models through an OpenAI-compatible API endpoint. Has tool calling and streaming support.
+Works with opencode, crush, claude code router, roo code, cline and anything that speaks the OpenAI API. Has tool calling and streaming support.
 
-> New - qwen 3,5 plus model (coder-model) is now the recommended default
+> **New** — qwen 3.5 plus model (`coder-model`) is now the recommended default
 
+[Discord](https://discord.gg/6S7HwCxbMy)
 
-## Important Notes
+**Important:** Users may hit 504 / timeout errors at 130k–150k+ token contexts — this is a Qwen upstream limit.
 
-To have a better experience for using it as prod you can use cloud flare worker . check the repo https://github.com/aptdnfapt/qwen-worker-proxy
+For a serverless/edge alternative: [qwen-worker-proxy](https://github.com/aptdnfapt/qwen-worker-proxy)
 
-Users might face errors or 504 Gateway Timeout issues when using contexts with 130,000 to 150,000 tokens or more. This appears to be a practical limit for Qwen models. Qwen code itself tends to also break down and get stuck on this limit.
-
- [Discord](https://discord.gg/6S7HwCxbMy) server to talk about other stuff . 
+---
 
 ## Quick Start
 
-### Option 1: Using Docker (Recommended)
-
-1.  **Configure Environment**:
-    ```bash
-    cp .env.example .env
-    # Edit .env file with your desired configuration
-    ```
-
-2.  **Build and Run with Docker Compose**:
-    ```bash
-    docker-compose up -d
-    ```
-
-3.  **Authenticate**:
-    ```bash
-    docker-compose exec qwen-proxy npm run auth:add <account>
-    ```
-
-4.  **Use the Proxy**: Point your OpenAI-compatible client to `http://localhost:8080/v1`
-
-### Option 2: Local Development
-
-1.  **Install Dependencies**:
-    ```bash
-    npm install
-    ```
-2.  **Authenticate**: You need to authenticate with Qwen to generate the required credentials file.
-    *   Run `npm run auth:add <account>` to authenticate with your Qwen account
-    *   This will create the `~/.qwen/oauth_creds.json` file needed by the proxy server
-    *   Alternatively, you can use the official `qwen-code` CLI tool from [QwenLM/qwen-code](https://github.com/QwenLM/qwen-code)
-3.  **Start the Operator UI**:
-    ```bash
-    qwen-proxy serve
-    ```
-    This launches the Phase 5 TUI with live controls, screen navigation, and the Accounts add-account auth modal.
-
-4.  **Start the Server (Headless)**:
-    ```bash
-    npm run serve:headless
-    ```
-5.  **Use the Proxy**: Point your OpenAI-compatible client to `http://localhost:8080/v1`.
-
-**Note**: API key can be any random string - it doesn't matter for this proxy.
-
-## CLI Entry (Rewrite Phase 2)
-
-The package now exposes both TUI and headless CLI entrypoints:
+### Option 1: npm (global install)
 
 ```bash
+npm install -g qwen-proxy
+```
+
+Add an account:
+```bash
+qwen-proxy auth add myaccount
+```
+
+Start with TUI dashboard:
+```bash
 qwen-proxy serve
+```
+
+Or headless (background/server mode):
+```bash
 qwen-proxy serve --headless
 ```
 
-`qwen-proxy serve` now opens the Phase 5 operator TUI. The Accounts screen can start a device-code auth flow in-app and shows the verification link, device code, and terminal QR block while waiting.
+Point your client at `http://localhost:8080/v1`. API key can be any string.
 
-Fallback utility commands are also available:
+---
+
+### Option 2: Docker (recommended for self-hosting)
 
 ```bash
+git clone https://github.com/aptdnfapt/qwen-code-oai-proxy
+cd qwen-code-oai-proxy
+cp .env.example .env
+docker compose up -d
+```
+
+The container mounts `~/.qwen` from your host — accounts you add are picked up live by the running container **without a restart**.
+
+Add an account while the container is running:
+```bash
+docker compose exec qwen-proxy node dist/src/cli/qwen-proxy.js auth add myaccount
+```
+
+Point your client at `http://localhost:8080/v1`.
+
+---
+
+### Option 3: Local / Dev
+
+```bash
+npm install
+npm run auth:add myaccount
+qwen-proxy serve
+# or headless:
+npm run serve:headless
+```
+
+---
+
+## CLI Commands
+
+```bash
+qwen-proxy serve                  # TUI dashboard
+qwen-proxy serve --headless       # headless server
+
 qwen-proxy auth list
 qwen-proxy auth add <account-id>
 qwen-proxy auth remove <account-id>
@@ -80,310 +84,123 @@ qwen-proxy auth counts
 qwen-proxy usage
 ```
 
-The operator-facing runtime behind these commands is now fully source-authored in TypeScript and emitted to `dist/` for execution.
-
-## Runtime Logging Controls (Rewrite Phase 4)
-
-The runtime now has a shared logging service with live log-level switching.
-
-- inspect current logging state --> `GET /runtime/log-level`
-- change it at runtime --> `POST /runtime/log-level`
-- persist the change by default --> send `{ "level": "debug" }`
-- apply only for current process --> send `{ "level": "error", "persist": false }`
-
-Response includes:
-
-- current log level
-- persisted log level
-- active log directory
-- runtime config file path
+---
 
 ## Multi-Account Support
 
-The proxy supports multiple Qwen accounts and rotates requests across them with round-robin selection. Tokens are refreshed ahead of expiry, while transient upstream failures move the request to the next account without long-lived account blocking.
+Add multiple accounts — requests round-robin across all of them automatically:
 
-### Setting Up Multiple Accounts
+```bash
+qwen-proxy auth add account1
+qwen-proxy auth add account2
+qwen-proxy auth add account3
+```
+
+**How rotation works:**
+- Requests rotate round-robin across all valid accounts
+- Tokens refreshed ahead of expiry automatically
+- Auth failures → one refresh attempt → rotate to next account
+- Transient failures (429, 500, timeout) → rotate to next account, no cooldowns
+- Client errors (bad payload etc.) → returned immediately, no rotation
+- `DEFAULT_ACCOUNT` env var → that account is tried first
+- Request counts reset daily at UTC midnight
 
 **For Docker:**
 ```bash
-docker-compose exec qwen-proxy npm run auth:list
-docker-compose exec qwen-proxy npm run auth:add <account-id>
-docker-compose exec qwen-proxy npm run auth:remove <account-id>
+docker compose exec qwen-proxy node dist/src/cli/qwen-proxy.js auth list
+docker compose exec qwen-proxy node dist/src/cli/qwen-proxy.js auth add <account-id>
+docker compose exec qwen-proxy node dist/src/cli/qwen-proxy.js auth remove <account-id>
 ```
 
-**For Local Development:**
-1. List existing accounts:
-   ```bash
-    npm run auth:list
-    qwen-proxy auth list
-   ```
+---
 
-2. Add a new account:
-   ```bash
-    npm run auth:add <account-id>
-    qwen-proxy auth add <account-id>
-   ```
-   Replace `<account-id>` with a unique identifier for your account (e.g., `account2`, `team-account`, etc.)
+## Supported Models
 
-3. Remove an account:
-   ```bash
-    npm run auth:remove <account-id>
-    qwen-proxy auth remove <account-id>
-   ```
+| Model ID | Description | Max Tokens | Notes |
+|----------|-------------|------------|-------|
+| `coder-model` | **Recommended** — Qwen 3.5 Plus, best for coding | 65536 | Default, excellent for code tasks |
+| `qwen3-coder-plus` | Qwen 3 Coder Plus | 65536 | |
+| `qwen3-coder-flash` | Qwen 3 Coder Flash | 65536 | Faster, lighter |
+| `vision-model` | Multimodal with image support | 32768 | Lower token limit, auto-clamped |
+| `qwen3.5-plus` | Alias → resolves to `coder-model` | 65536 | |
 
-### How Account Rotation Works
+---
 
-- When you have multiple accounts configured, the proxy will automatically rotate between them
-- Before using an account, the proxy refreshes its token inside a per-account 10-30 minute pre-expiry window
-- Refresh work is deduplicated per account so concurrent requests do not spam refresh calls
-- Clear auth failures trigger one refresh on the same account, then the proxy moves to the next account if auth still fails
-- Transient upstream failures such as `429`, `500`, and timeouts move the request to the next account without persistent cooldowns or strike-based blocking
-- Client-side request errors such as invalid payloads are returned immediately instead of rotating across all accounts
-- If a DEFAULT_ACCOUNT is configured, the proxy will use that account first before rotating to others
-- Request counts are tracked locally and reset daily at UTC midnight
-- You can check request counts for all accounts with:
-  ```bash
-  npm run auth:counts
-  ```
+## Supported Endpoints
 
-### Usage Tracking
+- `POST /v1/chat/completions` — Chat completions (streaming + non-streaming)
+- `GET /v1/models` — List available models
+- `POST /v1/web/search` — Web search (2000 req/day free)
+- `GET/POST /mcp` — MCP server (SSE transport)
+- `GET /health` — Health check
 
-Monitor your API usage with detailed reports:
-
-```bash
-# Show comprehensive usage report (chat + web search)
-npm run usage
-qwen-proxy usage
-```
-
-### Account Usage Monitoring
-
-The proxy provides real-time feedback in the terminal:
-- Shows which account is being used for each request
-- Displays current request count for each account
-- Notifies when an account is rotated to retry a transient failure on another account
-- Indicates which account will be tried next during rotation
-- Shows which account is configured as the default account on server startup
-- Marks the default account in the account list display
-
-## API Key Authentication
-
-The proxy can be secured with API keys to prevent unauthorized access.
-
-### Setting up API Keys
-
-1. **Single API Key:**
-   ```bash
-   API_KEY=your-secret-key-here
-   ```
-
-2. **Multiple API Keys:**
-   ```bash
-   API_KEY=key1,key2,key3
-   ```
-
-3. **Using the Proxy:**
-   ```javascript
-   const openai = new OpenAI({
-     apiKey: 'your-secret-key-here',
-     baseURL: 'http://localhost:8080/v1'
-   });
-   ```
-
-**Headers Supported:**
-- `X-API-Key: your-secret-key`
-- `Authorization: Bearer your-secret-key`
-
-If no API key is configured, the proxy will not require authentication.
-
-## Health Check
-
-Monitor the proxy status with the health endpoint:
-
-```bash
-curl http://localhost:8080/health
-```
-
-Response includes:
-- Server status
-- Account validation status  
-- Token expiry information
-- Request counts
-
-## Configuration
-
-The proxy server can be configured using environment variables. Create a `.env` file in the project root or set the variables directly in your environment.
-
-*   `LOG_LEVEL`: Logging mode (`off`, `error`, `error-debug`, `debug`)
-*   `MAX_DEBUG_LOGS`: Maximum number of request debug directories to keep (default: 20)
-*   `ERROR_LOG_MAX_MB`: Rotate `error.log` when it reaches this size in MB (default: 10)
-*   `ERROR_LOG_MAX_DAYS`: Keep rotated error logs for this many days (default: 30)
-*   `QWEN_PROXY_HOME`: Override base runtime data directory
-*   `QWEN_PROXY_CONFIG_DIR`: Override runtime config/state directory
-*   `QWEN_PROXY_LOG_DIR`: Override runtime log directory
-*   `API_KEY`: Set API key(s) for authentication (comma-separated for multiple keys)
-*   `DEFAULT_ACCOUNT`: Specify which account the proxy should use by default
-
-Compatibility aliases are still accepted:
-
-*   `DEBUG_LOG=true` maps to `LOG_LEVEL=debug`
-*   `LOG_FILE_LIMIT` maps to `MAX_DEBUG_LOGS`
-
-Example `.env` file:
-```bash
-# Log everything and keep only the 10 most recent request-debug folders
-LOG_LEVEL=debug
-MAX_DEBUG_LOGS=10
-
-# API key for authentication (comma-separated for multiple keys)
-API_KEY=your-secret-key-here
-
-# Specify which account to use by default (when using multi-account setup)
-# Should match the name used when adding an account with 'npm run auth add <name>'
-DEFAULT_ACCOUNT=my-primary-account
-```
+---
 
 ## Example Usage
 
-### Using JavaScript/Node.js:
+### JavaScript / Node.js
 ```javascript
 import OpenAI from 'openai';
 
 const openai = new OpenAI({
-  apiKey: 'fake-key', // Not used, but required by the OpenAI client
+  apiKey: 'fake-key',
   baseURL: 'http://localhost:8080/v1'
 });
 
-async function main() {
-  const response = await openai.chat.completions.create({
-    model: 'coder-model', // Recommended model
-    messages: [
-      { "role": "user", "content": "Hello!" }
-    ]
-  });
+const response = await openai.chat.completions.create({
+  model: 'coder-model',
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
 
-  console.log(response.choices[0].message.content);
-}
-
-main();
+console.log(response.choices[0].message.content);
 ```
 
-### Using curl:
+### curl
 ```bash
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer fake-key" \
   -d '{
     "model": "coder-model",
-    "messages": [
-      {
-        "role": "user",
-        "content": "Hello! Can you help me write a simple JavaScript function that adds two numbers together?"
-      }
-    ],
+    "messages": [{"role": "user", "content": "Hello!"}],
     "temperature": 0.7,
     "max_tokens": 200
   }'
 ```
 
-### Testing with streaming response:
+### Streaming
 ```bash
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer fake-key" \
   -d '{
     "model": "coder-model",
-    "messages": [
-      {
-        "role": "user",
-        "content": "Explain how to reverse a string in JavaScript."
-      }
-    ],
+    "messages": [{"role": "user", "content": "Explain how to reverse a string in JavaScript."}],
     "stream": true,
-    "temperature": 0.7,
     "max_tokens": 300
   }'
 ```
 
-## Supported Models
-
-The proxy supports the following Qwen models:
-
-| Model ID | Description | Max Tokens | Notes |
-|----------|-------------|------------|-------|
-| `coder-model` | **Recommended** - Qwen 3.5 Plus, best for coding | 65536 | Default model, excellent for code tasks |
-| `qwen3-coder-plus` | Qwen 3 Coder Plus | 65536 | Legacy coding model |
-| `qwen3-coder-flash` | Qwen 3 Coder Flash | 65536 | Faster, lighter model |
-| `vision-model` | Multimodal with image support | 32768 | For image processing (lower token limit) |
-
-**Important**: The `vision-model` has a max token limit of 32,768 (lower than other models). The proxy automatically clamps `max_tokens` for this model.
-
-**Note**: Use the exact model name as shown above when configuring your client applications.
-
-## Supported Endpoints
-
-*   `POST /v1/chat/completions` - Chat completions (streaming and non-streaming)
-*   `POST /v1/web/search` - Web search for real-time information
-*   `GET /v1/models` - List available models
-*   `GET/POST /mcp` - MCP server endpoint with SSE transport
-*   `GET /health` - Health check and status
+---
 
 ## Web Search API
 
-Free web search endpoint from Qwen - 2000 requests per day for free accounts.
+Free web search — 2000 requests/day on free accounts:
 
 ```bash
 curl -X POST http://localhost:8080/v1/web/search \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer fake-key" \
-  -d '{
-    "query": "latest AI developments",
-    "page": 1,
-    "rows": 5
-  }'
+  -d '{"query": "latest AI developments", "page": 1, "rows": 5}'
 ```
 
-## MCP (Model Context Protocol) Support
+---
 
-The proxy includes built-in MCP server support, allowing it to be used as a remote MCP server with compatible clients like opencode.
+## AI Agent Configs
 
-### opencode MCP Configuration
+### opencode
 
-To use the MCP server with opencode, add the following to your `~/.config/opencode/config.json`:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "qwen-web-search": {
-      "type": "remote",
-      "url": "http://localhost:8080/mcp",
-      "headers": {
-        "Authorization": "Bearer your-api-key"
-      }
-    }
-  }
-}
-```
-
-Replace `your-api-key` with your configured API key if authentication is enabled. If no API key is set (common for local development), omit the `headers` field entirely. 
-
-This provides access to the `web_search` tool that uses Qwen's web search API with automatic account rotation. For other mcp clients programs / tools your need to find the proper json .
-
-### MCP Endpoint
-
-- `GET/POST /mcp` - MCP server endpoint supporting SSE transport
-
-The MCP server provides a `web_search` tool that allows searching the web using Qwen's infrastructure. It supports the same API key authentication as the main endpoints.
-
-## AI AGENT CONFIGS  
-
-This proxy server supports tool calling functionality, allowing you to use it with tools like opencode and crush roo cline kilo and etc . 
-
-### opencode Configuration
-
-To use with opencode, add the following to `~/.config/opencode/opencode.json`:
-
+Add to `~/.config/opencode/opencode.json`:
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
@@ -404,10 +221,9 @@ To use with opencode, add the following to `~/.config/opencode/opencode.json`:
 }
 ```
 
-### crush Configuration
+### crush
 
-To use with crush, add the following to `~/.config/crush/crush.json`:
-
+Add to `~/.config/crush/crush.json`:
 ```json
 {
   "$schema": "https://charm.land/crush.json",
@@ -433,7 +249,7 @@ To use with crush, add the following to `~/.config/crush/crush.json`:
 }
 ```
 
-### Claude code Router
+### Claude Code Router
 ```json
 {
   "LOG": false,
@@ -441,16 +257,11 @@ To use with crush, add the following to `~/.config/crush/crush.json`:
     {
       "name": "qwen-code",
       "api_base_url": "http://localhost:8080/v1/chat/completions/",
-      "api_key": "wdadwa-random-stuff",
+      "api_key": "any-string",
       "models": ["coder-model"],
       "transformer": {
         "use": [
-          [
-            "maxtoken",
-            {
-              "max_tokens": 32768
-            }
-          ],
+          ["maxtoken", {"max_tokens": 32768}],
           "enhancetool",
           "cleancache"
         ]
@@ -463,41 +274,131 @@ To use with crush, add the following to `~/.config/crush/crush.json`:
 }
 ```
 
-### Roo Code and Kilo Code and Cline Configuration
+### Roo Code / Kilo Code / Cline
 
-To use with Roo Code or Kilo Code or Cline :
+1. Go to settings → choose OpenAI Compatible
+2. Set URL: `http://localhost:8080/v1`
+3. API key: any random string
+4. Model: `coder-model`
+5. Disable streaming checkbox (Roo Code / Kilo Code)
+6. Max output: `32000`
+7. Context window: up to 300k (but past 150k gets slower)
 
-1. Go to settings in the client
-2. Choose the OpenAI compatible option
-3. Set the URL to: `http://localhost:8080/v1`
-4. Use a random API key (it doesn't matter)
-5. Type or choose the model name exactly as: `coder-model`
-6. Disable streaming in the checkbox for Roo Code or Kilo Code
-7. Change the max output setting from -1 to 32000
-8. You can change the context window size to around 300k or so but after 150k it gets slower so keep that in mind . 
+### MCP (web search tool)
 
-## Token Counting
-
-The proxy now displays token counts in the terminal for each request, showing both input tokens and API-returned usage statistics (prompt, completion, and total tokens).
-
-## Token Usage Tracking
-
-The proxy includes comprehensive token usage tracking that monitors daily input and output token consumption across all accounts. View detailed token usage reports with either:
-
-```bash
-npm run auth:tokens
+Add to `~/.config/opencode/config.json`:
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "qwen-web-search": {
+      "type": "remote",
+      "url": "http://localhost:8080/mcp",
+      "headers": {
+        "Authorization": "Bearer your-api-key"
+      }
+    }
+  }
+}
 ```
 
-or
+Omit `headers` if you have no API key set. Works with other MCP clients too.
+
+---
+
+## API Key Authentication
 
 ```bash
+# Single key
+API_KEY=your-secret-key
+
+# Multiple keys
+API_KEY=key1,key2,key3
+```
+
+Supported headers:
+- `Authorization: Bearer your-secret-key`
+- `X-API-Key: your-secret-key`
+
+If no API key is configured, no auth is required.
+
+---
+
+## Configuration
+
+Set via environment variables or `.env` file:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `8080` | Server port |
+| `HOST` | `localhost` | Bind address (`0.0.0.0` for Docker) |
+| `API_KEY` | — | Comma-separated auth keys |
+| `DEFAULT_ACCOUNT` | — | Account to prefer first |
+| `LOG_LEVEL` | `error-debug` | `off` / `error` / `error-debug` / `debug` |
+| `MAX_DEBUG_LOGS` | `20` | Max request debug dirs to keep |
+| `QWEN_PROXY_HOME` | `~/.local/share/qwen-proxy` | Override runtime data dir |
+| `QWEN_PROXY_LOG_DIR` | — | Override log dir |
+
+Compatibility aliases: `DEBUG_LOG=true` → `LOG_LEVEL=debug`, `LOG_FILE_LIMIT` → `MAX_DEBUG_LOGS`
+
+Example `.env`:
+```bash
+LOG_LEVEL=debug
+MAX_DEBUG_LOGS=10
+API_KEY=your-secret-key
+DEFAULT_ACCOUNT=my-primary-account
+```
+
+Port and host can also be changed from the TUI Settings screen and are saved to `config.json` automatically.
+
+---
+
+## Storage
+
+| Path | Contents |
+|------|----------|
+| `~/.qwen/oauth_creds_<id>.json` | Account credentials |
+| `~/.local/share/qwen-proxy/usage.db` | Request + token usage (SQLite) |
+| `~/.local/share/qwen-proxy/config.json` | Port, host, log level, auto-start |
+| `~/.local/share/qwen-proxy/log/` | Error logs |
+
+---
+
+## Health Check
+
+```bash
+curl http://localhost:8080/health
+```
+
+Returns server status, account validation, token expiry info, request counts.
+
+---
+
+## Usage Tracking
+
+```bash
+qwen-proxy usage
+# or
+npm run usage
 npm run tokens
 ```
 
-Both commands display a clean table showing daily token usage trends, lifetime totals, and request counts. For more information, see `docs/token-usage-tracking.md`.
-
-For more detailed documentation, see the `docs/` directory.
-
-For information about configuring a default account, see `docs/default-account.md`.
+Shows daily token usage, cache hits, request counts per account. Also visible in the TUI Usage screen.
 
 ---
+
+## Runtime Log Level
+
+Change live without restart:
+```bash
+# inspect
+GET /runtime/log-level
+
+# change
+POST /runtime/log-level
+{"level": "debug"}
+
+# change without persisting
+POST /runtime/log-level
+{"level": "error", "persist": false}
+```

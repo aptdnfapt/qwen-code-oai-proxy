@@ -5,6 +5,7 @@ services:
       - "${PORT:-8080}:${PORT:-8080}"
     volumes:
       - ~/.qwen:/root/.qwen
+      - ~/.local/share/qwen-proxy:/root/.local/share/qwen-proxy
     environment:
       - NODE_ENV=production
       - PORT=${PORT:-8080}
