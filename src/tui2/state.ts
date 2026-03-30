@@ -93,11 +93,16 @@ function createInitialAuthModalState() {
   });
 }
 
+function createInitialDeleteModalState() {
+  return Object.freeze({ isOpen: false, accountId: "" });
+}
+
 function createInitialAccountsState(): AccountsScreenState {
   return Object.freeze({
     accounts: Object.freeze([]),
     selectedId: null,
     authModal: createInitialAuthModalState(),
+    deleteModal: createInitialDeleteModalState(),
   });
 }
 
@@ -374,6 +379,22 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
         accounts: Object.freeze({
           ...state.accounts,
           authModal: createInitialAuthModalState(),
+        }),
+      });
+    case "open-delete-modal":
+      return Object.freeze({
+        ...state,
+        accounts: Object.freeze({
+          ...state.accounts,
+          deleteModal: Object.freeze({ isOpen: true, accountId: action.accountId }),
+        }),
+      });
+    case "close-delete-modal":
+      return Object.freeze({
+        ...state,
+        accounts: Object.freeze({
+          ...state.accounts,
+          deleteModal: createInitialDeleteModalState(),
         }),
       });
     case "set-auth-account-id":

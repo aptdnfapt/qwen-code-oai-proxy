@@ -145,10 +145,16 @@ export type ArtifactsScreenState = Readonly<{
   activePane: "tree" | "preview";
 }>;
 
+export type DeleteConfirmModalState = Readonly<{
+  isOpen: boolean;
+  accountId: string;
+}>;
+
 export type AccountsScreenState = Readonly<{
   accounts: readonly AccountInfo[];
   selectedId: string | null;
   authModal: AccountsAuthModalState;
+  deleteModal: DeleteConfirmModalState;
 }>;
 
 export type UsageScreenState = Readonly<{
@@ -207,6 +213,8 @@ export type TuiAction =
   | Readonly<{ type: "select-account"; id: string | null }>
   | Readonly<{ type: "open-auth-modal" }>
   | Readonly<{ type: "close-auth-modal" }>
+  | Readonly<{ type: "open-delete-modal"; accountId: string }>
+  | Readonly<{ type: "close-delete-modal" }>
   | Readonly<{ type: "set-auth-account-id"; accountId: string }>
   | Readonly<{ type: "auth-start"; message: string }>
   | Readonly<{ type: "auth-device-flow-ready"; flow: AccountsAuthFlow; message: string }>

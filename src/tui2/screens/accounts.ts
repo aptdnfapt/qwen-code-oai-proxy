@@ -21,7 +21,10 @@ export function renderAccountsScreen(state: TuiState, width: number): string[] {
   lines.push(sectionHeader("Accounts", width));
   lines.push(hRule(width));
   const addGrid = layoutLabeledButtonGrid([
-    { label: "New account", items: [{ id: "add", label: "Add", tone: "accent" }] },
+    { label: "Accounts", items: [
+      { id: "add", label: "[A] Add", tone: "accent" },
+      { id: "delete", label: "[D] Delete", tone: "danger" },
+    ] },
   ], 14);
   lines.push(...addGrid.lines.map((line) => truncLine(`  ${line}`, width)));
   lines.push(hRule(width));

@@ -25,6 +25,7 @@ type AuthManagerLike = {
     code_verifier: string;
   }>;
   pollForToken: (deviceCode: string, codeVerifier: string, accountId?: string | null) => Promise<unknown>;
+  removeAccount: (accountId: string) => Promise<void>;
 };
 
 type QwenApiLike = {
@@ -300,6 +301,7 @@ export function createRuntimeMonitor(_bootMs: number): {
     codeVerifier: string;
   }>;
   completeAddAccountFlow: (deviceCode: string, codeVerifier: string, accountId: string) => Promise<void>;
+  deleteAccount: (accountId: string) => Promise<void>;
   startServer: () => Promise<RuntimeSummary>;
   stopServer: () => Promise<RuntimeSummary>;
   restartServer: () => Promise<RuntimeSummary>;
@@ -388,6 +390,9 @@ export function createRuntimeMonitor(_bootMs: number): {
     },
     async completeAddAccountFlow(deviceCode: string, codeVerifier: string, accountId: string): Promise<void> {
       await qwenAPI.authManager.pollForToken(deviceCode, codeVerifier, accountId);
+    },
+    async deleteAccount(accountId: string): Promise<void> {
+      await qwenAPI.authManager.removeAccount(accountId);
     },
     async startServer(): Promise<RuntimeSummary> {
       if (serverState === "running" || serverState === "starting") {

@@ -10,6 +10,7 @@ import {
 } from "./render.js";
 import { disableMouse, enableMouse, parseMouse } from "./mouse.js";
 import { AuthOverlay } from "./auth-overlay.js";
+import { DeleteConfirmOverlay } from "./delete-overlay.js";
 import { LIVE_LOG_LEVEL_ROW, LIVE_SERVER_ROW, liveLogLevelButtons, liveServerButtons, renderLiveScreen } from "./screens/live.js";
 import { ACCOUNTS_ADD_BUTTON_ROW, ACCOUNTS_TABLE_START_ROW, renderAccountsScreen } from "./screens/accounts.js";
 import { renderUsageScreen } from "./screens/usage.js";
@@ -36,6 +37,7 @@ export type AppCallbacks = {
   onAuthAccountIdChange: (id: string) => void;
   onStartAccountAuth: () => void;
   onSelectAccount: (id: string | null) => void;
+  onDeleteAccount: (id: string) => void;
   onSelectUsageDate: (date: string | null) => void;
   onUsageFilterChange: (value: string) => void;
   onToggleArtifactExpand: (path: string) => void;
@@ -52,6 +54,8 @@ export class AppView implements Component, Focusable {
   private mouseEnabled = true;
   private authOverlayHandle: ReturnType<TUI["showOverlay"]> | null = null;
   private authOverlay: AuthOverlay | null = null;
+  private deleteOverlayHandle: ReturnType<TUI["showOverlay"]> | null = null;
+  private deleteOverlay: DeleteConfirmOverlay | null = null;
   private inputMode: "usage-filter" | "artifact-filter" | null = null;
   private inputBuffer = "";
 
@@ -64,17 +68,25 @@ export class AppView implements Component, Focusable {
   invalidate(): void {}
 
   setState(state: TuiState): void {
-    const wasOpen = this.state.accounts.authModal.isOpen;
-    const isOpen = state.accounts.authModal.isOpen;
+    const wasAuthOpen = this.state.accounts.authModal.isOpen;
+    const isAuthOpen = state.accounts.authModal.isOpen;
+    const wasDeleteOpen = this.state.accounts.deleteModal.isOpen;
+    const isDeleteOpen = state.accounts.deleteModal.isOpen;
     this.state = state;
 
-    if (isOpen && !wasOpen) {
+    if (isAuthOpen && !wasAuthOpen) {
       this.openAuthOverlay();
-    } else if (!isOpen && wasOpen) {
+    } else if (!isAuthOpen && wasAuthOpen) {
       this.closeAuthOverlay();
-    } else if (isOpen && this.authOverlay) {
+    } else if (isAuthOpen && this.authOverlay) {
       this.authOverlay.update(state.accounts.authModal);
       this.tui.requestRender();
+    }
+
+    if (isDeleteOpen && !wasDeleteOpen) {
+      this.openDeleteOverlay(state.accounts.deleteModal.accountId);
+    } else if (!isDeleteOpen && wasDeleteOpen) {
+      this.closeDeleteOverlay();
     }
   }
 
@@ -114,6 +126,38 @@ export class AppView implements Component, Focusable {
       this.authOverlayHandle = null;
     }
     this.authOverlay = null;
+    this.tui.setFocus(this);
+    this.tui.requestRender();
+  }
+
+  private openDeleteOverlay(accountId: string): void {
+    const overlay = new DeleteConfirmOverlay(accountId);
+    overlay.focused = true;
+
+    overlay.onConfirm = () => {
+      this.cb.onDeleteAccount(accountId);
+    };
+
+    overlay.onCancel = () => {
+      this.cb.dispatch({ type: "close-delete-modal" });
+    };
+
+    this.deleteOverlay = overlay;
+    this.deleteOverlayHandle = this.tui.showOverlay(overlay, {
+      width: "50%",
+      anchor: "center",
+      margin: 2,
+    });
+    overlay.focused = true;
+    this.tui.setFocus(overlay);
+  }
+
+  private closeDeleteOverlay(): void {
+    if (this.deleteOverlayHandle) {
+      this.deleteOverlayHandle.hide();
+      this.deleteOverlayHandle = null;
+    }
+    this.deleteOverlay = null;
     this.tui.setFocus(this);
     this.tui.requestRender();
   }
@@ -313,6 +357,13 @@ export class AppView implements Component, Focusable {
 
     if (screen === "accounts") {
       if (data === "a" || data === "A") { this.cb.onAddAccount(); return; }
+      if (data === "d" || data === "D") {
+        const selectedId = this.state.accounts.selectedId;
+        if (selectedId) {
+          this.cb.dispatch({ type: "open-delete-modal", accountId: selectedId });
+        }
+        return;
+      }
       if (matchesKey(data, Key.up)) {
         this.stepAccounts(-1);
         return;

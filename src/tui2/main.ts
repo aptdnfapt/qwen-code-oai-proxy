@@ -244,6 +244,17 @@ async function handleStartAccountAuth(): Promise<void> {
   }
 }
 
+async function handleDeleteAccount(accountId: string): Promise<void> {
+  dispatch({ type: "close-delete-modal" });
+  try {
+    await runtimeMonitor.deleteAccount(accountId);
+    appendClassicLog("info", "✓", "Account", `deleted ${accountId}`);
+    await Promise.all([refreshAccounts(), refreshRuntimeSummary()]);
+  } catch (e: any) {
+    appendClassicLog("error", "✗", "Account", `delete failed: ${String(e?.message ?? e)}`);
+  }
+}
+
 async function handleOpenAuthBrowser(): Promise<void> {
   const url = currentState.accounts.authModal.flow?.verificationUriComplete;
   if (!url) {
@@ -275,6 +286,7 @@ appView = new AppView(tui, currentState, {
   onAuthAccountIdChange: (id) => { dispatch({ type: "set-auth-account-id", accountId: id }); },
   onStartAccountAuth: () => { void handleStartAccountAuth(); },
   onSelectAccount: (id) => { dispatch({ type: "select-account", id }); },
+  onDeleteAccount: (id) => { void handleDeleteAccount(id); },
   onSelectUsageDate: (date) => { dispatch({ type: "select-usage-date", date }); },
   onUsageFilterChange: (value) => { dispatch({ type: "set-usage-filter", value }); },
   onToggleArtifactExpand: (path) => {
@@ -311,6 +323,7 @@ tickTimer = setInterval(() => {
   });
   void refreshRuntimeSummary();
   void refreshUsage();
+  void refreshAccounts();
   if (currentState.activeScreen === "artifacts") {
     void refreshArtifacts();
   }
