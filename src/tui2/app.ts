@@ -17,8 +17,11 @@ import { renderUsageScreen } from "./screens/usage.js";
 import { ARTIFACT_BODY_START_ROW, artifactPaneWidths, getVisibleArtifactRows, renderArtifactsScreen } from "./screens/artifacts.js";
 import {
   renderSettingsScreen,
+  SETTINGS_AUTOSTART_ROW,
+  SETTINGS_HOST_ROW,
   SETTINGS_ICONS_ROW,
   SETTINGS_LOG_LEVEL_ROW,
+  SETTINGS_PORT_ROW,
   SETTINGS_SIDEBAR_ROW,
   SETTINGS_THEME_ROW,
 } from "./screens/settings.js";
@@ -43,6 +46,7 @@ export type AppCallbacks = {
   onToggleArtifactExpand: (path: string) => void;
   onSelectArtifact: (path: string | null) => void;
   onThemeChange: (theme: TuiState["themeName"]) => void;
+  onServerConfigChange: (port: number, host: string, autoStart: boolean) => void;
 };
 
 export class AppView implements Component, Focusable {
@@ -56,7 +60,7 @@ export class AppView implements Component, Focusable {
   private authOverlay: AuthOverlay | null = null;
   private deleteOverlayHandle: ReturnType<TUI["showOverlay"]> | null = null;
   private deleteOverlay: DeleteConfirmOverlay | null = null;
-  private inputMode: "usage-filter" | "artifact-filter" | null = null;
+  private inputMode: "usage-filter" | "artifact-filter" | "port" | "host" | null = null;
   private inputBuffer = "";
 
   constructor(tui: TUI, initialState: TuiState, cb: AppCallbacks) {
@@ -243,6 +247,20 @@ export class AppView implements Component, Focusable {
     }
   }
 
+  private commitServerField(): void {
+    const sc = this.state.serverConfig;
+    if (this.inputMode === "port") {
+      const parsed = parseInt(this.inputBuffer, 10);
+      const port = Number.isNaN(parsed) || parsed <= 0 || parsed > 65535 ? sc.port : parsed;
+      this.cb.onServerConfigChange(port, sc.host, sc.autoStart);
+    } else if (this.inputMode === "host") {
+      const host = this.inputBuffer.trim().length > 0 ? this.inputBuffer.trim() : sc.host;
+      this.cb.onServerConfigChange(sc.port, host, sc.autoStart);
+    }
+    this.inputMode = null;
+    this.inputBuffer = "";
+  }
+
   private mainWidth(totalWidth: number): number {
     return Math.max(20, totalWidth - this.sidebarWidth() - 1);
   }
@@ -250,14 +268,31 @@ export class AppView implements Component, Focusable {
   handleInput(data: string): void {
     if (this.inputMode) {
       if (matchesKey(data, Key.escape)) {
-        this.applyInputValue("");
-        this.inputMode = null;
+        if (this.inputMode === "port" || this.inputMode === "host") {
+          this.inputMode = null;
+          this.inputBuffer = "";
+        } else {
+          this.applyInputValue("");
+          this.inputMode = null;
+        }
       } else if (matchesKey(data, Key.enter)) {
-        this.inputMode = null;
+        if (this.inputMode === "port" || this.inputMode === "host") {
+          this.commitServerField();
+        } else {
+          this.inputMode = null;
+        }
       } else if (matchesKey(data, Key.backspace)) {
-        this.applyInputValue(this.inputBuffer.slice(0, -1));
+        if (this.inputMode === "port" || this.inputMode === "host") {
+          this.inputBuffer = this.inputBuffer.slice(0, -1);
+        } else {
+          this.applyInputValue(this.inputBuffer.slice(0, -1));
+        }
       } else if (data.length === 1 && data >= " ") {
-        this.applyInputValue(this.inputBuffer + data);
+        if (this.inputMode === "port" || this.inputMode === "host") {
+          this.inputBuffer = this.inputBuffer + data;
+        } else {
+          this.applyInputValue(this.inputBuffer + data);
+        }
       }
       this.tui.requestRender();
       return;
@@ -468,6 +503,18 @@ export class AppView implements Component, Focusable {
       if (data === "2") { this.cb.onLogLevelChange("error"); return; }
       if (data === "3") { this.cb.onLogLevelChange("error-debug"); return; }
       if (data === "4") { this.cb.onLogLevelChange("debug"); return; }
+      if (data === "p" || data === "P") {
+        this.inputMode = "port";
+        this.inputBuffer = String(this.state.serverConfig.port);
+        this.tui.requestRender();
+        return;
+      }
+      if (data === "h" || data === "H") {
+        this.inputMode = "host";
+        this.inputBuffer = this.state.serverConfig.host;
+        this.tui.requestRender();
+        return;
+      }
     }
   }
 
@@ -639,6 +686,33 @@ export class AppView implements Component, Focusable {
     if (localRow === SETTINGS_LOG_LEVEL_ROW) {
       const hit = buttonHitAt(runtimeGrid.hitRows[0]?.hits ?? [], rowCol);
       if (hit) this.cb.onLogLevelChange(hit as LogLevel);
+      return;
+    }
+
+    if (localRow === SETTINGS_AUTOSTART_ROW) {
+      const autoStartGrid = layoutLabeledButtonGrid([
+        { label: "Auto-start", items: [
+          { id: "on", label: "on", tone: "success" as const },
+          { id: "off", label: "off", tone: "danger" as const },
+        ] },
+      ], 14);
+      const hit = buttonHitAt(autoStartGrid.hitRows[0]?.hits ?? [], rowCol);
+      if (hit === "on") this.cb.onServerConfigChange(this.state.serverConfig.port, this.state.serverConfig.host, true);
+      if (hit === "off") this.cb.onServerConfigChange(this.state.serverConfig.port, this.state.serverConfig.host, false);
+      return;
+    }
+
+    if (localRow === SETTINGS_PORT_ROW) {
+      this.inputMode = "port";
+      this.inputBuffer = String(this.state.serverConfig.port);
+      this.tui.requestRender();
+      return;
+    }
+
+    if (localRow === SETTINGS_HOST_ROW) {
+      this.inputMode = "host";
+      this.inputBuffer = this.state.serverConfig.host;
+      this.tui.requestRender();
     }
   }
 
@@ -740,7 +814,11 @@ export class AppView implements Component, Focusable {
   private renderFooter(mainW: number): string {
     const focusStr = this.state.focusRegion === "sidebar" ? chalk.cyan("sidebar") : chalk.cyan("main");
     const base = caption(`Tab focus(${focusStr})  click select  wheel scroll  [ sidebar  t theme  m mouse  q quit  ? help`);
-    const filterHint = this.inputMode ? chalk.yellow(`  [${this.inputMode === "usage-filter" ? "USAGE FILTER" : "ARTIFACT SEARCH"}] type, Enter/Esc done`) : "";
+    let filterHint = "";
+    if (this.inputMode === "usage-filter") filterHint = chalk.yellow("  [USAGE FILTER] type, Enter/Esc done");
+    else if (this.inputMode === "artifact-filter") filterHint = chalk.yellow("  [ARTIFACT SEARCH] type, Enter/Esc done");
+    else if (this.inputMode === "port") filterHint = chalk.yellow("  [PORT] type number, Enter save, Esc cancel");
+    else if (this.inputMode === "host") filterHint = chalk.yellow("  [HOST] type hostname, Enter save, Esc cancel");
     return truncLine(base + filterHint, mainW);
   }
 
@@ -773,7 +851,12 @@ export class AppView implements Component, Focusable {
         screenLines = renderArtifactsScreen(state, contentRows, mainW);
         break;
       case "settings":
-        screenLines = renderSettingsScreen(state, mainW);
+        screenLines = renderSettingsScreen(
+          state,
+          mainW,
+          (this.inputMode === "port" || this.inputMode === "host") ? this.inputMode : null,
+          this.inputBuffer,
+        );
         break;
       case "help":
         screenLines = renderHelpScreen(mainW);

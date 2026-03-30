@@ -4,6 +4,9 @@ import { RUNTIME_LOG_LEVELS, type RuntimeLogLevel } from "../types/logging";
 
 export interface RuntimeConfig {
   logLevel: RuntimeLogLevel;
+  port?: number;
+  host?: string;
+  autoStart?: boolean;
   updatedAt: string;
 }
 
@@ -91,6 +94,9 @@ export class RuntimeConfigStore {
 
     return {
       logLevel: normalizeLogLevel(parsed.logLevel, defaultConfig.logLevel),
+      port: typeof parsed.port === "number" && parsed.port > 0 ? parsed.port : undefined,
+      host: typeof parsed.host === "string" && parsed.host.length > 0 ? parsed.host : undefined,
+      autoStart: typeof parsed.autoStart === "boolean" ? parsed.autoStart : undefined,
       updatedAt: parsed.updatedAt ?? defaultConfig.updatedAt,
     };
   }
@@ -99,6 +105,9 @@ export class RuntimeConfigStore {
     const current = await this.readConfig();
     const next: RuntimeConfig = {
       logLevel: normalizeLogLevel(input.logLevel, current.logLevel),
+      port: input.port !== undefined ? input.port : current.port,
+      host: input.host !== undefined ? input.host : current.host,
+      autoStart: input.autoStart !== undefined ? input.autoStart : current.autoStart,
       updatedAt: nowIso(),
     };
 
@@ -113,6 +122,19 @@ export class RuntimeConfigStore {
 
   async setLogLevel(level: RuntimeLogLevel): Promise<RuntimeConfig> {
     return this.writeConfig({ logLevel: level });
+  }
+
+  async getServerConfig(): Promise<{ port: number | undefined; host: string | undefined; autoStart: boolean }> {
+    const config = await this.readConfig();
+    return {
+      port: config.port,
+      host: config.host,
+      autoStart: config.autoStart ?? false,
+    };
+  }
+
+  async setServerConfig(input: { port?: number; host?: string; autoStart?: boolean }): Promise<RuntimeConfig> {
+    return this.writeConfig(input);
   }
 
   async readState(): Promise<RuntimeState> {

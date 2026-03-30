@@ -5,6 +5,7 @@ import {
   type ArtifactsScreenState,
   type LiveScreenState,
   type RuntimeSummary,
+  type ServerConfig,
   type TuiAction,
   type TuiState,
   type UsageScreenState,
@@ -114,6 +115,10 @@ function createInitialUsageState(): UsageScreenState {
   });
 }
 
+function createInitialServerConfig(): ServerConfig {
+  return Object.freeze({ port: 8080, host: "localhost", autoStart: false });
+}
+
 export function createInitialState(nowMs = Date.now()): TuiState {
   const viewport = initialViewport();
 
@@ -134,6 +139,7 @@ export function createInitialState(nowMs = Date.now()): TuiState {
     artifacts: createInitialArtifactsState(),
     accounts: createInitialAccountsState(),
     usage: createInitialUsageState(),
+    serverConfig: createInitialServerConfig(),
   });
 }
 
@@ -488,6 +494,15 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
         usage: Object.freeze({
           ...state.usage,
           filterQuery: action.value,
+        }),
+      });
+    case "set-server-config":
+      return Object.freeze({
+        ...state,
+        serverConfig: Object.freeze({
+          port: action.port,
+          host: action.host,
+          autoStart: action.autoStart,
         }),
       });
     default:

@@ -1,6 +1,8 @@
 require("dotenv").config();
 
 const fs = require("node:fs") as typeof import("node:fs");
+const os = require("node:os") as typeof import("node:os");
+const nodePath = require("node:path") as typeof import("node:path");
 
 function parseInteger(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -20,9 +22,27 @@ function loadSystemPrompt(): string | null {
   return fs.readFileSync(process.env.SYSTEM_PROMPT_FILE, "utf8");
 }
 
+function loadPersistedConfig(): { port?: number; host?: string; autoStart?: boolean } {
+  try {
+    const configPath = nodePath.join(os.homedir(), ".local", "share", "qwen-proxy", "config.json");
+    const raw = fs.readFileSync(configPath, "utf8");
+    const parsed = JSON.parse(raw);
+    return {
+      port: typeof parsed.port === "number" && parsed.port > 0 ? parsed.port : undefined,
+      host: typeof parsed.host === "string" && parsed.host.length > 0 ? parsed.host : undefined,
+      autoStart: typeof parsed.autoStart === "boolean" ? parsed.autoStart : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+const _persisted = loadPersistedConfig();
+
 const config = {
-  port: parseInteger(process.env.PORT, 8080),
-  host: process.env.HOST || "localhost",
+  port: process.env.PORT ? parseInteger(process.env.PORT, 8080) : (_persisted.port ?? 8080),
+  host: process.env.HOST || _persisted.host || "localhost",
+  autoStart: _persisted.autoStart ?? false,
   stream: process.env.STREAM === "true",
   qwen: {
     clientId: process.env.QWEN_CLIENT_ID || "f0304373b74a44d2b584a3fb70ca9e56",

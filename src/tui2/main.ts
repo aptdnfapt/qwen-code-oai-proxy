@@ -244,6 +244,35 @@ async function handleStartAccountAuth(): Promise<void> {
   }
 }
 
+async function loadServerConfig(): Promise<void> {
+  try {
+    const fileLogger = require("../utils/fileLogger.js") as { getRuntimeStatus: () => Promise<{ currentLogLevel?: string }> };
+    const { RuntimeConfigStore } = require("../core/config/runtime-config-store.js") as typeof import("../core/config/runtime-config-store.js");
+    const store = new RuntimeConfigStore();
+    const sc = await store.getServerConfig();
+    dispatch({
+      type: "set-server-config",
+      port: sc.port ?? 8080,
+      host: sc.host ?? "localhost",
+      autoStart: sc.autoStart,
+    });
+  } catch (e: any) {
+    appendClassicLog("warn", "■", "Config", `load failed: ${String(e?.message ?? e)}`);
+  }
+}
+
+async function handleServerConfigChange(port: number, host: string, autoStart: boolean): Promise<void> {
+  dispatch({ type: "set-server-config", port, host, autoStart });
+  try {
+    const { RuntimeConfigStore } = require("../core/config/runtime-config-store.js") as typeof import("../core/config/runtime-config-store.js");
+    const store = new RuntimeConfigStore();
+    await store.setServerConfig({ port, host, autoStart });
+    appendClassicLog("info", "✓", "Config", `saved port=${port} host=${host} autoStart=${autoStart}`);
+  } catch (e: any) {
+    appendClassicLog("error", "✗", "Config", `save failed: ${String(e?.message ?? e)}`);
+  }
+}
+
 async function handleDeleteAccount(accountId: string): Promise<void> {
   dispatch({ type: "close-delete-modal" });
   try {
@@ -301,6 +330,7 @@ appView = new AppView(tui, currentState, {
     })();
   },
   onThemeChange: (theme) => { dispatch({ type: "set-theme", theme }); },
+  onServerConfigChange: (port, host, autoStart) => { void handleServerConfigChange(port, host, autoStart); },
 });
 
 tui.addChild(appView);
@@ -348,4 +378,9 @@ tui.start();
 
 enableMouse((s) => terminal.write(s));
 
-await Promise.all([refreshRuntimeSummary(), refreshAccounts(), refreshUsage(), refreshArtifacts()]);
+await Promise.all([refreshRuntimeSummary(), refreshAccounts(), refreshUsage(), refreshArtifacts(), loadServerConfig()]);
+
+if (currentState.serverConfig.autoStart) {
+  appendClassicLog("info", "●", "Server", "auto-start enabled — starting...");
+  void handleStartServer();
+}

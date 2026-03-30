@@ -163,6 +163,12 @@ export type UsageScreenState = Readonly<{
   filterQuery: string;
 }>;
 
+export type ServerConfig = Readonly<{
+  port: number;
+  host: string;
+  autoStart: boolean;
+}>;
+
 export type TuiState = Readonly<{
   nowMs: number;
   bootMs: number;
@@ -180,6 +186,7 @@ export type TuiState = Readonly<{
   artifacts: ArtifactsScreenState;
   accounts: AccountsScreenState;
   usage: UsageScreenState;
+  serverConfig: ServerConfig;
 }>;
 
 export type TuiAction =
@@ -222,7 +229,8 @@ export type TuiAction =
   | Readonly<{ type: "auth-failure"; message: string }>
   | Readonly<{ type: "set-usage-days"; days: readonly UsageDay[] }>
   | Readonly<{ type: "select-usage-date"; date: string | null }>
-  | Readonly<{ type: "set-usage-filter"; value: string }>;
+  | Readonly<{ type: "set-usage-filter"; value: string }>
+  | Readonly<{ type: "set-server-config"; port: number; host: string; autoStart: boolean }>;
 
 export type ScreenRouteDeps = Readonly<{
   onNavigate: (screen: ScreenId) => void;
