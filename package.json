@@ -44,6 +44,7 @@
   "dependencies": {
     "@mariozechner/pi-tui": "^0.63.2",
     "axios": "^1.11.0",
+    "better-sqlite3": "^12.8.0",
     "chalk": "^4.1.2",
     "cli-table3": "^0.6.5",
     "cors": "^2.8.5",
@@ -57,6 +58,7 @@
     "winston": "^3.19.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.5.0",
     "nodemon": "^3.0.1",
     "typescript": "^6.0.2"

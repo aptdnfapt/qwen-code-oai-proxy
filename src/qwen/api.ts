@@ -6,6 +6,7 @@ const { PassThrough } = require("node:stream") as typeof import("node:stream");
 const path = require("node:path") as typeof import("node:path");
 const { promises: fs } = require("node:fs") as typeof import("node:fs");
 const crypto = require("node:crypto") as typeof import("node:crypto");
+const usageStore = require("../utils/usageStore.js") as typeof import("../utils/usageStore.js");
 
 const httpAgent = new http.Agent({
   keepAlive: true,
@@ -439,175 +440,65 @@ export class QwenAPI {
   requestCount: Map<string, number>;
   tokenUsage: Map<string, RequestUsageEntry[]>;
   lastResetDate: string;
-  requestCountFile: string;
-  lastSaveTime: number;
-  saveInterval: number;
-  pendingSave: boolean;
   accountLocks: Map<string, boolean>;
   accountQueues: Map<string, unknown>;
   webSearchRequestCounts: Map<string, number>;
   webSearchResultCounts: Map<string, number>;
+  private storeReady: Promise<void>;
 
   constructor() {
     this.authManager = new QwenAuthManager();
     this.requestCount = new Map();
     this.tokenUsage = new Map();
     this.lastResetDate = new Date().toISOString().split("T")[0] as string;
-    this.requestCountFile = path.join(this.authManager.qwenDir, "request_counts.json");
-    this.lastSaveTime = 0;
-    this.saveInterval = 60000;
-    this.pendingSave = false;
     this.accountLocks = new Map();
     this.accountQueues = new Map();
     this.webSearchRequestCounts = new Map();
     this.webSearchResultCounts = new Map();
-    void this.loadRequestCounts();
+    this.storeReady = usageStore.openUsageStore().then(async () => {
+      this.lastResetDate = usageStore.getLastResetDate();
+      this.resetRequestCountsIfNeeded();
+      await this.loadRequestCounts();
+    });
   }
 
   async loadRequestCounts(): Promise<void> {
-    try {
-      const data = await fs.readFile(this.requestCountFile, "utf8");
-      const counts = JSON.parse(data) as any;
-
-      if (counts.lastResetDate) {
-        this.lastResetDate = counts.lastResetDate;
-      }
-
-      if (counts.requests) {
-        for (const [accountId, count] of Object.entries(counts.requests)) {
-          this.requestCount.set(accountId, Number(count));
-        }
-      }
-
-      if (counts.tokenUsage) {
-        for (const [accountId, usageData] of Object.entries(counts.tokenUsage)) {
-          const normalizedUsage = Array.isArray(usageData)
-            ? usageData.map((entry) => this.normalizeUsageEntry(entry, String(entry?.date || this.lastResetDate)))
-            : [];
-          this.tokenUsage.set(accountId, normalizedUsage);
-        }
-      }
-
-      if (counts.webSearchRequests) {
-        for (const [accountId, count] of Object.entries(counts.webSearchRequests)) {
-          this.webSearchRequestCounts.set(accountId, Number(count));
-        }
-      }
-
-      if (counts.webSearchResults) {
-        for (const [accountId, count] of Object.entries(counts.webSearchResults)) {
-          this.webSearchResultCounts.set(accountId, Number(count));
-        }
-      } else {
-        console.log("Migrating old data structure - adding webSearchResults tracking");
-        for (const accountId of this.webSearchRequestCounts.keys()) {
-          this.webSearchResultCounts.set(accountId, 0);
-        }
-      }
-
-      this.resetRequestCountsIfNeeded();
-    } catch {
-      this.resetRequestCountsIfNeeded();
-    }
-  }
-
-  async saveRequestCounts(): Promise<void> {
-    try {
-      const counts = {
-        lastResetDate: this.lastResetDate,
-        requests: Object.fromEntries(this.requestCount),
-        webSearchRequests: Object.fromEntries(this.webSearchRequestCounts),
-        webSearchResults: Object.fromEntries(this.webSearchResultCounts),
-        tokenUsage: Object.fromEntries(this.tokenUsage),
-      };
-
-      await fs.writeFile(this.requestCountFile, JSON.stringify(counts, null, 2));
-      this.lastSaveTime = Date.now();
-      this.pendingSave = false;
-    } catch (error: any) {
-      console.warn("Failed to save request counts:", error.message);
-      this.pendingSave = false;
-    }
-  }
-
-  scheduleSave(): void {
-    if (this.pendingSave) {
-      return;
-    }
-
-    this.pendingSave = true;
-    const now = Date.now();
-    if (now - this.lastSaveTime < this.saveInterval) {
-      setTimeout(() => {
-        void this.saveRequestCounts();
-      }, this.saveInterval);
-    } else {
-      void this.saveRequestCounts();
-    }
+    this.resetRequestCountsIfNeeded();
+    this.requestCount = usageStore.getAllTodayRequestCounts(this.lastResetDate);
+    const allUsage = usageStore.getAllUsage();
+    this.tokenUsage = new Map(
+      Array.from(allUsage.entries()).map(([accountId, entries]) => [
+        accountId,
+        entries.map((e) => ({
+          date: e.date,
+          requests: e.requests,
+          requestsKnown: e.requestsKnown,
+          inputTokens: e.inputTokens,
+          outputTokens: e.outputTokens,
+          cacheReadTokens: e.cacheReadTokens,
+          cacheWriteTokens: e.cacheWriteTokens,
+          cacheTypes: e.cacheTypes,
+        })),
+      ]),
+    );
   }
 
   resetRequestCountsIfNeeded(): void {
     const today = new Date().toISOString().split("T")[0] as string;
     if (today !== this.lastResetDate) {
+      usageStore.resetRequestCounts(today);
       this.requestCount.clear();
       this.webSearchRequestCounts.clear();
       this.webSearchResultCounts.clear();
       this.lastResetDate = today;
       console.log("Request counts reset for new UTC day");
-      void this.saveRequestCounts();
     }
-  }
-
-  normalizeUsageEntry(entry: any, date: string): RequestUsageEntry {
-    const cacheTypes = Array.isArray(entry?.cacheTypes)
-      ? entry.cacheTypes.filter((value: unknown): value is string => typeof value === "string" && value.length > 0)
-      : typeof entry?.cacheType === "string" && entry.cacheType.length > 0
-        ? [entry.cacheType]
-        : [];
-
-    return {
-      date,
-      requests: asNonNegativeNumber(entry?.requests),
-      requestsKnown: typeof entry?.requests === "number" || entry?.requestsKnown === true,
-      inputTokens: asNonNegativeNumber(entry?.inputTokens),
-      outputTokens: asNonNegativeNumber(entry?.outputTokens),
-      cacheReadTokens: asNonNegativeNumber(entry?.cacheReadTokens),
-      cacheWriteTokens: asNonNegativeNumber(entry?.cacheWriteTokens),
-      cacheTypes: Array.from(new Set<string>(cacheTypes)),
-    };
-  }
-
-  ensureUsageEntry(accountId: string, date: string): RequestUsageEntry {
-    if (!this.tokenUsage.has(accountId)) {
-      this.tokenUsage.set(accountId, []);
-    }
-
-    const accountUsage = this.tokenUsage.get(accountId) as RequestUsageEntry[];
-    const existingIndex = accountUsage.findIndex((entry) => entry.date === date);
-    if (existingIndex >= 0) {
-      const normalized = this.normalizeUsageEntry(accountUsage[existingIndex], date);
-      accountUsage[existingIndex] = normalized;
-      return normalized;
-    }
-
-    const nextEntry: RequestUsageEntry = {
-      date,
-      requests: 0,
-      requestsKnown: true,
-      inputTokens: 0,
-      outputTokens: 0,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-      cacheTypes: [],
-    };
-    accountUsage.push(nextEntry);
-    return nextEntry;
   }
 
   async incrementWebSearchRequestCount(accountId: string): Promise<void> {
+    usageStore.incrementWebSearchRequest(accountId);
     const currentCount = this.webSearchRequestCounts.get(accountId) || 0;
     this.webSearchRequestCounts.set(accountId, currentCount + 1);
-    this.scheduleSave();
   }
 
   getWebSearchRequestCount(accountId: string): number {
@@ -615,9 +506,9 @@ export class QwenAPI {
   }
 
   async incrementWebSearchResultCount(accountId: string, resultCount: number): Promise<void> {
+    usageStore.incrementWebSearchResults(accountId, resultCount);
     const currentCount = this.webSearchResultCounts.get(accountId) || 0;
     this.webSearchResultCounts.set(accountId, currentCount + resultCount);
-    this.scheduleSave();
   }
 
   getWebSearchResultCount(accountId: string): number {
@@ -626,28 +517,26 @@ export class QwenAPI {
 
   async incrementRequestCount(accountId: string): Promise<void> {
     this.resetRequestCountsIfNeeded();
-    const currentDate = new Date().toISOString().split("T")[0] as string;
+    const today = this.lastResetDate;
+    usageStore.incrementRequestCount(accountId, today);
+    usageStore.incrementUsageRequests(accountId, today);
     const currentCount = this.requestCount.get(accountId) || 0;
     this.requestCount.set(accountId, currentCount + 1);
-    const usageEntry = this.ensureUsageEntry(accountId, currentDate);
-    usageEntry.requests += 1;
-    this.scheduleSave();
   }
 
   async recordTokenUsage(accountId: string, usage: any): Promise<void> {
     try {
-      const currentDate = new Date().toISOString().split("T")[0] as string;
+      const today = new Date().toISOString().split("T")[0] as string;
       const metrics = extractUsageMetrics(usage);
-      const todayEntry = this.ensureUsageEntry(accountId, currentDate);
-      todayEntry.inputTokens += metrics.inputTokens;
-      todayEntry.outputTokens += metrics.outputTokens;
-      todayEntry.cacheReadTokens += metrics.cacheReadTokens;
-      todayEntry.cacheWriteTokens += metrics.cacheWriteTokens;
-      if (metrics.cacheType && !todayEntry.cacheTypes.includes(metrics.cacheType)) {
-        todayEntry.cacheTypes.push(metrics.cacheType);
-      }
-
-      this.scheduleSave();
+      usageStore.recordTokenUsage(
+        accountId,
+        today,
+        metrics.inputTokens,
+        metrics.outputTokens,
+        metrics.cacheReadTokens,
+        metrics.cacheWriteTokens,
+        metrics.cacheType,
+      );
     } catch (error: any) {
       console.warn("Failed to record token usage:", error.message);
     }

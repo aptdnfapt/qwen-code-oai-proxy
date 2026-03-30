@@ -56,9 +56,10 @@ export function renderSettingsScreen(state: TuiState, width: number): string[] {
   lines.push(hRule(width));
   lines.push(truncLine(chalk.bold("Storage paths"), width));
   lines.push(hRule(width));
-  lines.push(truncLine(caption("  Config   ") + muted("~/.config/qwen-proxy/"), width));
-  lines.push(truncLine(caption("  Logs     ") + muted("~/.local/share/qwen-proxy/logs/"), width));
-  lines.push(truncLine(caption("  Accounts ") + muted("~/.local/share/qwen-proxy/accounts/"), width));
+  lines.push(truncLine(caption("  Config   ") + muted("~/.local/share/qwen-proxy/config.json"), width));
+  lines.push(truncLine(caption("  Logs     ") + muted("~/.local/share/qwen-proxy/log/"), width));
+  lines.push(truncLine(caption("  Usage DB ") + muted("~/.local/share/qwen-proxy/usage.db"), width));
+  lines.push(truncLine(caption("  Accounts ") + muted("~/.qwen/oauth_creds_<id>.json"), width));
 
   lines.push(hRule(width));
   lines.push(truncLine(caption("  click a row  t cycle theme  i toggle icon mode  1-4 set log level"), width));
