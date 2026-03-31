@@ -198,6 +198,18 @@ Tracked runtime validation utility:
 - Loads key runtime modules to catch syntax/import regressions
 - Used by npm scripts: `test`, `test:simple`, and `test:proxy`
 
+#### scripts/validate-first-run.ts
+Fresh-install storage validation utility:
+- Runs the compiled runtime in a clean `HOME`
+- Verifies SQLite storage/bootstrap works on first use
+- Catches missing directory/schema regressions before a real user request
+
+#### scripts/smoke-packaged-install.ts
+Packaged install smoke utility:
+- Creates an npm tarball from the built package
+- Installs it into a temporary global-style prefix
+- Starts the installed `qwen-proxy` binary, checks `/health`, then stops it cleanly
+
 #### tmp-test/*
 Scratch probes were removed during the TS-only cleanup and are no longer part of the maintained tree.
 

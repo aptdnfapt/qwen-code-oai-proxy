@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import os from "node:os";
 import path from "node:path";
-import { promises as fs } from "node:fs";
+import { mkdirSync, promises as fs } from "node:fs";
 
 const APP_DIR = path.join(os.homedir(), ".local", "share", "qwen-proxy");
 const DB_PATH = path.join(APP_DIR, "usage.db");
@@ -35,9 +35,11 @@ let _db: Database.Database | null = null;
 
 function getDb(): Database.Database {
   if (_db) return _db;
+  mkdirSync(APP_DIR, { recursive: true });
   _db = new Database(DB_PATH);
   _db.pragma("journal_mode = WAL");
   _db.pragma("synchronous = NORMAL");
+  initSchema(_db);
   return _db;
 }
 
@@ -165,9 +167,7 @@ async function migrateLegacyJson(db: Database.Database): Promise<void> {
 }
 
 export async function openUsageStore(): Promise<void> {
-  await fs.mkdir(APP_DIR, { recursive: true });
   const db = getDb();
-  initSchema(db);
   await migrateLegacyJson(db);
 }
 

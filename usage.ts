@@ -1,58 +1,57 @@
 #!/usr/bin/env node
 
-const { QwenAuthManager } = require("./src/qwen/auth.js") as any;
-const path = require("node:path") as typeof import("node:path");
-const { promises: fs } = require("node:fs") as typeof import("node:fs");
+const usageStore = require("./src/utils/usageStore.js") as typeof import("./src/utils/usageStore.js");
 const Table = require("cli-table3") as any;
+
+type DailyUsageSummary = {
+  chatRequests: number;
+  inputTokens: number;
+  outputTokens: number;
+  webSearches: number;
+  webResults: number;
+};
+
+function createEmptyDay(): DailyUsageSummary {
+  return {
+    chatRequests: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    webSearches: 0,
+    webResults: 0,
+  };
+}
 
 export async function showUsageReport(): Promise<void> {
   console.log("📊 Qwen OpenAI Proxy - Usage Report");
   console.log("═══════════════════════════════════════════════════════════════════════════════\n");
   try {
-    const authManager = new QwenAuthManager();
-    const tokenUsageData = new Map<string, any[]>();
-    const chatRequestData = new Map<string, number>();
-    const webSearchRequestData = new Map<string, number>();
-    const webSearchResultData = new Map<string, number>();
-    const requestCountFile = path.join(authManager.qwenDir, "request_counts.json");
+    await usageStore.openUsageStore();
+    const tokenUsageData = usageStore.getAllUsage();
+    const webSearchTotals = usageStore.getTotalWebSearchCounts();
 
-    try {
-      const data = await fs.readFile(requestCountFile, "utf8");
-      const counts = JSON.parse(data) as any;
-      if (counts.tokenUsage) for (const [accountId, usageData] of Object.entries(counts.tokenUsage)) tokenUsageData.set(accountId, usageData as any[]);
-      if (counts.requests) for (const [accountId, count] of Object.entries(counts.requests)) chatRequestData.set(accountId, Number(count));
-      if (counts.webSearchRequests) for (const [accountId, count] of Object.entries(counts.webSearchRequests)) webSearchRequestData.set(accountId, Number(count));
-      if (counts.webSearchResults) for (const [accountId, count] of Object.entries(counts.webSearchResults)) webSearchResultData.set(accountId, Number(count));
-    } catch {
-      console.log("No usage data found.");
-      return;
-    }
-
-    if (tokenUsageData.size === 0 && chatRequestData.size === 0 && webSearchRequestData.size === 0) {
-      console.log("No usage data available.");
-      return;
-    }
-
-    const dailyUsage = new Map<string, any>();
-    const ensureDay = (date: string): any => {
+    const dailyUsage = new Map<string, DailyUsageSummary>();
+    const ensureDay = (date: string): DailyUsageSummary => {
       if (!dailyUsage.has(date)) {
-        dailyUsage.set(date, { chatRequests: 0, inputTokens: 0, outputTokens: 0, webSearches: 0, webResults: 0 });
+        dailyUsage.set(date, createEmptyDay());
       }
-      return dailyUsage.get(date);
+      return dailyUsage.get(date) as DailyUsageSummary;
     };
 
     for (const usageData of tokenUsageData.values()) {
       for (const entry of usageData) {
         const day = ensureDay(entry.date);
+        day.chatRequests += entry.requests;
         day.inputTokens += entry.inputTokens;
         day.outputTokens += entry.outputTokens;
       }
     }
 
-    const today = new Date().toISOString().split("T")[0] as string;
-    for (const count of chatRequestData.values()) ensureDay(today).chatRequests += count;
-    for (const count of webSearchRequestData.values()) ensureDay(today).webSearches += count;
-    for (const count of webSearchResultData.values()) ensureDay(today).webResults += count;
+    if (webSearchTotals.requests > 0 || webSearchTotals.results > 0) {
+      const today = new Date().toISOString().split("T")[0] as string;
+      const day = ensureDay(today);
+      day.webSearches += webSearchTotals.requests;
+      day.webResults += webSearchTotals.results;
+    }
 
     if (dailyUsage.size === 0) {
       console.log("No usage data available.");

@@ -1,6 +1,6 @@
 {
   "name": "qwen-proxy",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "A proxy server that exposes Qwen models through an OpenAI-compatible API",
   "main": "dist/src/index.js",
   "files": [
@@ -19,8 +19,10 @@
     "serve:headless": "npm run build:core && node dist/src/cli/qwen-proxy.js serve --headless",
     "build:core": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json && tsc -p tsconfig.tui2.json && node dist/scripts/prepare-bin.js",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.tui2.json",
-    "test": "npm run build:core && node dist/scripts/validate-runtime.js",
+    "test": "npm run build:core && node dist/scripts/validate-runtime.js && node dist/scripts/validate-first-run.js && node dist/scripts/smoke-packaged-install.js",
     "test:simple": "npm run build:core && node dist/scripts/validate-runtime.js",
+    "test:first-run": "npm run build:core && node dist/scripts/validate-first-run.js",
+    "test:install-smoke": "npm run build:core && node dist/scripts/smoke-packaged-install.js",
     "test:proxy": "npm run build:core && node dist/scripts/validate-runtime.js",
     "test:tui": "npm run build:core",
     "test:all": "npm run build:core && node dist/test-all-accounts.js",

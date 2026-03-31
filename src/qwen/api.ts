@@ -444,6 +444,7 @@ export class QwenAPI {
   webSearchRequestCounts: Map<string, number>;
   webSearchResultCounts: Map<string, number>;
   private storeReady: Promise<void>;
+  private storeInitialized: boolean;
   constructor() {
     this.authManager = new QwenAuthManager();
     this.requestCount = new Map();
@@ -452,14 +453,19 @@ export class QwenAPI {
 
     this.webSearchRequestCounts = new Map();
     this.webSearchResultCounts = new Map();
-    this.storeReady = usageStore.openUsageStore().then(async () => {
-      this.lastResetDate = usageStore.getLastResetDate();
-      this.resetRequestCountsIfNeeded();
-      await this.loadRequestCounts();
+    this.storeInitialized = false;
+    this.storeReady = usageStore.openUsageStore().then(() => {
+      this.storeInitialized = true;
+      this.loadUsageStateFromStore();
     });
   }
 
-  async loadRequestCounts(): Promise<void> {
+  private async ensureUsageStoreReady(): Promise<void> {
+    await this.storeReady;
+  }
+
+  private loadUsageStateFromStore(): void {
+    this.lastResetDate = usageStore.getLastResetDate();
     this.resetRequestCountsIfNeeded();
     this.requestCount = usageStore.getAllTodayRequestCounts(this.lastResetDate);
     const allUsage = usageStore.getAllUsage();
@@ -480,7 +486,21 @@ export class QwenAPI {
     );
   }
 
+  async loadRequestCounts(): Promise<void> {
+    await this.ensureUsageStoreReady();
+    this.loadUsageStateFromStore();
+  }
+
+  async saveRequestCounts(): Promise<void> {
+    await this.ensureUsageStoreReady();
+    usageStore.closeUsageStore();
+  }
+
   resetRequestCountsIfNeeded(): void {
+    if (!this.storeInitialized) {
+      return;
+    }
+
     const today = new Date().toISOString().split("T")[0] as string;
     if (today !== this.lastResetDate) {
       usageStore.resetRequestCounts(today);
@@ -493,6 +513,7 @@ export class QwenAPI {
   }
 
   async incrementWebSearchRequestCount(accountId: string): Promise<void> {
+    await this.ensureUsageStoreReady();
     usageStore.incrementWebSearchRequest(accountId);
     const currentCount = this.webSearchRequestCounts.get(accountId) || 0;
     this.webSearchRequestCounts.set(accountId, currentCount + 1);
@@ -503,6 +524,7 @@ export class QwenAPI {
   }
 
   async incrementWebSearchResultCount(accountId: string, resultCount: number): Promise<void> {
+    await this.ensureUsageStoreReady();
     usageStore.incrementWebSearchResults(accountId, resultCount);
     const currentCount = this.webSearchResultCounts.get(accountId) || 0;
     this.webSearchResultCounts.set(accountId, currentCount + resultCount);
@@ -513,6 +535,7 @@ export class QwenAPI {
   }
 
   async incrementRequestCount(accountId: string): Promise<void> {
+    await this.ensureUsageStoreReady();
     this.resetRequestCountsIfNeeded();
     const today = this.lastResetDate;
     usageStore.incrementRequestCount(accountId, today);
@@ -523,6 +546,7 @@ export class QwenAPI {
 
   async recordTokenUsage(accountId: string, usage: any): Promise<void> {
     try {
+      await this.ensureUsageStoreReady();
       const today = new Date().toISOString().split("T")[0] as string;
       const metrics = extractUsageMetrics(usage);
       usageStore.recordTokenUsage(

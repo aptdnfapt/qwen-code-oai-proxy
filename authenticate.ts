@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 
 const { QwenAuthManager } = require("./src/qwen/auth.js") as any;
+const usageStore = require("./src/utils/usageStore.js") as typeof import("./src/utils/usageStore.js");
 const qrcode = require("qrcode-terminal") as any;
 const open = require("open") as any;
-const path = require("node:path") as typeof import("node:path");
-const { promises: fs } = require("node:fs") as typeof import("node:fs");
 
 export async function listAccounts(): Promise<void> {
   console.log("Listing all Qwen accounts...");
@@ -105,18 +104,8 @@ export async function checkRequestCounts(): Promise<void> {
     const totalAccounts = accountIds.length + (defaultCredentials ? 1 : 0);
     console.log(`\nFound ${totalAccounts} account(s):\n`);
 
-    const requestCounts = new Map<string, number>();
-    const requestCountFile = path.join(authManager.qwenDir, "request_counts.json");
-    try {
-      const data = await fs.readFile(requestCountFile, "utf8");
-      const counts = JSON.parse(data) as any;
-      if (counts.requests) {
-        for (const [accountId, count] of Object.entries(counts.requests)) {
-          requestCounts.set(accountId, Number(count));
-        }
-      }
-    } catch {
-    }
+    await usageStore.openUsageStore();
+    const requestCounts = usageStore.getAllTodayRequestCounts(usageStore.getLastResetDate());
 
     for (const accountId of accountIds) {
       const count = requestCounts.get(accountId) || 0;
