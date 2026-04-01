@@ -204,6 +204,12 @@ Fresh-install storage validation utility:
 - Verifies SQLite storage/bootstrap works on first use
 - Catches missing directory/schema regressions before a real user request
 
+#### scripts/validate-clean-home-auth.ts
+Fresh-install auth validation utility:
+- Runs auth loading in a clean `HOME`
+- Verifies missing `~/.qwen` is treated as an empty account set
+- Catches repeated ENOENT warning regressions that break the TUI
+
 #### scripts/smoke-packaged-install.ts
 Packaged install smoke utility:
 - Creates an npm tarball from the built package

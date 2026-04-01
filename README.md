@@ -86,6 +86,22 @@ qwen-proxy usage
 
 ---
 
+## Dev Test Helpers
+
+For fresh-machine regressions, use the built-in clean-home checks instead of ad-hoc shell probes:
+
+```bash
+npm run test:auth-clean-home
+npm run test:first-run
+npm run test:install-smoke
+```
+
+These scripts run the compiled code with a temporary `HOME`, so they simulate a new machine without touching your real `~/.qwen` or local usage database.
+
+More detail: `docs/testing-clean-home.md`
+
+---
+
 ## Multi-Account Support
 
 Add multiple accounts — requests round-robin across all of them automatically:

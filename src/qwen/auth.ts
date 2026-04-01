@@ -4,6 +4,7 @@ const { fetch } = require("undici") as { fetch: typeof globalThis.fetch };
 const crypto = require("node:crypto") as typeof import("node:crypto");
 
 let _conflictWarningShown = false;
+const _warnedAuthIssues = new Set<string>();
 
 const QWEN_DIR = ".qwen";
 const QWEN_CREDENTIAL_FILENAME = "oauth_creds.json";
@@ -52,6 +53,19 @@ function generatePKCEPair(): { code_verifier: string; code_challenge: string } {
   return { code_verifier: codeVerifier, code_challenge: codeChallenge };
 }
 
+function isMissingPathError(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error && (error as { code?: unknown }).code === "ENOENT");
+}
+
+function warnAuthIssueOnce(issueKey: string, ...args: unknown[]): void {
+  if (_warnedAuthIssues.has(issueKey)) {
+    return;
+  }
+
+  _warnedAuthIssues.add(issueKey);
+  console.warn(...args);
+}
+
 export class QwenAuthManager {
   qwenDir: string;
   credentialsPath: string;
@@ -98,48 +112,60 @@ export class QwenAuthManager {
   }
 
   async loadAllAccounts(): Promise<Map<string, QwenCredentials>> {
+    this.accounts.clear();
+
+    let files: string[];
     try {
-      this.accounts.clear();
-      const files = await fs.readdir(this.qwenDir);
-      const accountFiles = files
-        .filter((file) => file.startsWith(QWEN_MULTI_ACCOUNT_PREFIX) && file.endsWith(QWEN_MULTI_ACCOUNT_SUFFIX) && file !== QWEN_CREDENTIAL_FILENAME)
-        .sort();
-
-      const config = require("../config.js") as any;
-      try {
-        const defaultAuthExists = await fs.access(this.credentialsPath).then(() => true).catch(() => false);
-        if (defaultAuthExists && accountFiles.length > 0 && config.qwenCodeAuthUse !== false && !_conflictWarningShown) {
-          _conflictWarningShown = true;
-          console.log("\n\x1b[31m%s\x1b[0m", "[PROXY WARNING] Conflicting authentication files detected!");
-          console.log("\x1b[31m%s\x1b[0m", "Found both default ~/.qwen/oauth_creds.json (created by qwen-code) and named account file(s) ~/.qwen/oauth_creds_<name>.json");
-          console.log("\x1b[31m%s\x1b[0m", "If these were created with the same account, token refresh conflicts will occur, invalidating the other file.");
-          console.log("\x1b[31m%s\x1b[0m", "Solution: Set QWEN_CODE_AUTH_USE=false in your .env file, or remove the default auth file.");
-        }
-      } catch {
-      }
-
-      for (const file of accountFiles) {
-        try {
-          const accountPath = path.join(this.qwenDir, file);
-          const credentialsData = await fs.readFile(accountPath, "utf8");
-          const credentials = JSON.parse(credentialsData) as QwenCredentials;
-          const accountId = file.substring(QWEN_MULTI_ACCOUNT_PREFIX.length, file.length - QWEN_MULTI_ACCOUNT_SUFFIX.length);
-          this.accounts.set(accountId, credentials);
-        } catch (error: any) {
-          console.warn(`Failed to load account from ${file}:`, error.message);
-        }
-      }
-
-      return this.accounts;
+      files = await fs.readdir(this.qwenDir);
     } catch (error: any) {
-      console.warn("Failed to load multi-account credentials:", error.message);
+      if (isMissingPathError(error)) {
+        return this.accounts;
+      }
+
+      warnAuthIssueOnce(`load-accounts:${error.code || error.message}`, "Failed to load multi-account credentials:", error.message);
       return this.accounts;
     }
+
+    const accountFiles = files
+      .filter((file) => file.startsWith(QWEN_MULTI_ACCOUNT_PREFIX) && file.endsWith(QWEN_MULTI_ACCOUNT_SUFFIX) && file !== QWEN_CREDENTIAL_FILENAME)
+      .sort();
+
+    const config = require("../config.js") as any;
+    try {
+      const defaultAuthExists = await fs.access(this.credentialsPath).then(() => true).catch(() => false);
+      if (defaultAuthExists && accountFiles.length > 0 && config.qwenCodeAuthUse !== false && !_conflictWarningShown) {
+        _conflictWarningShown = true;
+        console.log("\n\x1b[31m%s\x1b[0m", "[PROXY WARNING] Conflicting authentication files detected!");
+        console.log("\x1b[31m%s\x1b[0m", "Found both default ~/.qwen/oauth_creds.json (created by qwen-code) and named account file(s) ~/.qwen/oauth_creds_<name>.json");
+        console.log("\x1b[31m%s\x1b[0m", "If these were created with the same account, token refresh conflicts will occur, invalidating the other file.");
+        console.log("\x1b[31m%s\x1b[0m", "Solution: Set QWEN_CODE_AUTH_USE=false in your .env file, or remove the default auth file.");
+      }
+    } catch {
+    }
+
+    for (const file of accountFiles) {
+      try {
+        const accountPath = path.join(this.qwenDir, file);
+        const credentialsData = await fs.readFile(accountPath, "utf8");
+        const credentials = JSON.parse(credentialsData) as QwenCredentials;
+        const accountId = file.substring(QWEN_MULTI_ACCOUNT_PREFIX.length, file.length - QWEN_MULTI_ACCOUNT_SUFFIX.length);
+        this.accounts.set(accountId, credentials);
+      } catch (error: any) {
+        if (isMissingPathError(error)) {
+          continue;
+        }
+
+        warnAuthIssueOnce(`account-file:${file}:${error.code || error.message}`, `Failed to load account from ${file}:`, error.message);
+      }
+    }
+
+    return this.accounts;
   }
 
   async saveCredentials(credentials: QwenCredentials, accountId: string | null = null): Promise<void> {
     try {
       const credentialsString = JSON.stringify(credentials, null, 2);
+      await fs.mkdir(this.qwenDir, { recursive: true });
       if (accountId) {
         const accountFilename = `${QWEN_MULTI_ACCOUNT_PREFIX}${accountId}${QWEN_MULTI_ACCOUNT_SUFFIX}`;
         const accountPath = path.join(this.qwenDir, accountFilename);
@@ -160,12 +186,10 @@ export class QwenAuthManager {
     }
 
     if (typeof credentials.access_token !== "string" || credentials.access_token.length === 0) {
-      console.warn("Invalid access token format");
       return false;
     }
 
     if (Number.isNaN(credentials.expiry_date) || credentials.expiry_date <= 0) {
-      console.warn("Invalid expiry date");
       return false;
     }
 
@@ -211,16 +235,10 @@ export class QwenAuthManager {
   }
 
   async removeAccount(accountId: string): Promise<void> {
-    try {
-      const accountFilename = `${QWEN_MULTI_ACCOUNT_PREFIX}${accountId}${QWEN_MULTI_ACCOUNT_SUFFIX}`;
-      const accountPath = path.join(this.qwenDir, accountFilename);
-      await fs.unlink(accountPath);
-      this.accounts.delete(accountId);
-      console.log(`Account ${accountId} removed successfully`);
-    } catch (error: any) {
-      console.error(`Error removing account ${accountId}:`, error.message);
-      throw error;
-    }
+    const accountFilename = `${QWEN_MULTI_ACCOUNT_PREFIX}${accountId}${QWEN_MULTI_ACCOUNT_SUFFIX}`;
+    const accountPath = path.join(this.qwenDir, accountFilename);
+    await fs.unlink(accountPath);
+    this.accounts.delete(accountId);
   }
 
   async refreshAccessToken(credentials: QwenCredentials): Promise<QwenCredentials> {

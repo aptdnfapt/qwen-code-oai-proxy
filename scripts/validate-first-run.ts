@@ -11,7 +11,11 @@ async function main(): Promise<void> {
   const tempHome = await fsPromises.mkdtemp(path.join(os.tmpdir(), "qwen-proxy-first-run-"));
   const runtimeScript = `
     (async () => {
+      const { QwenAuthManager } = require(${JSON.stringify(path.join(process.cwd(), "dist", "src", "qwen", "auth.js"))});
       const { QwenAPI } = require(${JSON.stringify(path.join(process.cwd(), "dist", "src", "qwen", "api.js"))});
+      const authManager = new QwenAuthManager();
+      await authManager.loadAllAccounts();
+      await authManager.loadAllAccounts();
       const api = new QwenAPI();
       await api.loadRequestCounts();
       await api.incrementRequestCount("default");
@@ -40,6 +44,10 @@ async function main(): Promise<void> {
     process.stdout.write(result.stdout);
     process.stderr.write(result.stderr);
     throw new Error("fresh-home runtime validation failed");
+  }
+
+  if (result.stdout.includes("Failed to load multi-account credentials") || result.stderr.includes("Failed to load multi-account credentials")) {
+    throw new Error("fresh-home auth validation emitted missing-directory warnings");
   }
 
   await fsPromises.access(path.join(tempHome, ".local", "share", "qwen-proxy", "usage.db"));
