@@ -1,6 +1,6 @@
 {
   "name": "qwen-proxy",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A proxy server that exposes Qwen models through an OpenAI-compatible API",
   "main": "dist/src/index.js",
   "files": [
@@ -54,7 +54,6 @@
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "open": "^8.4.0",
-    "openai": "^4.20.0",
     "qrcode-terminal": "^0.12.0",
     "tiktoken": "^1.0.22",
     "undici": "^7.13.0",

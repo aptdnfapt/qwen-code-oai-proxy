@@ -2,7 +2,9 @@
 
 Works with opencode, crush, claude code router, roo code, cline and anything that speaks the OpenAI API. Has tool calling and streaming support.
 
-> **New** — qwen 3.5 plus model (`coder-model`) is now the recommended default
+> **New** — Minimal terminal UI with full mouse support — lightweight, low resource usage. Just run `qwen-proxy` and manage accounts, usage, and settings directly from the dashboard — no manual commands needed.
+>
+> **New** — Qwen 3.5 Plus (`coder-model`) is now the recommended default model.
 
 [Discord](https://discord.gg/6S7HwCxbMy)
 
@@ -25,10 +27,12 @@ Add an account:
 qwen-proxy auth add myaccount
 ```
 
-Start with TUI dashboard:
+Start the TUI dashboard:
 ```bash
-qwen-proxy serve
+qwen-proxy
 ```
+
+The interactive CLI launches with full mouse support. Go to the **Accounts** tab and add an account from there — no separate commands needed.
 
 Or headless (background/server mode):
 ```bash
@@ -104,7 +108,9 @@ More detail: `docs/testing-clean-home.md`
 
 ## Multi-Account Support
 
-Add multiple accounts — requests round-robin across all of them automatically:
+The easiest way to add accounts is from the TUI — just run `qwen-proxy`, go to the **Accounts** tab, and add from there.
+
+You can also add via CLI:
 
 ```bash
 qwen-proxy auth add account1
