@@ -108,10 +108,11 @@ const liveLogger = {
     log(message, loggingState);
   },
 
-  proxyRequest(requestId: string, model: string, accountId: string | null | undefined, tokenCount: number, requestNum?: number, isStreaming?: boolean, loggingState?: { liveEnabled?: boolean }): void {
+  proxyRequest(requestId: string, model: string, accountId: string | null | undefined, tokenCount: number, requestNum?: number, isStreaming?: boolean, loggingState?: { liveEnabled?: boolean }, thinkingLabel?: string | null): void {
     const reqNumStr = requestNum ? colors.gray(`#${requestNum}`) : "";
     const streamStr = isStreaming ? colors.cyan("{streaming}") : "";
-    const message = `${colors.blue("→")} ${formatAccountTag(accountId)} ${colors.gray(requestId.substring(0, 8))} | ${colors.yellow(model)} ${streamStr} | ${colors.gray(`${tokenCount} tokens`)} ${reqNumStr}`;
+    const thinkStr = thinkingLabel ? colors.magenta(`[${thinkingLabel}]`) : "";
+    const message = `${colors.blue("→")} ${formatAccountTag(accountId)} ${colors.gray(requestId.substring(0, 8))} | ${colors.yellow(model)} ${streamStr}${thinkStr} | ${colors.gray(`${tokenCount} tokens`)} ${reqNumStr}`;
     log(message, loggingState);
   },
 

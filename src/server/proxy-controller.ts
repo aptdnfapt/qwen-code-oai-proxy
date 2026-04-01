@@ -32,6 +32,15 @@ function getRequestAccountId(req: RequestLike): string | null {
   return null;
 }
 
+function resolveThinkingLabel(body: any): string | null {
+  if (body.enable_thinking === false) return "think:off";
+  if (body.reasoning?.effort) return `think:${body.reasoning.effort}`;
+  if (body.enable_thinking === true) {
+    return body.thinking_budget ? `think:budget:${body.thinking_budget}` : "think:on";
+  }
+  return null;
+}
+
 function isAuthLikeError(error: any): boolean {
   const message = error?.message || "";
   return typeof message === "string" && (message.includes("Not authenticated") || message.includes("access token"));
@@ -74,7 +83,8 @@ export class QwenOpenAIProxy {
 
     try {
       const tokenCount = this.countTokens(req.body.messages);
-      this.liveLogger.proxyRequest(requestId, model, displayAccount, tokenCount, requestNum, isStreaming, loggingState);
+      const thinkingLabel = resolveThinkingLabel(req.body);
+      this.liveLogger.proxyRequest(requestId, model, displayAccount, tokenCount, requestNum, isStreaming, loggingState, thinkingLabel);
 
       if (isStreaming) {
         await this.handleStreamingChatCompletion(req, res, requestId, accountId, model, startTime, loggingState);
@@ -119,6 +129,8 @@ export class QwenOpenAIProxy {
         top_k: req.body.top_k || this.config.defaultTopK,
         repetition_penalty: req.body.repetition_penalty || this.config.defaultRepetitionPenalty,
         reasoning: req.body.reasoning,
+        enable_thinking: req.body.enable_thinking,
+        thinking_budget: req.body.thinking_budget,
         accountId,
       });
 
@@ -170,6 +182,8 @@ export class QwenOpenAIProxy {
         top_k: req.body.top_k || this.config.defaultTopK,
         repetition_penalty: req.body.repetition_penalty || this.config.defaultRepetitionPenalty,
         reasoning: req.body.reasoning,
+        enable_thinking: req.body.enable_thinking,
+        thinking_budget: req.body.thinking_budget,
         accountId,
       });
 

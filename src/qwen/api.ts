@@ -46,6 +46,37 @@ const QWEN_MODELS = [
   { id: "vision-model", object: "model", created: 1754686206, owned_by: "qwen" },
 ];
 
+const EFFORT_BUDGET_MAP: Record<string, number | null> = {
+  low: 1024,
+  medium: 8192,
+  high: null,
+};
+
+function resolveThinkingParams(request: any): Record<string, any> {
+  const result: Record<string, any> = {};
+
+  if (request.enable_thinking !== undefined) {
+    result.enable_thinking = request.enable_thinking;
+  }
+  if (request.thinking_budget !== undefined) {
+    result.thinking_budget = request.thinking_budget;
+  }
+
+  if (request.reasoning?.effort !== undefined) {
+    const effort = request.reasoning.effort;
+    if (effort === "none") {
+      result.enable_thinking = false;
+    } else if (Object.prototype.hasOwnProperty.call(EFFORT_BUDGET_MAP, effort)) {
+      result.enable_thinking = true;
+      if (EFFORT_BUDGET_MAP[effort] !== null) {
+        result.thinking_budget = EFFORT_BUDGET_MAP[effort];
+      }
+    }
+  }
+
+  return result;
+}
+
 type RequestUsageEntry = {
   date: string;
   requests: number;
@@ -723,7 +754,7 @@ export class QwenAPI {
       repetition_penalty: request.repetition_penalty,
       tools: request.tools,
       tool_choice: request.tool_choice,
-      reasoning: request.reasoning,
+      ...resolveThinkingParams(request),
       stream: false,
     };
 
@@ -768,7 +799,7 @@ export class QwenAPI {
       repetition_penalty: request.repetition_penalty,
       tools: request.tools,
       tool_choice: request.tool_choice,
-      reasoning: request.reasoning,
+      ...resolveThinkingParams(request),
       stream: true,
       stream_options: { include_usage: true },
     };
