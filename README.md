@@ -2,7 +2,7 @@
 
 Works with opencode, crush, claude code router, roo code, cline and anything that speaks the OpenAI API. Has tool calling and streaming support.
 
-> **New** — Minimal terminal UI with full mouse support — lightweight, low resource usage. Just run `qwen-proxy` and manage accounts, usage, and settings directly from the dashboard — no manual commands needed.
+> **New** — Minimal terminal UI with full mouse support — lightweight, low resource usage. 
 >
 > **New** — Qwen 3.5 Plus (`coder-model`) is now the recommended default model.
 
@@ -16,23 +16,17 @@ For a serverless/edge alternative: [qwen-worker-proxy](https://github.com/aptdnf
 
 ## Quick Start
 
-### Option 1: npm (global install)
+### Option 1: npm (global install) (recommended)
 
 ```bash
 npm install -g qwen-proxy
 ```
 
-Add an account:
 ```bash
-qwen-proxy auth add myaccount
-```
+qwen-proxy 
 
-Start the TUI dashboard:
-```bash
-qwen-proxy
+# and then add some accounts from the tui . full mouse Supported
 ```
-
-The interactive CLI launches with full mouse support. Go to the **Accounts** tab and add an account from there — no separate commands needed.
 
 Or headless (background/server mode):
 ```bash
@@ -43,7 +37,7 @@ Point your client at `http://localhost:8080/v1`. API key can be any string.
 
 ---
 
-### Option 2: Docker (recommended for self-hosting)
+### Option 2: Docker . ( manual build )
 
 ```bash
 git clone https://github.com/aptdnfapt/qwen-code-oai-proxy
