@@ -5,7 +5,6 @@ const { QwenAuthManager } = require("./auth.js") as any;
 const { PassThrough } = require("node:stream") as typeof import("node:stream");
 const path = require("node:path") as typeof import("node:path");
 const { promises: fs } = require("node:fs") as typeof import("node:fs");
-const crypto = require("node:crypto") as typeof import("node:crypto");
 const usageStore = require("../utils/usageStore.js") as typeof import("../utils/usageStore.js");
 
 const httpAgent = new http.Agent({
@@ -22,12 +21,11 @@ const httpsAgent = new https.Agent({
   maxSockets: 50,
   maxFreeSockets: 10,
   timeout: 60000,
-});
+  freeSocketTimeout: 30000,
+} as any);
 
 const DEFAULT_QWEN_API_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
 const DEFAULT_MODEL = "qwen3-coder-plus";
-const QWEN_CODE_VERSION = "0.12.0";
-
 const MODEL_ALIASES: Record<string, string> = {
   "qwen3.5-plus": "coder-model",
 };
@@ -97,35 +95,25 @@ function resolveModelAlias(model: string): string {
   return MODEL_ALIASES[model] || model;
 }
 
-function generateUserAgent(): string {
-  return `QwenCode/${QWEN_CODE_VERSION} (${process.platform}; ${process.arch})`;
-}
-
-function generateRequestId(): string {
-  return crypto.randomUUID();
-}
-
 function buildDashScopeHeaders(accessToken: string, isStreaming = false): Record<string, string> {
-  const userAgent = generateUserAgent();
   const headers: Record<string, string> = {
     connection: "keep-alive",
     accept: "application/json",
     authorization: `Bearer ${accessToken}`,
     "content-type": "application/json",
-    "user-agent": userAgent,
+    "user-agent": "QwenCode/0.11.1 (linux; x64)",
     "x-dashscope-authtype": "qwen-oauth",
     "x-dashscope-cachecontrol": "enable",
-    "x-dashscope-useragent": userAgent,
-    "x-stainless-arch": process.arch,
+    "x-dashscope-useragent": "QwenCode/0.11.1 (linux; x64)",
+    "x-stainless-arch": "x64",
     "x-stainless-lang": "js",
-    "x-stainless-os": process.platform,
+    "x-stainless-os": "Linux",
     "x-stainless-package-version": "5.11.0",
     "x-stainless-retry-count": "1",
     "x-stainless-runtime": "node",
-    "x-stainless-runtime-version": process.version,
+    "x-stainless-runtime-version": "v18.19.1",
     "accept-language": "*",
     "sec-fetch-mode": "cors",
-    "x-request-id": generateRequestId(),
   };
 
   if (isStreaming) {
