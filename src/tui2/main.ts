@@ -7,6 +7,7 @@ import { createRuntimeMonitor } from "./runtime.js";
 import type { ArtifactNode, LogLevel, TuiAction, TuiState } from "./types.js";
 import { AppView } from "./app.js";
 import { enableMouse, disableMouse } from "./mouse.js";
+import { enableConsoleRedirect, disableConsoleRedirect } from "./console-redirect.js";
 
 const require = createRequire(import.meta.url);
 const qrcode = require("qrcode-terminal") as {
@@ -60,6 +61,10 @@ function appendLog(level: "info" | "warn" | "error" | "debug", message: string, 
   });
 }
 
+function handleRedirectedConsoleLog(level: "info" | "warn" | "error" | "debug", message: string): void {
+  appendLog(level, message);
+}
+
 function appendClassicLog(level: "info" | "warn" | "error" | "debug", symbol: string, label: string, detail: string): void {
   const icon = level === "error" ? chalk.red(symbol) : level === "warn" ? chalk.yellow(symbol) : chalk.cyan(symbol);
   const formatted = `${icon} ${chalk.white(label)} | ${detail}`;
@@ -104,6 +109,7 @@ async function stopApp(): Promise<void> {
     unsubscribeLiveLogs = null;
     liveLogger.setConsoleEnabled(true);
     fileLogger.setConsoleEnabled(true);
+    disableConsoleRedirect();
     await runtimeMonitor.dispose();
     tui.stop();
   } catch {}
@@ -361,6 +367,7 @@ tickTimer = setInterval(() => {
 
 liveLogger.setConsoleEnabled(false);
 fileLogger.setConsoleEnabled(false);
+enableConsoleRedirect(handleRedirectedConsoleLog);
 for (const entry of liveLogger.getRecentEntries(200)) {
   const stripped = stripAnsi(entry.message);
   if (stripped) {
