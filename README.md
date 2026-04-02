@@ -171,7 +171,7 @@ const response = await openai.chat.completions.create({
 console.log(response.choices[0].message.content);
 ```
 
-### curl
+ ### curl
 ```bash
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
@@ -180,9 +180,12 @@ curl -X POST http://localhost:8080/v1/chat/completions \
     "model": "coder-model",
     "messages": [{"role": "user", "content": "Hello!"}],
     "temperature": 0.7,
-    "max_tokens": 200
+    "max_tokens": 200,
+    "reasoning": {"effort": "high"}
   }'
 ```
+
+> `effort` can be `"high"`, `"medium"`, `"low"`, or `"none"` (disables thinking).
 
 ### Streaming
 ```bash
@@ -193,7 +196,8 @@ curl -X POST http://localhost:8080/v1/chat/completions \
     "model": "coder-model",
     "messages": [{"role": "user", "content": "Explain how to reverse a string in JavaScript."}],
     "stream": true,
-    "max_tokens": 300
+    "max_tokens": 300,
+    "reasoning": {"effort": "medium"}
   }'
 ```
 
@@ -217,6 +221,9 @@ curl -X POST http://localhost:8080/v1/web/search \
 ### opencode
 
 Add to `~/.config/opencode/opencode.json`:
+
+
+> `effort` can be `"high"`, `"medium"`, `"low"`, or `"none"` (disables thinking). change it from the ctrl-t key bind on opencode
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
@@ -229,7 +236,23 @@ Add to `~/.config/opencode/opencode.json`:
       },
       "models": {
         "coder-model": {
-          "name": "qwen35"
+          "name": "qwen3.5-plus" ,
+           "reasoning": true,
+          "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+            "attachment": true,
+        "limit": {
+          "context": 195000,
+          "output": 60000
+          }
+
         }
       }
     }
