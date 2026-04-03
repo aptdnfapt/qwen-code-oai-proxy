@@ -140,7 +140,7 @@ This is why the proxy constructs URLs differently for each endpoint type.
 ## Rate Limits and Quotas
 
 ### Free Account Limits
-- **Web Search**: 2,000 requests per day
+- **Web Search**: 1,000 requests per account per day
 - **Chat Completions**: Separate quota (varies by model)
 
 ### Rate Limiting Behavior

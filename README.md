@@ -208,7 +208,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 ## Web Search API
 
-Free web search — 2000 requests/day on free accounts:
+Free web search — 1000 requests/account/day:
 
 ```bash
 curl -X POST http://localhost:8080/v1/web/search \
