@@ -28,18 +28,23 @@ const DEFAULT_QWEN_API_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mod
 const DEFAULT_MODEL = "qwen3-coder-plus";
 const MODEL_ALIASES: Record<string, string> = {
   "qwen3.5-plus": "coder-model",
+  "qwen3.6-plus": "coder-model",
 };
 
 const MODEL_LIMITS: Record<string, { maxTokens: number }> = {
   "vision-model": { maxTokens: 32768 },
   "qwen3-vl-plus": { maxTokens: 32768 },
   "qwen3-vl-max": { maxTokens: 32768 },
+  "qwen3.5-plus": { maxTokens: 65536 },
+  "qwen3.6-plus": { maxTokens: 65536 },
+  "coder-model": { maxTokens: 65536 },
 };
 
 const QWEN_MODELS = [
   { id: "qwen3-coder-plus", object: "model", created: 1754686206, owned_by: "qwen" },
   { id: "qwen3-coder-flash", object: "model", created: 1754686206, owned_by: "qwen" },
-  { id: "qwen3-coder-flash", object: "model", created: 1754686206, owned_by: "qwen" },
+  { id: "qwen3.5-plus", object: "model", created: 1754686206, owned_by: "qwen" },
+  { id: "qwen3.6-plus", object: "model", created: 1754686206, owned_by: "qwen" },
   { id: "coder-model", object: "model", created: 1754686206, owned_by: "qwen" },
   { id: "vision-model", object: "model", created: 1754686206, owned_by: "qwen" },
 ];

@@ -4,7 +4,7 @@ Works with opencode, crush, claude code router, roo code, cline and anything tha
 
 > **New** — Minimal terminal UI with full mouse support — lightweight, low resource usage. 
 >
-> **New** — Qwen 3.5 Plus (`coder-model`) is now the recommended default model.
+> **New** — `coder-model` now points to **Qwen 3.6 Plus** (Qwen team updated the alias). `qwen3.5-plus` requires Coding Plan subscription and won't work with OAuth accounts.
 
 [Discord](https://discord.gg/6S7HwCxbMy)
 
@@ -134,11 +134,14 @@ docker compose exec qwen-proxy node dist/src/cli/qwen-proxy.js auth remove <acco
 
 | Model ID | Description | Max Tokens | Notes |
 |----------|-------------|------------|-------|
-| `coder-model` | **Recommended** — Qwen 3.5 Plus, best for coding | 65536 | Default, excellent for code tasks |
+| `coder-model` | **Recommended** — Qwen 3.6 Plus (alias, auto-updated by Qwen) | 65536 | Default, best for coding |
+| `qwen3.5-plus` | Alias → resolves to `coder-model` | 65536 | Kept for backward compatibility |
+| `qwen3.6-plus` | Alias → resolves to `coder-model` | 65536 | |
 | `qwen3-coder-plus` | Qwen 3 Coder Plus | 65536 | |
 | `qwen3-coder-flash` | Qwen 3 Coder Flash | 65536 | Faster, lighter |
 | `vision-model` | Multimodal with image support | 32768 | Lower token limit, auto-clamped |
-| `qwen3.5-plus` | Alias → resolves to `coder-model` | 65536 | |
+
+> **Note:** `coder-model` is an alias maintained by Qwen. It was Qwen 3.5 Plus, now updated to Qwen 3.6 Plus. Both `qwen3.5-plus` and `qwen3.6-plus` resolve to `coder-model`.
 
 ---
 
@@ -236,7 +239,7 @@ Add to `~/.config/opencode/opencode.json`:
       },
       "models": {
         "coder-model": {
-          "name": "qwen3.5-plus" ,
+          "name": "qwen3.6-plus" ,
            "reasoning": true,
           "modalities": {
           "input": [
