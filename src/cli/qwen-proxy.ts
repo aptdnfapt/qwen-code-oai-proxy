@@ -7,7 +7,8 @@ const { startHeadlessServer } = require("../server/headless-runtime.js") as any;
 
 async function startTui(): Promise<void> {
   const path = require("path") as typeof import("path");
-  const tuiPath = path.resolve(__dirname, "../tui2/main.js");
+  const { pathToFileURL } = require("node:url") as typeof import("node:url");
+  const tuiPath = pathToFileURL(path.resolve(__dirname, "../tui2/main.js")).href;
   await new Function("path", "return import(path)")(tuiPath);
 }
 
