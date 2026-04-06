@@ -24,6 +24,7 @@
     "test:auth-clean-home": "npm run build:core && node dist/scripts/validate-clean-home-auth.js",
     "test:first-run": "npm run build:core && node dist/scripts/validate-first-run.js",
     "test:install-smoke": "npm run build:core && node dist/scripts/smoke-packaged-install.js",
+    "test:console-redirect": "npm run build:core && node dist/scripts/validate-console-redirect.js",
     "test:proxy": "npm run build:core && node dist/scripts/validate-runtime.js",
     "test:tui": "npm run build:core",
     "test:all": "npm run build:core && node dist/test-all-accounts.js",

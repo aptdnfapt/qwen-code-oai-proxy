@@ -1,3 +1,5 @@
+import { formatWithOptions } from "node:util";
+
 const originalConsoleLog = console.log.bind(console);
 const originalConsoleError = console.error.bind(console);
 const originalConsoleWarn = console.warn.bind(console);
@@ -9,7 +11,7 @@ type LogCallback = (level: "info" | "warn" | "error" | "debug", message: string)
 let isEnabled = false;
 let logCallback: LogCallback | null = null;
 
-const ANSI_RE = /\x1b[\x20-\x2f]*[\x40-\x7e]|\x1b\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]|\x1b[\x40-\x5f][^\x1b]*/g;
+const ANSI_RE = /\u001B\[[0-?]*[ -/]*[@-~]|\u001B\][^\u0007]*(?:\u0007|\u001B\\)/g;
 
 function stripAnsi(text: string): string {
   return text.replace(ANSI_RE, "").replace(/[\r\x00-\x08\x0b-\x1f\x7f]/g, "").trim();
@@ -20,14 +22,26 @@ function forwardToCallback(level: "info" | "warn" | "error" | "debug", args: unk
     return;
   }
 
-  const message = args
-    .map((arg) => (typeof arg === "string" ? arg : typeof arg === "object" ? safeStringify(arg) : String(arg)))
-    .join(" ");
+  const message = formatConsoleArgs(args);
 
   const cleaned = stripAnsi(message);
   if (cleaned) {
     logCallback(level, cleaned);
   }
+}
+
+function formatConsoleArgs(args: unknown[]): string {
+  if (args.length === 0) {
+    return "";
+  }
+
+  if (typeof args[0] === "string") {
+    return formatWithOptions({ colors: false }, args[0], ...args.slice(1));
+  }
+
+  return args
+    .map((arg) => (typeof arg === "object" ? safeStringify(arg) : String(arg)))
+    .join(" ");
 }
 
 function safeStringify(obj: unknown): string {
