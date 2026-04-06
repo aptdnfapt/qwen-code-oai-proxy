@@ -3,6 +3,7 @@ import { Input, type Component, type Focusable, Key, matchesKey, truncateToWidth
 import type { AccountsAuthModalState } from "./types.js";
 import { parseMouse } from "./mouse.js";
 import { buttonHitAt, danger, hRule, layoutLabeledButtonGrid, muted, padRight, success, type ButtonHit, truncLine, warning } from "./render.js";
+import { getViewportRows } from "./viewport.js";
 
 function phaseColor(phase: AccountsAuthModalState["phase"]): (s: string) => string {
   if (phase === "success") return success;
@@ -107,7 +108,7 @@ export class AuthOverlay implements Component, Focusable {
     }
 
     const cols = process.stdout.columns ?? 120;
-    const rows = process.stdout.rows ?? 40;
+    const rows = getViewportRows(process.stdout.rows);
     const overlayCol = Math.max(0, Math.floor((cols - this.lastRenderWidth) / 2));
     const overlayRow = Math.max(0, Math.floor((rows - this.lastRenderHeight) / 2));
     const localCol = col - overlayCol;

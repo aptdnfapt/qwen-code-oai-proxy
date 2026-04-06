@@ -10,6 +10,7 @@ import {
   type TuiState,
   type UsageScreenState,
 } from "./types.js";
+import { getViewportSize } from "./viewport.js";
 
 function findNavIndex(screen: TuiState["activeScreen"]): number {
   const index = NAV_ITEMS.findIndex((item) => item.id === screen);
@@ -44,10 +45,7 @@ function artifactPathExists(nodes: readonly ArtifactNode[], target: string | nul
 }
 
 function initialViewport(): { cols: number; rows: number } {
-  return {
-    cols: process.stdout.columns ?? 120,
-    rows: process.stdout.rows ?? 40,
-  };
+  return getViewportSize(process.stdout.columns, process.stdout.rows);
 }
 
 function createInitialRuntime(): RuntimeSummary {

@@ -8,6 +8,7 @@ import type { ArtifactNode, LogLevel, TuiAction, TuiState } from "./types.js";
 import { AppView } from "./app.js";
 import { enableMouse, disableMouse } from "./mouse.js";
 import { enableConsoleRedirect, disableConsoleRedirect } from "./console-redirect.js";
+import { getViewportRows } from "./viewport.js";
 
 const require = createRequire(import.meta.url);
 const qrcode = require("qrcode-terminal") as {
@@ -39,7 +40,13 @@ function renderQrText(text: string): Promise<string> {
 let currentState: TuiState = createInitialState();
 const runtimeMonitor = createRuntimeMonitor(currentState.bootMs);
 
-const terminal = new ProcessTerminal();
+class AppTerminal extends ProcessTerminal {
+  override get rows(): number {
+    return getViewportRows(super.rows);
+  }
+}
+
+const terminal = new AppTerminal();
 const tui = new TUI(terminal);
 
 let stopping = false;
@@ -345,8 +352,8 @@ tui.setFocus(appView);
 process.on("resize", () => {
   dispatch({
     type: "set-viewport",
-    cols: process.stdout.columns ?? currentState.viewportCols,
-    rows: process.stdout.rows ?? currentState.viewportRows,
+    cols: terminal.columns ?? currentState.viewportCols,
+    rows: terminal.rows ?? currentState.viewportRows,
   });
 });
 
@@ -354,8 +361,8 @@ tickTimer = setInterval(() => {
   dispatch({ type: "tick", nowMs: Date.now() });
   dispatch({
     type: "set-viewport",
-    cols: process.stdout.columns ?? currentState.viewportCols,
-    rows: process.stdout.rows ?? currentState.viewportRows,
+    cols: terminal.columns ?? currentState.viewportCols,
+    rows: terminal.rows ?? currentState.viewportRows,
   });
   void refreshRuntimeSummary();
   void refreshUsage();

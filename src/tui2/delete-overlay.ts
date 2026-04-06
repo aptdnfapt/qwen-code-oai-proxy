@@ -2,6 +2,7 @@ import chalk from "chalk";
 import { type Component, type Focusable, Key, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
 import { parseMouse } from "./mouse.js";
 import { buttonHitAt, danger, hRule, layoutLabeledButtonGrid, muted, padRight, type ButtonHit, truncLine } from "./render.js";
+import { getViewportRows } from "./viewport.js";
 
 export class DeleteConfirmOverlay implements Component, Focusable {
   focused = false;
@@ -43,7 +44,7 @@ export class DeleteConfirmOverlay implements Component, Focusable {
     if (this.lastButtonRow < 0) return;
 
     const cols = process.stdout.columns ?? 120;
-    const rows = process.stdout.rows ?? 40;
+    const rows = getViewportRows(process.stdout.rows);
     const overlayCol = Math.max(0, Math.floor((cols - this.lastRenderWidth) / 2));
     const overlayRow = Math.max(0, Math.floor((rows - this.lastRenderHeight) / 2));
     const localCol = col - overlayCol;
