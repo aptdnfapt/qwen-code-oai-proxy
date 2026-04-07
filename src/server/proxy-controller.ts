@@ -41,6 +41,42 @@ function resolveThinkingLabel(body: any): string | null {
   return null;
 }
 
+const EFFORT_BUDGET_MAP: Record<string, number | null> = {
+  low: 1024,
+  medium: 8192,
+  high: null,
+};
+
+function resolveLoggedThinkingParams(body: any): Record<string, any> {
+  const result: Record<string, any> = {};
+
+  if (body.enable_thinking !== undefined) {
+    result.enable_thinking = body.enable_thinking;
+  }
+
+  if (body.thinking_budget !== undefined) {
+    result.thinking_budget = body.thinking_budget;
+  }
+
+  if (body.reasoning?.effort !== undefined) {
+    const effort = body.reasoning.effort;
+    if (effort === "none") {
+      result.enable_thinking = false;
+      delete result.thinking_budget;
+    } else if (Object.prototype.hasOwnProperty.call(EFFORT_BUDGET_MAP, effort)) {
+      result.enable_thinking = true;
+      const mappedBudget = EFFORT_BUDGET_MAP[effort];
+      if (mappedBudget !== null) {
+        result.thinking_budget = mappedBudget;
+      } else {
+        delete result.thinking_budget;
+      }
+    }
+  }
+
+  return result;
+}
+
 function isAuthLikeError(error: any): boolean {
   const message = error?.message || "";
   return typeof message === "string" && (message.includes("Not authenticated") || message.includes("access token"));
@@ -71,6 +107,28 @@ export class QwenOpenAIProxy {
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
   }
 
+  buildLoggedUpstreamRequest(req: RequestLike, model: string, transformedMessages: unknown): Record<string, unknown> {
+    return {
+      model,
+      messages: transformedMessages,
+      tools: req.body.tools,
+      tool_choice: req.body.tool_choice,
+      temperature: req.body.temperature || this.config.defaultTemperature,
+      max_tokens: req.body.max_tokens || this.config.defaultMaxTokens,
+      top_p: req.body.top_p || this.config.defaultTopP,
+      top_k: req.body.top_k || this.config.defaultTopK,
+      repetition_penalty: req.body.repetition_penalty || this.config.defaultRepetitionPenalty,
+      reasoning: req.body.reasoning,
+      ...resolveLoggedThinkingParams(req.body),
+    };
+  }
+
+  logFailedRequestArtifacts(requestId: string, req: RequestLike, model: string, transformedMessages: unknown, statusCode: number, loggingState: any): void {
+    const transformedBody = transformedMessages === undefined ? undefined : this.buildLoggedUpstreamRequest(req, model, transformedMessages);
+    const logContent = this.fileLogger.formatLogContent(requestId, req, transformedBody, statusCode, 0, undefined);
+    this.fileLogger.logToFile(requestId, logContent, statusCode, loggingState);
+  }
+
   async handleChatCompletion(req: RequestLike, res: ResponseLike): Promise<void> {
     const requestId = this.createRequestId();
     const loggingState = this.fileLogger.captureState();
@@ -93,12 +151,14 @@ export class QwenOpenAIProxy {
       }
     } catch (error: any) {
       if ((error.message || "").includes("Validation error")) {
+        this.logFailedRequestArtifacts(requestId, req, model, undefined, 400, loggingState);
         this.liveLogger.proxyError(requestId, 400, displayAccount, error.message, loggingState);
         const validationError = this.ErrorFormatter.openAIValidationError(error.message);
         res.status(validationError.status).json(validationError.body);
         return;
       }
 
+      this.logFailedRequestArtifacts(requestId, req, model, undefined, 500, loggingState);
       this.fileLogger.logError(requestId, displayAccount, 500, error, undefined, loggingState);
       this.liveLogger.proxyError(requestId, 500, displayAccount, error.message, loggingState);
 
@@ -115,9 +175,10 @@ export class QwenOpenAIProxy {
 
   async handleRegularChatCompletion(req: RequestLike, res: ResponseLike, requestId: string, accountId: string | null, model: string, startTime: number, loggingState: any): Promise<void> {
     const displayAccount = accountId ? accountId.substring(0, 8) : "default";
+    let transformedMessages: unknown;
 
     try {
-      const transformedMessages = this.systemPromptTransformer.transform(req.body.messages, req.body.model || this.config.defaultModel);
+      transformedMessages = this.systemPromptTransformer.transform(req.body.messages, req.body.model || this.config.defaultModel);
       const response = await this.qwenAPI.chatCompletions({
         model: req.body.model || this.config.defaultModel,
         messages: transformedMessages,
@@ -140,7 +201,7 @@ export class QwenOpenAIProxy {
       const qwenId = response?.id ? response.id.replace("chatcmpl-", "").substring(0, 8) : null;
 
       if (loggingState.isDebugLogging) {
-        const logContent = this.fileLogger.formatLogContent(requestId, req, { model, messages: transformedMessages }, 200, latency, response);
+        const logContent = this.fileLogger.formatLogContent(requestId, req, this.buildLoggedUpstreamRequest(req, model, transformedMessages), 200, latency, response);
         this.fileLogger.logToFile(requestId, logContent, 200, loggingState);
       }
 
@@ -148,6 +209,7 @@ export class QwenOpenAIProxy {
       res.json(response);
     } catch (error: any) {
       const statusCode = error.response?.status || 500;
+      this.logFailedRequestArtifacts(requestId, req, model, transformedMessages, statusCode, loggingState);
       this.fileLogger.logError(requestId, displayAccount, statusCode, error, undefined, loggingState);
       this.liveLogger.proxyError(requestId, statusCode, displayAccount, error.message, loggingState);
 
@@ -163,6 +225,7 @@ export class QwenOpenAIProxy {
 
   async handleStreamingChatCompletion(req: RequestLike, res: ResponseLike, requestId: string, accountId: string | null, model: string, startTime: number, loggingState: any): Promise<void> {
     const displayAccount = accountId ? accountId.substring(0, 8) : "default";
+    let transformedMessages: unknown;
 
     try {
       res.setHeader("Content-Type", "text/event-stream");
@@ -170,7 +233,7 @@ export class QwenOpenAIProxy {
       res.setHeader("Connection", "keep-alive");
       res.setHeader("Access-Control-Allow-Origin", "*");
 
-      const transformedMessages = this.systemPromptTransformer.transform(req.body.messages, req.body.model || this.config.defaultModel);
+      transformedMessages = this.systemPromptTransformer.transform(req.body.messages, req.body.model || this.config.defaultModel);
       const stream = await this.qwenAPI.streamChatCompletions({
         model: req.body.model || this.config.defaultModel,
         messages: transformedMessages,
@@ -188,7 +251,7 @@ export class QwenOpenAIProxy {
       });
 
       if (loggingState.isDebugLogging) {
-        const logContent = this.fileLogger.formatLogContent(requestId, req, { model, messages: transformedMessages }, 200, 0, { streaming: true });
+        const logContent = this.fileLogger.formatLogContent(requestId, req, this.buildLoggedUpstreamRequest(req, model, transformedMessages), 200, 0, { streaming: true });
         this.fileLogger.logToFile(requestId, logContent, 200, loggingState);
       }
 
@@ -240,6 +303,7 @@ export class QwenOpenAIProxy {
 
       stream.on("error", (error: any) => {
           settleStream();
+          this.logFailedRequestArtifacts(requestId, req, model, transformedMessages, 500, loggingState);
           this.fileLogger.logError(requestId, displayAccount, 500, error, undefined, loggingState);
           this.liveLogger.proxyError(requestId, 500, displayAccount, error.message, loggingState);
         if (!res.headersSent) {
@@ -255,6 +319,7 @@ export class QwenOpenAIProxy {
       });
     } catch (error: any) {
       const statusCode = error.response?.status || 500;
+      this.logFailedRequestArtifacts(requestId, req, model, transformedMessages, statusCode, loggingState);
       this.fileLogger.logError(requestId, displayAccount, statusCode, error, undefined, loggingState);
       this.liveLogger.proxyError(requestId, statusCode, displayAccount, error.message, loggingState);
 

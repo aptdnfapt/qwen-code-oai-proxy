@@ -187,20 +187,24 @@ function formatLogContent(requestId: string, req: RequestLike, transformedBody: 
   logContent += "Client Request Body:\n";
   logContent += `${JSON.stringify(req.body, null, 2)}\n`;
 
-  logContent += "--------------------------\n";
-  logContent += "TRANSFORMER\n";
-  logContent += "Transformed Body:\n";
-  logContent += `${JSON.stringify(transformedBody, null, 2)}\n`;
+  if (transformedBody !== undefined) {
+    logContent += "--------------------------\n";
+    logContent += "TRANSFORMER\n";
+    logContent += "Transformed Body:\n";
+    logContent += `${JSON.stringify(transformedBody, null, 2)}\n`;
+  }
 
-  logContent += "--------------------------\n";
-  logContent += "OUTPUT\n";
-  logContent += `status: ${statusCode}\n`;
-  logContent += `latencyMs: ${latency}\n`;
-  logContent += "Response Data:\n";
-  if (typeof output === "string") {
-    logContent += `${output}\n`;
-  } else {
-    logContent += `${JSON.stringify(output, null, 2)}\n`;
+  if (output !== undefined) {
+    logContent += "--------------------------\n";
+    logContent += "OUTPUT\n";
+    logContent += `status: ${statusCode}\n`;
+    logContent += `latencyMs: ${latency}\n`;
+    logContent += "Response Data:\n";
+    if (typeof output === "string") {
+      logContent += `${output}\n`;
+    } else {
+      logContent += `${JSON.stringify(output, null, 2)}\n`;
+    }
   }
 
   return logContent;
