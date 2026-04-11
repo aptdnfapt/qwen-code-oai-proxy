@@ -22,11 +22,12 @@ import {
   SETTINGS_ICONS_ROW,
   SETTINGS_LOG_LEVEL_ROW,
   SETTINGS_PORT_ROW,
+  SETTINGS_SELECTION_ROW,
   SETTINGS_SIDEBAR_ROW,
   SETTINGS_THEME_ROW,
 } from "./screens/settings.js";
 import { renderHelpScreen } from "./screens/help.js";
-import { setActiveTheme, THEME_ORDER } from "./theme.js";
+import { setActiveSelectionStyle, setActiveTheme, THEME_ORDER } from "./theme.js";
 
 export type AppCallbacks = {
   dispatch: (action: TuiAction) => void;
@@ -47,6 +48,7 @@ export type AppCallbacks = {
   onToggleArtifactExpand: (path: string) => void;
   onSelectArtifact: (path: string | null) => void;
   onThemeChange: (theme: TuiState["themeName"]) => void;
+  onSelectionStyleChange: (style: TuiState["selectionStyle"]) => void;
   onServerConfigChange: (port: number, host: string, autoStart: boolean) => void;
 };
 
@@ -69,6 +71,7 @@ export class AppView implements Component, Focusable {
     this.state = initialState;
     this.cb = cb;
     setActiveTheme(initialState.themeName);
+    setActiveSelectionStyle(initialState.selectionStyle);
   }
 
   invalidate(): void {}
@@ -80,6 +83,7 @@ export class AppView implements Component, Focusable {
     const isDeleteOpen = state.accounts.deleteModal.isOpen;
     this.state = state;
     setActiveTheme(state.themeName);
+    setActiveSelectionStyle(state.selectionStyle);
 
     if (isAuthOpen && !wasAuthOpen) {
       this.openAuthOverlay();
@@ -658,6 +662,10 @@ export class AppView implements Component, Focusable {
         { id: "expanded", label: "expanded", selected: this.state.sidebarMode === "expanded", tone: "accent" },
         { id: "collapsed", label: "collapsed", selected: this.state.sidebarMode === "collapsed", tone: "accent" },
       ] },
+      { label: "Selection", items: [
+        { id: "solid", label: "solid", selected: this.state.selectionStyle === "solid", tone: "accent" },
+        { id: "transparent", label: "transparent", selected: this.state.selectionStyle === "transparent", tone: "accent" },
+      ] },
       { label: "Sidebar icons", items: [
         { id: "nerd", label: "nerd", selected: this.state.iconMode === "nerd", tone: "accent" },
         { id: "fallback", label: "fallback", selected: this.state.iconMode === "fallback", tone: "accent" },
@@ -684,8 +692,14 @@ export class AppView implements Component, Focusable {
       return;
     }
 
-    if (localRow === SETTINGS_ICONS_ROW) {
+    if (localRow === SETTINGS_SELECTION_ROW) {
       const hit = buttonHitAt(appearanceGrid.hitRows[2]?.hits ?? [], rowCol);
+      if (hit) this.cb.onSelectionStyleChange(hit as TuiState["selectionStyle"]);
+      return;
+    }
+
+    if (localRow === SETTINGS_ICONS_ROW) {
+      const hit = buttonHitAt(appearanceGrid.hitRows[3]?.hits ?? [], rowCol);
       if (hit) this.cb.dispatch({ type: "set-icon-mode", mode: hit as TuiState["iconMode"] });
       return;
     }

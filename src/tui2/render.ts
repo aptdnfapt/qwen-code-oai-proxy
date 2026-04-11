@@ -1,6 +1,6 @@
 import chalk from "chalk";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import { getThemePalette } from "./theme.js";
+import { getActiveSelectionStyle, getThemePalette } from "./theme.js";
 
 export const SIDEBAR_W = 20;
 export const SIDEBAR_W_COLLAPSED = 6;
@@ -103,6 +103,12 @@ export function border(s: string): string {
 }
 
 export function selected(s: string): string {
+  if (getActiveSelectionStyle() === "transparent") {
+    const marker = highlight("▌");
+    const body = truncateToWidth(s, Math.max(0, visibleWidth(s) - 1), "");
+    return marker + chalk.bold(body);
+  }
+
   return getThemePalette().inverse(s);
 }
 

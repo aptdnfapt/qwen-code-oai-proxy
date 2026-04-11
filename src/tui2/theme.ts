@@ -1,5 +1,5 @@
 import chalk from "chalk";
-import type { ThemeName } from "./types.js";
+import type { SelectionStyle, ThemeName } from "./types.js";
 
 type Paint = (text: string) => string;
 
@@ -21,6 +21,7 @@ type ThemePalette = Readonly<{
 }>;
 
 export const THEME_ORDER: readonly ThemeName[] = Object.freeze(["dark", "light", "amber", "contrast"]);
+export const SELECTION_STYLE_ORDER: readonly SelectionStyle[] = Object.freeze(["solid", "transparent"]);
 
 const THEMES: Record<ThemeName, ThemePalette> = {
   dark: Object.freeze({
@@ -90,6 +91,7 @@ const THEMES: Record<ThemeName, ThemePalette> = {
 };
 
 let activeThemeName: ThemeName = "dark";
+let activeSelectionStyle: SelectionStyle = "solid";
 
 export function isThemeName(value: string | undefined | null): value is ThemeName {
   return Boolean(value && (THEME_ORDER as readonly string[]).includes(value));
@@ -98,6 +100,18 @@ export function isThemeName(value: string | undefined | null): value is ThemeNam
 export function nextThemeName(current: ThemeName): ThemeName {
   const index = THEME_ORDER.indexOf(current);
   return THEME_ORDER[(index + 1) % THEME_ORDER.length] ?? THEME_ORDER[0];
+}
+
+export function isSelectionStyle(value: string | undefined | null): value is SelectionStyle {
+  return Boolean(value && (SELECTION_STYLE_ORDER as readonly string[]).includes(value));
+}
+
+export function setActiveSelectionStyle(style: SelectionStyle): void {
+  activeSelectionStyle = style;
+}
+
+export function getActiveSelectionStyle(): SelectionStyle {
+  return activeSelectionStyle;
 }
 
 export function setActiveTheme(themeName: ThemeName): void {

@@ -22,6 +22,15 @@ Theme choice is saved automatically to:
 
 The next time the TUI starts, it loads the saved theme automatically.
 
+## Selection style
+
+You can also choose how selected rows look:
+
+- `solid` --> filled highlight
+- `transparent` --> bold text + accent left marker, keeps row colors visible
+
+This is saved in the same config file and auto-loads on next start too.
+
 ## Notes
 
 - This changes TUI text, borders, highlights, and button colors

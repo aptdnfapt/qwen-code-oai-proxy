@@ -6,6 +6,7 @@ import {
   type IconMode,
   type LiveScreenState,
   type RuntimeSummary,
+  type SelectionStyle,
   type ServerConfig,
   type SidebarMode,
   type ThemeName,
@@ -54,6 +55,7 @@ function initialViewport(): { cols: number; rows: number } {
 
 type InitialTuiStateOptions = Readonly<{
   themeName?: ThemeName;
+  selectionStyle?: SelectionStyle;
   sidebarMode?: SidebarMode;
   iconMode?: IconMode;
   serverConfig?: Partial<ServerConfig>;
@@ -146,6 +148,7 @@ export function createInitialState(nowMs = Date.now(), initial: InitialTuiStateO
     sidebarIndex: 0,
     sidebarMode: initial.sidebarMode ?? "expanded",
     themeName: initial.themeName ?? "dark",
+    selectionStyle: initial.selectionStyle ?? "solid",
     iconMode: initial.iconMode ?? "nerd",
     runtime: createInitialRuntime(serverConfig),
     shouldQuit: false,
@@ -214,6 +217,11 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
       return Object.freeze({
         ...state,
         themeName: action.theme,
+      });
+    case "set-selection-style":
+      return Object.freeze({
+        ...state,
+        selectionStyle: action.style,
       });
     case "set-runtime":
       return Object.freeze({

@@ -2,6 +2,7 @@ export type ScreenId = "live" | "artifacts" | "accounts" | "usage" | "settings" 
 export type FocusRegion = "sidebar" | "main";
 export type SidebarMode = "expanded" | "collapsed";
 export type ThemeName = "dark" | "light" | "amber" | "contrast";
+export type SelectionStyle = "solid" | "transparent";
 export type IconMode = "fallback" | "nerd";
 export type RotationMode = "RR" | "single" | "none";
 export type RuntimeStatus = "ready" | "unauthenticated";
@@ -181,6 +182,7 @@ export type TuiState = Readonly<{
   sidebarIndex: number;
   sidebarMode: SidebarMode;
   themeName: ThemeName;
+  selectionStyle: SelectionStyle;
   iconMode: IconMode;
   runtime: RuntimeSummary;
   shouldQuit: boolean;
@@ -201,6 +203,7 @@ export type TuiAction =
   | Readonly<{ type: "set-icon-mode"; mode: IconMode }>
   | Readonly<{ type: "cycle-theme" }>
   | Readonly<{ type: "set-theme"; theme: ThemeName }>
+  | Readonly<{ type: "set-selection-style"; style: SelectionStyle }>
   | Readonly<{ type: "set-runtime"; runtime: RuntimeSummary }>
   | Readonly<{ type: "request-quit" }>
   | Readonly<{ type: "set-focus-region"; region: FocusRegion }>

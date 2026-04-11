@@ -9,7 +9,7 @@ import type { ArtifactNode, LogLevel, TuiAction, TuiState } from "./types.js";
 import { AppView } from "./app.js";
 import { enableMouse, disableMouse } from "./mouse.js";
 import { enableConsoleRedirect, disableConsoleRedirect } from "./console-redirect.js";
-import { isThemeName } from "./theme.js";
+import { isSelectionStyle, isThemeName } from "./theme.js";
 import { getViewportRows } from "./viewport.js";
 
 const require = createRequire(import.meta.url);
@@ -43,6 +43,7 @@ const runtimeConfigStore = new RuntimeConfigStore();
 const initialConfig = await runtimeConfigStore.readConfig().catch(() => null);
 let currentState: TuiState = createInitialState(Date.now(), {
   themeName: isThemeName(initialConfig?.theme) ? initialConfig.theme : undefined,
+  selectionStyle: isSelectionStyle(initialConfig?.selectionStyle) ? initialConfig.selectionStyle : undefined,
   serverConfig: {
     port: initialConfig?.port,
     host: initialConfig?.host,
@@ -89,11 +90,11 @@ function appendClassicLog(level: "info" | "warn" | "error" | "debug", symbol: st
   appendLog(level, `${label} | ${stripAnsi(detail)}`, formatted);
 }
 
-async function persistThemePreference(themeName: TuiState["themeName"]): Promise<void> {
+async function persistTuiPreferences(input: { theme?: TuiState["themeName"]; selectionStyle?: TuiState["selectionStyle"] }): Promise<void> {
   try {
-    await runtimeConfigStore.setTuiPreferences({ theme: themeName });
+    await runtimeConfigStore.setTuiPreferences(input);
   } catch (e: any) {
-    appendClassicLog("error", "✗", "Theme", `save failed: ${String(e?.message ?? e)}`);
+    appendClassicLog("error", "✗", "Settings", `save failed: ${String(e?.message ?? e)}`);
   }
 }
 
@@ -125,7 +126,11 @@ function dispatch(action: TuiAction): void {
   tui.requestRender(true);
 
   if (action.type === "set-theme" || action.type === "cycle-theme") {
-    void persistThemePreference(currentState.themeName);
+    void persistTuiPreferences({ theme: currentState.themeName });
+  }
+
+  if (action.type === "set-selection-style") {
+    void persistTuiPreferences({ selectionStyle: currentState.selectionStyle });
   }
 }
 
@@ -293,6 +298,9 @@ async function loadServerConfig(): Promise<void> {
     if (isThemeName(ui.theme) && currentState.themeName !== ui.theme) {
       dispatch({ type: "set-theme", theme: ui.theme });
     }
+    if (isSelectionStyle(ui.selectionStyle) && currentState.selectionStyle !== ui.selectionStyle) {
+      dispatch({ type: "set-selection-style", style: ui.selectionStyle });
+    }
   } catch (e: any) {
     appendClassicLog("warn", "■", "Config", `load failed: ${String(e?.message ?? e)}`);
   }
@@ -365,6 +373,7 @@ appView = new AppView(tui, currentState, {
     })();
   },
   onThemeChange: (theme) => { dispatch({ type: "set-theme", theme }); },
+  onSelectionStyleChange: (style) => { dispatch({ type: "set-selection-style", style }); },
   onServerConfigChange: (port, host, autoStart) => { void handleServerConfigChange(port, host, autoStart); },
 });
 

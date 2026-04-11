@@ -1,18 +1,20 @@
 import type { ButtonGridRow, ButtonTone } from "../render.js";
-import type { IconMode, LogLevel, SidebarMode, ThemeName, TuiState } from "../types.js";
+import type { IconMode, LogLevel, SelectionStyle, SidebarMode, ThemeName, TuiState } from "../types.js";
 import { caption, hRule, layoutLabeledButtonGrid, muted, sectionHeader, strong, truncLine, value, warning } from "../render.js";
-import { THEME_ORDER } from "../theme.js";
+import { SELECTION_STYLE_ORDER, THEME_ORDER } from "../theme.js";
 
 export const SETTINGS_THEME_ROW = 4;
 export const SETTINGS_SIDEBAR_ROW = 5;
-export const SETTINGS_ICONS_ROW = 6;
-export const SETTINGS_LOG_LEVEL_ROW = 10;
-export const SETTINGS_AUTOSTART_ROW = 14;
-export const SETTINGS_PORT_ROW = 15;
-export const SETTINGS_HOST_ROW = 16;
+export const SETTINGS_SELECTION_ROW = 6;
+export const SETTINGS_ICONS_ROW = 7;
+export const SETTINGS_LOG_LEVEL_ROW = 11;
+export const SETTINGS_AUTOSTART_ROW = 15;
+export const SETTINGS_PORT_ROW = 16;
+export const SETTINGS_HOST_ROW = 17;
 
 function appearanceRows(state: TuiState): readonly ButtonGridRow<string>[] {
   const themes: readonly ThemeName[] = THEME_ORDER;
+  const selectionStyles: readonly SelectionStyle[] = SELECTION_STYLE_ORDER;
   const sidebarModes: SidebarMode[] = ["expanded", "collapsed"];
   const iconModes: IconMode[] = ["nerd", "fallback"];
 
@@ -24,6 +26,10 @@ function appearanceRows(state: TuiState): readonly ButtonGridRow<string>[] {
     Object.freeze({
       label: "Sidebar",
       items: sidebarModes.map((option) => ({ id: option, label: option, selected: option === state.sidebarMode, tone: (option === state.sidebarMode ? "accent" : "neutral") as ButtonTone })),
+    }),
+    Object.freeze({
+      label: "Selection",
+      items: selectionStyles.map((option) => ({ id: option, label: option, selected: option === state.selectionStyle, tone: (option === state.selectionStyle ? "accent" : "neutral") as ButtonTone })),
     }),
     Object.freeze({
       label: "Sidebar icons",
@@ -85,6 +91,7 @@ export function renderSettingsScreen(state: TuiState, width: number, editingFiel
   lines.push(truncLine(caption("  Usage DB ") + muted("~/.local/share/qwen-proxy/usage.db"), width));
   lines.push(truncLine(caption("  Accounts ") + muted("~/.qwen/oauth_creds_<id>.json"), width));
   lines.push(truncLine(caption("  Theme    ") + muted("saved here automatically"), width));
+  lines.push(truncLine(caption("  Selection") + muted(" saved here automatically"), width));
 
   lines.push(hRule(width));
   lines.push(truncLine(caption("  click a row  t theme  i icons  1-4 log level  P port  H host"), width));

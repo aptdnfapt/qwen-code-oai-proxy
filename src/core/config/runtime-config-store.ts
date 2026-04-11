@@ -8,6 +8,7 @@ export interface RuntimeConfig {
   host?: string;
   autoStart?: boolean;
   theme?: string;
+  selectionStyle?: string;
   updatedAt: string;
 }
 
@@ -47,6 +48,7 @@ function normalizeLogLevel(value: string | undefined, fallback: RuntimeLogLevel)
 }
 
 const TUI_THEME_NAMES = ["dark", "light", "amber", "contrast"] as const;
+const TUI_SELECTION_STYLE_NAMES = ["solid", "transparent"] as const;
 
 function normalizeTheme(value: string | undefined): string | undefined {
   if (!value) {
@@ -54,6 +56,14 @@ function normalizeTheme(value: string | undefined): string | undefined {
   }
 
   return (TUI_THEME_NAMES as readonly string[]).includes(value) ? value : undefined;
+}
+
+function normalizeSelectionStyle(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  return (TUI_SELECTION_STYLE_NAMES as readonly string[]).includes(value) ? value : undefined;
 }
 
 export class RuntimeConfigStore {
@@ -109,6 +119,7 @@ export class RuntimeConfigStore {
       host: typeof parsed.host === "string" && parsed.host.length > 0 ? parsed.host : undefined,
       autoStart: typeof parsed.autoStart === "boolean" ? parsed.autoStart : undefined,
       theme: normalizeTheme(parsed.theme),
+      selectionStyle: normalizeSelectionStyle(parsed.selectionStyle),
       updatedAt: parsed.updatedAt ?? defaultConfig.updatedAt,
     };
   }
@@ -121,6 +132,7 @@ export class RuntimeConfigStore {
       host: input.host !== undefined ? input.host : current.host,
       autoStart: input.autoStart !== undefined ? input.autoStart : current.autoStart,
       theme: input.theme !== undefined ? (normalizeTheme(input.theme) ?? current.theme) : current.theme,
+      selectionStyle: input.selectionStyle !== undefined ? (normalizeSelectionStyle(input.selectionStyle) ?? current.selectionStyle) : current.selectionStyle,
       updatedAt: nowIso(),
     };
 
@@ -150,14 +162,15 @@ export class RuntimeConfigStore {
     return this.writeConfig(input);
   }
 
-  async getTuiPreferences(): Promise<{ theme: string | undefined }> {
+  async getTuiPreferences(): Promise<{ theme: string | undefined; selectionStyle: string | undefined }> {
     const config = await this.readConfig();
     return {
       theme: config.theme,
+      selectionStyle: config.selectionStyle,
     };
   }
 
-  async setTuiPreferences(input: { theme?: string }): Promise<RuntimeConfig> {
+  async setTuiPreferences(input: { theme?: string; selectionStyle?: string }): Promise<RuntimeConfig> {
     return this.writeConfig(input);
   }
 
