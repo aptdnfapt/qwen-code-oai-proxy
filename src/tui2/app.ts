@@ -1,12 +1,12 @@
-import chalk from "chalk";
 import { type Component, type Focusable, type TUI, Key, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
 import type { LogLevel, ScreenId, TuiAction, TuiState } from "./types.js";
 import { NAV_ITEMS } from "./types.js";
 import {
+  border,
   buttonHitAt,
-  caption, formatDuration, hRule, muted, padRight,
+  caption, formatDuration, hRule, highlight, muted, padRight,
   layoutLabeledButtonGrid,
-  success, truncLine, warning, SIDEBAR_W, SIDEBAR_W_COLLAPSED,
+  strong, success, truncLine, value, warning, SIDEBAR_W, SIDEBAR_W_COLLAPSED,
 } from "./render.js";
 import { disableMouse, enableMouse, parseMouse } from "./mouse.js";
 import { AuthOverlay } from "./auth-overlay.js";
@@ -26,6 +26,7 @@ import {
   SETTINGS_THEME_ROW,
 } from "./screens/settings.js";
 import { renderHelpScreen } from "./screens/help.js";
+import { setActiveTheme, THEME_ORDER } from "./theme.js";
 
 export type AppCallbacks = {
   dispatch: (action: TuiAction) => void;
@@ -67,6 +68,7 @@ export class AppView implements Component, Focusable {
     this.tui = tui;
     this.state = initialState;
     this.cb = cb;
+    setActiveTheme(initialState.themeName);
   }
 
   invalidate(): void {}
@@ -77,6 +79,7 @@ export class AppView implements Component, Focusable {
     const wasDeleteOpen = this.state.accounts.deleteModal.isOpen;
     const isDeleteOpen = state.accounts.deleteModal.isOpen;
     this.state = state;
+    setActiveTheme(state.themeName);
 
     if (isAuthOpen && !wasAuthOpen) {
       this.openAuthOverlay();
@@ -644,8 +647,12 @@ export class AppView implements Component, Focusable {
 
     const appearanceGrid = layoutLabeledButtonGrid([
       { label: "Theme", items: [
-        { id: "dark", label: "dark", selected: this.state.themeName === "dark", tone: "accent" },
-        { id: "light", label: "light", selected: this.state.themeName === "light", tone: "accent" },
+        ...THEME_ORDER.map((theme) => ({
+          id: theme,
+          label: theme,
+          selected: this.state.themeName === theme,
+          tone: (this.state.themeName === theme ? "accent" : "neutral") as "accent" | "neutral",
+        })),
       ] },
       { label: "Sidebar", items: [
         { id: "expanded", label: "expanded", selected: this.state.sidebarMode === "expanded", tone: "accent" },
@@ -768,7 +775,7 @@ export class AppView implements Component, Focusable {
     const lines: string[] = [];
 
     const title = collapsed ? "QP" : "qwen-proxy";
-    lines.push(truncLine(chalk.bold(title), sbW));
+    lines.push(truncLine(strong(title), sbW));
     lines.push(truncLine(hRule(sbW), sbW));
 
     for (let i = 0; i < NAV_ITEMS.length; i++) {
@@ -786,7 +793,7 @@ export class AppView implements Component, Focusable {
       }
 
       const raw = padRight(label, sbW);
-      const styled = isActive ? chalk.cyan(raw) : isHighlighted ? chalk.white(raw) : muted(raw);
+      const styled = isActive ? highlight(raw) : isHighlighted ? value(raw) : muted(raw);
       lines.push(truncLine(styled, sbW));
     }
 
@@ -804,21 +811,21 @@ export class AppView implements Component, Focusable {
     const stateStr =
       runtime.serverState === "running" ? success("▶ " + runtime.serverState) :
       runtime.serverState === "stopped" ? warning("■ " + runtime.serverState) :
-      chalk.cyan("⟳ " + runtime.serverState);
+      highlight("⟳ " + runtime.serverState);
     const authStr = runtime.status === "ready" ? success("auth:ok") : warning("auth:none");
-    const mouseStr = this.mouseEnabled ? chalk.cyan("mouse:on") : muted("mouse:off");
+    const mouseStr = this.mouseEnabled ? highlight("mouse:on") : muted("mouse:off");
     const line = `${stateStr}  ${runtime.host}:${String(runtime.port)}  up ${formatDuration(runtime.uptimeMs)}  ${runtime.rotationMode}  ${String(runtime.accountCount)} acc  req ${String(runtime.requestCount)}  streams ${String(runtime.streamCount)}  ${authStr}  ${mouseStr}`;
     return truncLine(line, mainW);
   }
 
   private renderFooter(mainW: number): string {
-    const focusStr = this.state.focusRegion === "sidebar" ? chalk.cyan("sidebar") : chalk.cyan("main");
+    const focusStr = this.state.focusRegion === "sidebar" ? highlight("sidebar") : highlight("main");
     const base = caption(`Tab focus(${focusStr})  click select  wheel scroll  [ sidebar  t theme  m mouse  q quit  ? help`);
     let filterHint = "";
-    if (this.inputMode === "usage-filter") filterHint = chalk.yellow("  [USAGE FILTER] type, Enter/Esc done");
-    else if (this.inputMode === "artifact-filter") filterHint = chalk.yellow("  [ARTIFACT SEARCH] type, Enter/Esc done");
-    else if (this.inputMode === "port") filterHint = chalk.yellow("  [PORT] type number, Enter save, Esc cancel");
-    else if (this.inputMode === "host") filterHint = chalk.yellow("  [HOST] type hostname, Enter save, Esc cancel");
+    if (this.inputMode === "usage-filter") filterHint = warning("  [USAGE FILTER] type, Enter/Esc done");
+    else if (this.inputMode === "artifact-filter") filterHint = warning("  [ARTIFACT SEARCH] type, Enter/Esc done");
+    else if (this.inputMode === "port") filterHint = warning("  [PORT] type number, Enter save, Esc cancel");
+    else if (this.inputMode === "host") filterHint = warning("  [HOST] type hostname, Enter save, Esc cancel");
     return truncLine(base + filterHint, mainW);
   }
 
@@ -869,15 +876,15 @@ export class AppView implements Component, Focusable {
     screenLines = screenLines.slice(0, contentRows);
 
     const allLines: string[] = [];
-    allLines.push(padRight(sidebarLines[0] ?? "", sbW) + chalk.dim("│") + padRight(header, mainW));
+    allLines.push(padRight(sidebarLines[0] ?? "", sbW) + border("│") + padRight(header, mainW));
 
     for (let i = 1; i < contentRows + 1; i++) {
       const sLine = padRight(sidebarLines[i] ?? "", sbW);
       const mLine = padRight(screenLines[i - 1] ?? "", mainW);
-      allLines.push(sLine + chalk.dim("│") + mLine);
+      allLines.push(sLine + border("│") + mLine);
     }
 
-    allLines.push(padRight(sidebarLines[contentRows + 1] ?? "", sbW) + chalk.dim("│") + padRight(footer, mainW));
+    allLines.push(padRight(sidebarLines[contentRows + 1] ?? "", sbW) + border("│") + padRight(footer, mainW));
 
     return allLines.map((l) => padRight(truncateToWidth(l, width, ""), width));
   }

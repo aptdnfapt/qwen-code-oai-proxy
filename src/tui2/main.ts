@@ -1,13 +1,15 @@
 import { exit } from "process";
 import { createRequire } from "module";
-import chalk from "chalk";
 import { ProcessTerminal, TUI } from "@mariozechner/pi-tui";
+import { RuntimeConfigStore } from "../core/config/runtime-config-store.js";
 import { createInitialState, reduceTuiState } from "./state.js";
+import { danger, highlight, value, warning } from "./render.js";
 import { createRuntimeMonitor } from "./runtime.js";
 import type { ArtifactNode, LogLevel, TuiAction, TuiState } from "./types.js";
 import { AppView } from "./app.js";
 import { enableMouse, disableMouse } from "./mouse.js";
 import { enableConsoleRedirect, disableConsoleRedirect } from "./console-redirect.js";
+import { isThemeName } from "./theme.js";
 import { getViewportRows } from "./viewport.js";
 
 const require = createRequire(import.meta.url);
@@ -37,7 +39,16 @@ function renderQrText(text: string): Promise<string> {
   });
 }
 
-let currentState: TuiState = createInitialState();
+const runtimeConfigStore = new RuntimeConfigStore();
+const initialConfig = await runtimeConfigStore.readConfig().catch(() => null);
+let currentState: TuiState = createInitialState(Date.now(), {
+  themeName: isThemeName(initialConfig?.theme) ? initialConfig.theme : undefined,
+  serverConfig: {
+    port: initialConfig?.port,
+    host: initialConfig?.host,
+    autoStart: initialConfig?.autoStart,
+  },
+});
 const runtimeMonitor = createRuntimeMonitor(currentState.bootMs);
 
 class AppTerminal extends ProcessTerminal {
@@ -73,9 +84,17 @@ function handleRedirectedConsoleLog(level: "info" | "warn" | "error" | "debug", 
 }
 
 function appendClassicLog(level: "info" | "warn" | "error" | "debug", symbol: string, label: string, detail: string): void {
-  const icon = level === "error" ? chalk.red(symbol) : level === "warn" ? chalk.yellow(symbol) : chalk.cyan(symbol);
-  const formatted = `${icon} ${chalk.white(label)} | ${detail}`;
+  const icon = level === "error" ? danger(symbol) : level === "warn" ? warning(symbol) : highlight(symbol);
+  const formatted = `${icon} ${value(label)} | ${detail}`;
   appendLog(level, `${label} | ${stripAnsi(detail)}`, formatted);
+}
+
+async function persistThemePreference(themeName: TuiState["themeName"]): Promise<void> {
+  try {
+    await runtimeConfigStore.setTuiPreferences({ theme: themeName });
+  } catch (e: any) {
+    appendClassicLog("error", "✗", "Theme", `save failed: ${String(e?.message ?? e)}`);
+  }
 }
 
 function classifyLogLine(message: string): "info" | "warn" | "error" | "debug" {
@@ -104,6 +123,10 @@ function dispatch(action: TuiAction): void {
   currentState = reduceTuiState(currentState, action);
   appView?.setState(currentState);
   tui.requestRender(true);
+
+  if (action.type === "set-theme" || action.type === "cycle-theme") {
+    void persistThemePreference(currentState.themeName);
+  }
 }
 
 async function stopApp(): Promise<void> {
@@ -259,16 +282,17 @@ async function handleStartAccountAuth(): Promise<void> {
 
 async function loadServerConfig(): Promise<void> {
   try {
-    const fileLogger = require("../utils/fileLogger.js") as { getRuntimeStatus: () => Promise<{ currentLogLevel?: string }> };
-    const { RuntimeConfigStore } = require("../core/config/runtime-config-store.js") as typeof import("../core/config/runtime-config-store.js");
-    const store = new RuntimeConfigStore();
-    const sc = await store.getServerConfig();
+    const sc = await runtimeConfigStore.getServerConfig();
+    const ui = await runtimeConfigStore.getTuiPreferences();
     dispatch({
       type: "set-server-config",
       port: sc.port ?? 8080,
       host: sc.host ?? "localhost",
       autoStart: sc.autoStart,
     });
+    if (isThemeName(ui.theme) && currentState.themeName !== ui.theme) {
+      dispatch({ type: "set-theme", theme: ui.theme });
+    }
   } catch (e: any) {
     appendClassicLog("warn", "■", "Config", `load failed: ${String(e?.message ?? e)}`);
   }
@@ -277,9 +301,7 @@ async function loadServerConfig(): Promise<void> {
 async function handleServerConfigChange(port: number, host: string, autoStart: boolean): Promise<void> {
   dispatch({ type: "set-server-config", port, host, autoStart });
   try {
-    const { RuntimeConfigStore } = require("../core/config/runtime-config-store.js") as typeof import("../core/config/runtime-config-store.js");
-    const store = new RuntimeConfigStore();
-    await store.setServerConfig({ port, host, autoStart });
+    await runtimeConfigStore.setServerConfig({ port, host, autoStart });
     appendClassicLog("info", "✓", "Config", `saved port=${port} host=${host} autoStart=${autoStart}`);
   } catch (e: any) {
     appendClassicLog("error", "✗", "Config", `save failed: ${String(e?.message ?? e)}`);

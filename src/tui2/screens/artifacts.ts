@@ -1,6 +1,5 @@
-import chalk from "chalk";
 import type { ArtifactNode, TuiState } from "../types.js";
-import { caption, hRule, muted, padRight, sectionHeader, truncLine } from "../render.js";
+import { border, caption, hRule, highlight, muted, padRight, sectionHeader, selected, strong, truncLine } from "../render.js";
 
 export const ARTIFACT_BODY_START_ROW = 6;
 
@@ -124,17 +123,17 @@ function findArtifactNodeByPath(nodes: readonly ArtifactNode[], path: string | n
   return null;
 }
 
-function renderTreeRow(row: VisibleArtifactRow, selected: boolean, width: number): string {
+function renderTreeRow(row: VisibleArtifactRow, isSelected: boolean, width: number): string {
   const indent = "  ".repeat(row.depth);
   const icon = row.type === "directory" ? (row.expanded ? "▼" : "▶") : "•";
   const sizeStr = row.type === "file" && row.size !== undefined ? muted(` ${formatSize(row.size)}`) : "";
-  const base = `${indent}${muted(icon)} ${row.type === "directory" ? chalk.bold(row.name) : row.name}${sizeStr}`;
+  const base = `${indent}${muted(icon)} ${row.type === "directory" ? strong(row.name) : row.name}${sizeStr}`;
 
-  if (!selected) {
+  if (!isSelected) {
     return truncLine(padRight(base, width), width);
   }
 
-  return truncLine(chalk.bgCyan.black(padRight(base, width)), width);
+  return truncLine(selected(padRight(base, width)), width);
 }
 
 function previewLinesForSelection(selectedNode: ArtifactNode | null, previewContent: string | null, previewWidth: number): readonly string[] {
@@ -212,11 +211,11 @@ export function renderArtifactsScreen(state: TuiState, termRows: number, width: 
 
   lines.push(truncLine(caption(status), width));
 
-  const top = `┌${"─".repeat(treeWidth)}┬${"─".repeat(previewWidth)}┐`;
+  const top = border(`┌${"─".repeat(treeWidth)}┬${"─".repeat(previewWidth)}┐`);
   const header =
-    `│${padRight(truncLine(activePane === "tree" ? chalk.cyan("Files") : chalk.bold("Files"), treeWidth), treeWidth)}│` +
-    `${padRight(truncLine(activePane === "preview" ? chalk.cyan("Preview") : chalk.bold("Preview"), previewWidth), previewWidth)}│`;
-  const divider = `├${"─".repeat(treeWidth)}┼${"─".repeat(previewWidth)}┤`;
+    `${border("│")}${padRight(truncLine(activePane === "tree" ? highlight("Files") : strong("Files"), treeWidth), treeWidth)}${border("│")}` +
+    `${padRight(truncLine(activePane === "preview" ? highlight("Preview") : strong("Preview"), previewWidth), previewWidth)}${border("│")}`;
+  const divider = border(`├${"─".repeat(treeWidth)}┼${"─".repeat(previewWidth)}┤`);
 
   lines.push(truncLine(top, width));
   lines.push(truncLine(header, width));
@@ -228,13 +227,13 @@ export function renderArtifactsScreen(state: TuiState, termRows: number, width: 
     const right = previewAllLines[previewTop + index] ?? "";
     lines.push(
       truncLine(
-        `│${padRight(left, treeWidth)}│${padRight(right, previewWidth)}│`,
+        `${border("│")}${padRight(left, treeWidth)}${border("│")}${padRight(right, previewWidth)}${border("│")}`,
         width,
       ),
     );
   }
 
-  lines.push(truncLine(`└${"─".repeat(treeWidth)}┴${"─".repeat(previewWidth)}┘`, width));
+  lines.push(truncLine(border(`└${"─".repeat(treeWidth)}┴${"─".repeat(previewWidth)}┘`), width));
   lines.push(truncLine(caption(`  ↑↓ move  ←→ pane  PgUp/PgDn preview  / search  Esc clear  ${String(previewTop + 1)}-${String(previewEnd)}/${String(previewAllLines.length || 1)}`), width));
 
   return lines;

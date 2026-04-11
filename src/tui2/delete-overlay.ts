@@ -1,7 +1,6 @@
-import chalk from "chalk";
 import { type Component, type Focusable, Key, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
 import { parseMouse } from "./mouse.js";
-import { buttonHitAt, danger, hRule, layoutLabeledButtonGrid, muted, padRight, type ButtonHit, truncLine } from "./render.js";
+import { border, buttonHitAt, danger, hRule, layoutLabeledButtonGrid, muted, padRight, strong, type ButtonHit, truncLine, value } from "./render.js";
 import { getViewportRows } from "./viewport.js";
 
 export class DeleteConfirmOverlay implements Component, Focusable {
@@ -65,9 +64,9 @@ export class DeleteConfirmOverlay implements Component, Focusable {
     const innerW = width - 4;
 
     const borderH = "─".repeat(innerW + 2);
-    const top = chalk.dim("┌" + borderH + "┐");
-    const bot = chalk.dim("└" + borderH + "┘");
-    const side = chalk.dim("│");
+    const top = border("┌" + borderH + "┐");
+    const bot = border("└" + borderH + "┘");
+    const side = border("│");
 
     function row(content: string): string {
       return side + " " + truncateToWidth(padRight(content, innerW), innerW, "") + " " + side;
@@ -78,11 +77,11 @@ export class DeleteConfirmOverlay implements Component, Focusable {
     this.lastButtonHits = Object.freeze([]);
 
     lines.push(top);
-    lines.push(row(chalk.bold.red("Delete Account")));
+    lines.push(row(danger(strong("Delete Account"))));
     lines.push(row(hRule(innerW)));
     lines.push(row(danger("This will permanently remove the account credentials.")));
     lines.push(row(""));
-    lines.push(row(muted("Account: ") + chalk.white(this.accountId)));
+    lines.push(row(muted("Account: ") + value(this.accountId)));
     lines.push(row(""));
     lines.push(row(hRule(innerW)));
 

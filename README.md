@@ -4,6 +4,8 @@ Works with opencode, crush, claude code router, roo code, cline and anything tha
 
 > **New** — Minimal terminal UI with full mouse support — lightweight, low resource usage. 
 >
+> **New** — TUI themes: **dark**, **light**, **amber**, **contrast**. Change from **Settings** or press **t**. Theme saves to `~/.local/share/qwen-proxy/config.json`.
+>
 > **New** — `coder-model` now points to **Qwen 3.6 Plus** (Qwen team updated the alias). `qwen3.5-plus` requires Coding Plan subscription and won't work with OAuth accounts.
 
 [Discord](https://discord.gg/6S7HwCxbMy)

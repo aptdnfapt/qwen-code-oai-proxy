@@ -1,7 +1,7 @@
-import chalk from "chalk";
 import type { ButtonGridRow, ButtonTone } from "../render.js";
 import type { IconMode, LogLevel, SidebarMode, ThemeName, TuiState } from "../types.js";
-import { caption, danger, hRule, layoutLabeledButtonGrid, muted, sectionHeader, success, truncLine, warning } from "../render.js";
+import { caption, hRule, layoutLabeledButtonGrid, muted, sectionHeader, strong, truncLine, value, warning } from "../render.js";
+import { THEME_ORDER } from "../theme.js";
 
 export const SETTINGS_THEME_ROW = 4;
 export const SETTINGS_SIDEBAR_ROW = 5;
@@ -12,7 +12,7 @@ export const SETTINGS_PORT_ROW = 15;
 export const SETTINGS_HOST_ROW = 16;
 
 function appearanceRows(state: TuiState): readonly ButtonGridRow<string>[] {
-  const themes: ThemeName[] = ["dark", "light"];
+  const themes: readonly ThemeName[] = THEME_ORDER;
   const sidebarModes: SidebarMode[] = ["expanded", "collapsed"];
   const iconModes: IconMode[] = ["nerd", "fallback"];
 
@@ -48,17 +48,17 @@ export function renderSettingsScreen(state: TuiState, width: number, editingFiel
 
   lines.push(sectionHeader("Settings", width));
   lines.push(hRule(width));
-  lines.push(truncLine(chalk.bold("Appearance"), width));
+  lines.push(truncLine(strong("Appearance"), width));
   lines.push(hRule(width));
   lines.push(...layoutLabeledButtonGrid(appearanceRows(state), 18).lines.map((line) => truncLine(`  ${line}`, width)));
 
   lines.push(hRule(width));
-  lines.push(truncLine(chalk.bold("Runtime defaults"), width));
+  lines.push(truncLine(strong("Runtime defaults"), width));
   lines.push(hRule(width));
   lines.push(...layoutLabeledButtonGrid(runtimeRows(state), 18).lines.map((line) => truncLine(`  ${line}`, width)));
 
   lines.push(hRule(width));
-  lines.push(truncLine(chalk.bold("Server"), width));
+  lines.push(truncLine(strong("Server"), width));
   lines.push(hRule(width));
 
   const autoStartGrid = layoutLabeledButtonGrid([
@@ -69,8 +69,8 @@ export function renderSettingsScreen(state: TuiState, width: number, editingFiel
   ], 14);
   lines.push(...autoStartGrid.lines.map((line) => truncLine(`  ${line}`, width)));
 
-  const portValue = editingField === "port" ? chalk.yellow(editBuffer + "▌") : chalk.white(String(sc.port));
-  const hostValue = editingField === "host" ? chalk.yellow(editBuffer + "▌") : chalk.white(sc.host);
+  const portValue = editingField === "port" ? warning(editBuffer + "▌") : value(String(sc.port));
+  const hostValue = editingField === "host" ? warning(editBuffer + "▌") : value(sc.host);
   const portHint = editingField === "port" ? warning(" (editing — Enter save, Esc cancel)") : muted("  [P] edit");
   const hostHint = editingField === "host" ? warning(" (editing — Enter save, Esc cancel)") : muted("  [H] edit");
 
@@ -78,12 +78,13 @@ export function renderSettingsScreen(state: TuiState, width: number, editingFiel
   lines.push(truncLine(caption("  Host    ") + hostValue + hostHint, width));
 
   lines.push(hRule(width));
-  lines.push(truncLine(chalk.bold("Storage paths"), width));
+  lines.push(truncLine(strong("Storage paths"), width));
   lines.push(hRule(width));
   lines.push(truncLine(caption("  Config   ") + muted("~/.local/share/qwen-proxy/config.json"), width));
   lines.push(truncLine(caption("  Logs     ") + muted("~/.local/share/qwen-proxy/log/"), width));
   lines.push(truncLine(caption("  Usage DB ") + muted("~/.local/share/qwen-proxy/usage.db"), width));
   lines.push(truncLine(caption("  Accounts ") + muted("~/.qwen/oauth_creds_<id>.json"), width));
+  lines.push(truncLine(caption("  Theme    ") + muted("saved here automatically"), width));
 
   lines.push(hRule(width));
   lines.push(truncLine(caption("  click a row  t theme  i icons  1-4 log level  P port  H host"), width));

@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { getThemePalette } from "./theme.js";
 
 export const SIDEBAR_W = 20;
 export const SIDEBAR_W_COLLAPSED = 6;
@@ -54,68 +55,82 @@ export function truncLine(s: string, width: number): string {
 }
 
 export function hRule(width: number): string {
-  return chalk.dim("─".repeat(Math.max(0, width)));
+  return getThemePalette().border("─".repeat(Math.max(0, width)));
 }
 
 export function vDivider(): string {
-  return chalk.dim("│");
+  return getThemePalette().border("│");
 }
 
 export function sectionHeader(label: string, width: number): string {
-  return truncLine(chalk.bold(label), width);
+  return truncLine(strong(label), width);
 }
 
 export function caption(s: string): string {
-  return chalk.dim(s);
+  return muted(s);
 }
 
 export function highlight(s: string): string {
-  return chalk.cyan(s);
+  return getThemePalette().accent(s);
 }
 
 export function success(s: string): string {
-  return chalk.green(s);
+  return getThemePalette().success(s);
 }
 
 export function warning(s: string): string {
-  return chalk.yellow(s);
+  return getThemePalette().warning(s);
 }
 
 export function danger(s: string): string {
-  return chalk.red(s);
+  return getThemePalette().danger(s);
 }
 
 export function muted(s: string): string {
-  return chalk.dim(s);
+  return getThemePalette().muted(s);
+}
+
+export function value(s: string): string {
+  return getThemePalette().text(s);
+}
+
+export function strong(s: string): string {
+  return getThemePalette().heading(chalk.bold(s));
+}
+
+export function border(s: string): string {
+  return getThemePalette().border(s);
 }
 
 export function selected(s: string): string {
-  return chalk.inverse(s);
+  return getThemePalette().inverse(s);
 }
 
-function toneColor(tone: ButtonTone): typeof chalk.cyan {
+function toneColor(tone: ButtonTone): (text: string) => string {
+  const palette = getThemePalette();
   switch (tone) {
     case "danger":
-      return chalk.red;
+      return palette.danger;
     case "success":
-      return chalk.green;
+      return palette.success;
     case "neutral":
-      return chalk.white;
+      return palette.neutral;
     default:
-      return chalk.cyan;
+      return palette.accent;
   }
 }
 
-function toneFill(tone: ButtonTone): typeof chalk.bgCyan {
+function toneFill(tone: ButtonTone): (text: string) => string {
+  const palette = getThemePalette();
   switch (tone) {
     case "danger":
-      return chalk.bgRed;
+      return palette.dangerFill;
     case "success":
-      return chalk.bgGreen;
+      return palette.successFill;
     case "neutral":
-      return chalk.bgWhite;
+      return palette.neutralFill;
     default:
-      return chalk.bgCyan;
+      return palette.accentFill;
   }
 }
 
@@ -133,14 +148,14 @@ function renderButton<T extends string>(item: ButtonRowItem<T>): string {
   const content = centerText(item.label, Math.max(visibleWidth(item.label) + 2, 6));
 
   if (item.disabled) {
-    return chalk.dim("│") + muted(content) + chalk.dim("│");
+    return border("│") + muted(content) + border("│");
   }
 
   if (item.selected) {
-    return chalk.dim("│") + fill.black(content) + chalk.dim("│");
+    return border("│") + fill(content) + border("│");
   }
 
-  return chalk.dim("│") + toneColor(tone)(content) + chalk.dim("│");
+  return border("│") + toneColor(tone)(content) + border("│");
 }
 
 function renderButtonCell<T extends string>(item: ButtonRowItem<T>, width: number): string {
@@ -152,7 +167,7 @@ function renderButtonCell<T extends string>(item: ButtonRowItem<T>, width: numbe
   }
 
   if (item.selected) {
-    return toneFill(tone).black(content);
+    return toneFill(tone)(content);
   }
 
   return toneColor(tone)(content);
@@ -167,7 +182,7 @@ function renderButtonChip<T extends string>(item: ButtonRowItem<T>): string {
   }
 
   if (item.selected) {
-    return toneFill(tone).black(content);
+    return toneFill(tone)(content);
   }
 
   return toneColor(tone)(content);
@@ -202,10 +217,10 @@ export function layoutButtonRow<T extends string>(items: readonly ButtonRowItem<
 
 export function layoutButtonGroup<T extends string>(items: readonly ButtonRowItem<T>[]): ButtonGroupLayout<T> {
   const widths = items.map((item) => Math.max(visibleWidth(item.label) + 2, 6));
-  const top = chalk.dim("┌") + widths.map((width) => "─".repeat(width)).join(chalk.dim("┬")) + chalk.dim("┐");
-  const bottom = chalk.dim("└") + widths.map((width) => "─".repeat(width)).join(chalk.dim("┴")) + chalk.dim("┘");
+  const top = border("┌") + widths.map((width) => "─".repeat(width)).join(border("┬")) + border("┐");
+  const bottom = border("└") + widths.map((width) => "─".repeat(width)).join(border("┴")) + border("┘");
 
-  const parts: string[] = [chalk.dim("│")];
+  const parts: string[] = [border("│")];
   const hits: ButtonHit<T>[] = [];
   let offset = 1;
 
@@ -219,7 +234,7 @@ export function layoutButtonGroup<T extends string>(items: readonly ButtonRowIte
     if (item.disabled) {
       cell = muted(content);
     } else if (item.selected) {
-      cell = toneFill(tone).black(content);
+      cell = toneFill(tone)(content);
     } else {
       cell = toneColor(tone)(content);
     }
@@ -233,12 +248,12 @@ export function layoutButtonGroup<T extends string>(items: readonly ButtonRowIte
     offset += width;
 
     if (index < items.length - 1) {
-      parts.push(chalk.dim("│"));
+      parts.push(border("│"));
       offset += 1;
     }
   }
 
-  parts.push(chalk.dim("│"));
+  parts.push(border("│"));
 
   return Object.freeze({
     lines: Object.freeze([top, parts.join(""), bottom]) as [string, string, string],
@@ -254,19 +269,19 @@ export function layoutLabeledButtonGroup<T extends string>(
   const labelWidth = Math.max(minLabelWidth, visibleWidth(label) + 2);
   const widths = items.map((item) => Math.max(visibleWidth(item.label) + 2, 6));
   const top =
-    chalk.dim("┌") +
+    border("┌") +
     "─".repeat(labelWidth) +
-    chalk.dim("┬") +
-    widths.map((width) => "─".repeat(width)).join(chalk.dim("┬")) +
-    chalk.dim("┐");
+    border("┬") +
+    widths.map((width) => "─".repeat(width)).join(border("┬")) +
+    border("┐");
   const bottom =
-    chalk.dim("└") +
+    border("└") +
     "─".repeat(labelWidth) +
-    chalk.dim("┴") +
-    widths.map((width) => "─".repeat(width)).join(chalk.dim("┴")) +
-    chalk.dim("┘");
+    border("┴") +
+    widths.map((width) => "─".repeat(width)).join(border("┴")) +
+    border("┘");
 
-  const parts: string[] = [chalk.dim("│"), centerText(label, labelWidth), chalk.dim("│")];
+  const parts: string[] = [border("│"), centerText(label, labelWidth), border("│")];
   const hits: ButtonHit<T>[] = [];
   let offset = labelWidth + 2;
 
@@ -280,7 +295,7 @@ export function layoutLabeledButtonGroup<T extends string>(
     if (item.disabled) {
       cell = muted(content);
     } else if (item.selected) {
-      cell = toneFill(tone).black(content);
+      cell = toneFill(tone)(content);
     } else {
       cell = toneColor(tone)(content);
     }
@@ -294,12 +309,12 @@ export function layoutLabeledButtonGroup<T extends string>(
     offset += width;
 
     if (index < items.length - 1) {
-      parts.push(chalk.dim("│"));
+      parts.push(border("│"));
       offset += 1;
     }
   }
 
-  parts.push(chalk.dim("│"));
+  parts.push(border("│"));
 
   return Object.freeze({
     lines: Object.freeze([top, parts.join(""), bottom]) as [string, string, string],

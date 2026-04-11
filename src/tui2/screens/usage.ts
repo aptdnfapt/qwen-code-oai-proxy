@@ -1,8 +1,7 @@
-import chalk from "chalk";
 import type { TuiState, UsageDay } from "../types.js";
 import {
   caption, formatPercent, formatTokens, hRule, muted,
-  padRight, sectionHeader, truncLine,
+  padRight, sectionHeader, selected, strong, truncLine, value,
 } from "../render.js";
 
 function formatRequests(day: Pick<UsageDay, "requests" | "requestsKnown" | "requestFloor">): string {
@@ -30,10 +29,10 @@ export function renderUsageScreen(state: TuiState, width: number): string[] {
   if (today) {
     lines.push(truncLine(
       caption("  today  ") +
-      `req ${chalk.white(formatRequests(today))}  ` +
-      `in ${chalk.white(formatTokens(today.inputTokens))}  ` +
-      `out ${chalk.white(formatTokens(today.outputTokens))}  ` +
-      `cache-hit ${chalk.white(formatPercent(today.cacheHitRate))}`,
+      `req ${value(formatRequests(today))}  ` +
+      `in ${value(formatTokens(today.inputTokens))}  ` +
+      `out ${value(formatTokens(today.outputTokens))}  ` +
+      `cache-hit ${value(formatPercent(today.cacheHitRate))}`,
       width,
     ));
   } else {
@@ -44,14 +43,14 @@ export function renderUsageScreen(state: TuiState, width: number): string[] {
   const totalWebSearchResults = days.reduce((a, d) => a + d.webSearchResults, 0);
   lines.push(truncLine(
     caption("  web-search  ") +
-    `searches ${chalk.white(String(totalWebSearchRequests))}  ` +
-    `results ${chalk.white(String(totalWebSearchResults))}`,
+    `searches ${value(String(totalWebSearchRequests))}  ` +
+    `results ${value(String(totalWebSearchResults))}`,
     width,
   ));
   lines.push(hRule(width));
 
   const filterLabel = filterQuery
-    ? caption(`  filter: `) + chalk.white(filterQuery) + caption("  (Esc clear)")
+    ? caption(`  filter: `) + value(filterQuery) + caption("  (Esc clear)")
     : caption("  / to filter");
   lines.push(truncLine(filterLabel, width));
   lines.push(hRule(width));
@@ -65,14 +64,14 @@ export function renderUsageScreen(state: TuiState, width: number): string[] {
 
   const cDate = 12, cReq = 6, cIn = 8, cOut = 8, cRead = 8, cWrite = 8, cType = 10, cHit = 7;
   const header =
-    padRight(chalk.bold("Date"), cDate) +
-    padRight(chalk.bold("Req"), cReq) +
-    padRight(chalk.bold("In"), cIn) +
-    padRight(chalk.bold("Out"), cOut) +
-    padRight(chalk.bold("CacheRd"), cRead) +
-    padRight(chalk.bold("CacheWr"), cWrite) +
-    padRight(chalk.bold("Type"), cType) +
-    chalk.bold("Hit%");
+    padRight(strong("Date"), cDate) +
+    padRight(strong("Req"), cReq) +
+    padRight(strong("In"), cIn) +
+    padRight(strong("Out"), cOut) +
+    padRight(strong("CacheRd"), cRead) +
+    padRight(strong("CacheWr"), cWrite) +
+    padRight(strong("Type"), cType) +
+    strong("Hit%");
   lines.push(truncLine("  " + header, width));
   lines.push(hRule(width));
 
@@ -88,7 +87,7 @@ export function renderUsageScreen(state: TuiState, width: number): string[] {
       padRight(muted(day.cacheTypeLabel), cType) +
       muted(formatPercent(day.cacheHitRate));
 
-    lines.push(truncLine(isSelected ? chalk.inverse(padRight("  " + row, width)) : "  " + row, width));
+    lines.push(truncLine(isSelected ? selected(padRight("  " + row, width)) : "  " + row, width));
   }
 
   lines.push(hRule(width));

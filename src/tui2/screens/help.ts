@@ -1,8 +1,7 @@
-import chalk from "chalk";
-import { hRule, muted, padRight, sectionHeader, truncLine } from "../render.js";
+import { hRule, muted, padRight, sectionHeader, strong, truncLine, value } from "../render.js";
 
 function kb(key: string, desc: string, keyW: number, width: number): string {
-  return truncLine(padRight(chalk.white(key), keyW) + muted(desc), width);
+  return truncLine(padRight(value(key), keyW) + muted(desc), width);
 }
 
 export function renderHelpScreen(width: number): string[] {
@@ -11,7 +10,7 @@ export function renderHelpScreen(width: number): string[] {
 
   lines.push(sectionHeader("Help", width));
   lines.push(hRule(width));
-  lines.push(truncLine(chalk.bold("Global shortcuts"), width));
+  lines.push(truncLine(strong("Global shortcuts"), width));
   lines.push(hRule(width));
   lines.push(kb("q / Ctrl+C", "quit", kw, width));
   lines.push(kb("Tab / Shift+Tab", "switch focus (sidebar ↔ main)", kw, width));
@@ -23,7 +22,7 @@ export function renderHelpScreen(width: number): string[] {
   lines.push(kb("mouse / wheel", "click buttons, rows, sidebar; wheel scrolls lists", kw, width));
 
   lines.push(hRule(width));
-  lines.push(truncLine(chalk.bold("Live screen"), width));
+  lines.push(truncLine(strong("Live screen"), width));
   lines.push(hRule(width));
   lines.push(kb("S", "start server", kw, width));
   lines.push(kb("X", "stop server", kw, width));
@@ -32,20 +31,20 @@ export function renderHelpScreen(width: number): string[] {
   lines.push(kb("↑ / ↓", "scroll logs", kw, width));
 
   lines.push(hRule(width));
-  lines.push(truncLine(chalk.bold("Accounts screen"), width));
+  lines.push(truncLine(strong("Accounts screen"), width));
   lines.push(hRule(width));
   lines.push(kb("A", "add account (opens popup)", kw, width));
   lines.push(kb("↑ / ↓", "select account", kw, width));
 
    lines.push(hRule(width));
-   lines.push(truncLine(chalk.bold("Artifacts screen"), width));
+   lines.push(truncLine(strong("Artifacts screen"), width));
    lines.push(hRule(width));
    lines.push(kb("/", "filter request folders/files", kw, width));
    lines.push(kb("← / →", "switch tree and preview pane", kw, width));
    lines.push(kb("PgUp / PgDn", "scroll preview content", kw, width));
 
   lines.push(hRule(width));
-  lines.push(truncLine(chalk.bold("Authentication flow"), width));
+  lines.push(truncLine(strong("Authentication flow"), width));
   lines.push(hRule(width));
   lines.push(muted("  1. Go to Accounts → press A"));
   lines.push(muted("  2. Enter account ID → Start auth"));
@@ -53,11 +52,16 @@ export function renderHelpScreen(width: number): string[] {
   lines.push(muted("  4. Approve in browser — done"));
 
   lines.push(hRule(width));
-  lines.push(truncLine(chalk.bold("Important paths"), width));
+  lines.push(truncLine(strong("Important paths"), width));
   lines.push(hRule(width));
   lines.push(truncLine(muted("  Accounts: ") + "~/.qwen/oauth_creds_<id>.json", width));
   lines.push(truncLine(muted("  Logs:     ") + "./log/", width));
   lines.push(truncLine(muted("  Artifacts:") + " ./debug/", width));
+
+  lines.push(hRule(width));
+  lines.push(truncLine(strong("Help"), width));
+  lines.push(hRule(width));
+  lines.push(truncLine(muted("  Ask for help on Discord: ") + value("https://discord.gg/6S7HwCxbMy"), width));
 
   return lines;
 }

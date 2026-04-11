@@ -7,6 +7,7 @@ export interface RuntimeConfig {
   port?: number;
   host?: string;
   autoStart?: boolean;
+  theme?: string;
   updatedAt: string;
 }
 
@@ -43,6 +44,16 @@ function normalizeLogLevel(value: string | undefined, fallback: RuntimeLogLevel)
   }
 
   return fallback;
+}
+
+const TUI_THEME_NAMES = ["dark", "light", "amber", "contrast"] as const;
+
+function normalizeTheme(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  return (TUI_THEME_NAMES as readonly string[]).includes(value) ? value : undefined;
 }
 
 export class RuntimeConfigStore {
@@ -97,6 +108,7 @@ export class RuntimeConfigStore {
       port: typeof parsed.port === "number" && parsed.port > 0 ? parsed.port : undefined,
       host: typeof parsed.host === "string" && parsed.host.length > 0 ? parsed.host : undefined,
       autoStart: typeof parsed.autoStart === "boolean" ? parsed.autoStart : undefined,
+      theme: normalizeTheme(parsed.theme),
       updatedAt: parsed.updatedAt ?? defaultConfig.updatedAt,
     };
   }
@@ -108,6 +120,7 @@ export class RuntimeConfigStore {
       port: input.port !== undefined ? input.port : current.port,
       host: input.host !== undefined ? input.host : current.host,
       autoStart: input.autoStart !== undefined ? input.autoStart : current.autoStart,
+      theme: input.theme !== undefined ? (normalizeTheme(input.theme) ?? current.theme) : current.theme,
       updatedAt: nowIso(),
     };
 
@@ -134,6 +147,17 @@ export class RuntimeConfigStore {
   }
 
   async setServerConfig(input: { port?: number; host?: string; autoStart?: boolean }): Promise<RuntimeConfig> {
+    return this.writeConfig(input);
+  }
+
+  async getTuiPreferences(): Promise<{ theme: string | undefined }> {
+    const config = await this.readConfig();
+    return {
+      theme: config.theme,
+    };
+  }
+
+  async setTuiPreferences(input: { theme?: string }): Promise<RuntimeConfig> {
     return this.writeConfig(input);
   }
 

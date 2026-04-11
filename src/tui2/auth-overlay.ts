@@ -1,15 +1,14 @@
-import chalk from "chalk";
 import { Input, type Component, type Focusable, Key, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
 import type { AccountsAuthModalState } from "./types.js";
 import { parseMouse } from "./mouse.js";
-import { buttonHitAt, danger, hRule, layoutLabeledButtonGrid, muted, padRight, success, type ButtonHit, truncLine, warning } from "./render.js";
+import { border, buttonHitAt, danger, hRule, highlight, layoutLabeledButtonGrid, muted, padRight, strong, success, type ButtonHit, truncLine, value, warning } from "./render.js";
 import { getViewportRows } from "./viewport.js";
 
 function phaseColor(phase: AccountsAuthModalState["phase"]): (s: string) => string {
   if (phase === "success") return success;
   if (phase === "failure") return danger;
   if (phase === "waiting") return warning;
-  return chalk.cyan;
+  return highlight;
 }
 
 function phaseLabel(phase: AccountsAuthModalState["phase"]): string {
@@ -135,9 +134,9 @@ export class AuthOverlay implements Component, Focusable {
     const innerW = width - 4;
 
     const borderH = "─".repeat(innerW + 2);
-    const top = chalk.dim("┌" + borderH + "┐");
-    const bot = chalk.dim("└" + borderH + "┘");
-    const side = chalk.dim("│");
+    const top = border("┌" + borderH + "┐");
+    const bot = border("└" + borderH + "┘");
+    const side = border("│");
     const pad = " ".repeat(innerW);
 
     function row(content: string): string {
@@ -149,13 +148,13 @@ export class AuthOverlay implements Component, Focusable {
     this.lastButtonHits = Object.freeze([]);
 
     lines.push(top);
-    lines.push(row(chalk.bold("Add account")));
+    lines.push(row(strong("Add account")));
     lines.push(row(hRule(innerW)));
     lines.push(row(col(phaseLabel(modal.phase)) + (modal.message && modal.phase !== "idle" ? muted(" — " + modal.message) : "")));
     lines.push(row(pad));
 
     if (busy || modal.phase === "success") {
-      lines.push(row(muted("account: ") + chalk.white(modal.accountId)));
+      lines.push(row(muted("account: ") + value(modal.accountId)));
     } else {
       lines.push(row(muted("account ID: ")));
       const inputLines = this.input.render(innerW);
@@ -170,7 +169,7 @@ export class AuthOverlay implements Component, Focusable {
       lines.push(row(pad));
       lines.push(row(hRule(innerW)));
       lines.push(row(muted("URL: ") + truncateToWidth(modal.flow.verificationUriComplete, innerW - 5)));
-      lines.push(row(muted("code: ") + chalk.white(modal.flow.userCode)));
+      lines.push(row(muted("code: ") + value(modal.flow.userCode)));
       lines.push(row(pad));
       lines.push(row(muted("QR code:")));
       const qrLines = modal.flow.qrText.split("\n").filter((l) => l.length > 0);

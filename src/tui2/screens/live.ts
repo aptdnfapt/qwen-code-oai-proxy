@@ -3,7 +3,7 @@ import type { LogEntry, LogLevel, TuiState } from "../types.js";
 import {
   type ButtonGridRow,
   type ButtonTone,
-  caption, danger, formatDuration, formatTime, hRule,
+  caption, danger, formatDuration, formatTime, hRule, highlight,
   layoutLabeledButtonGrid,
   muted, sectionHeader, success, truncLine, warning,
 } from "../render.js";
@@ -23,7 +23,7 @@ function renderServerStatus(runtime: TuiState["runtime"], width: number): string
   const stateStr =
     runtime.serverState === "running" ? success("RUNNING") :
     runtime.serverState === "stopped" ? warning("STOPPED") :
-    chalk.cyan(runtime.serverState.toUpperCase());
+    highlight(runtime.serverState.toUpperCase());
 
   const authStr = runtime.status === "ready" ? success("auth:ok") : warning("auth:none");
   const line = `${stateStr}  ${runtime.host}:${String(runtime.port)}  up ${formatDuration(runtime.uptimeMs)}  ${String(runtime.accountCount)} acc  ${runtime.rotationMode}  ${authStr}`;

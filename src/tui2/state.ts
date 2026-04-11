@@ -3,13 +3,17 @@ import {
   type AccountsScreenState,
   type ArtifactNode,
   type ArtifactsScreenState,
+  type IconMode,
   type LiveScreenState,
   type RuntimeSummary,
   type ServerConfig,
+  type SidebarMode,
+  type ThemeName,
   type TuiAction,
   type TuiState,
   type UsageScreenState,
 } from "./types.js";
+import { nextThemeName } from "./theme.js";
 import { getViewportSize } from "./viewport.js";
 
 function findNavIndex(screen: TuiState["activeScreen"]): number {
@@ -48,12 +52,19 @@ function initialViewport(): { cols: number; rows: number } {
   return getViewportSize(process.stdout.columns, process.stdout.rows);
 }
 
-function createInitialRuntime(): RuntimeSummary {
+type InitialTuiStateOptions = Readonly<{
+  themeName?: ThemeName;
+  sidebarMode?: SidebarMode;
+  iconMode?: IconMode;
+  serverConfig?: Partial<ServerConfig>;
+}>;
+
+function createInitialRuntime(serverConfig?: Partial<ServerConfig>): RuntimeSummary {
   return Object.freeze({
     serverState: "stopped",
     status: "unauthenticated",
-    host: "localhost",
-    port: 8080,
+    host: serverConfig?.host || "localhost",
+    port: serverConfig?.port ?? 8080,
     uptimeMs: 0,
     rotationMode: "none",
     accountCount: 0,
@@ -113,12 +124,17 @@ function createInitialUsageState(): UsageScreenState {
   });
 }
 
-function createInitialServerConfig(): ServerConfig {
-  return Object.freeze({ port: 8080, host: "localhost", autoStart: false });
+function createInitialServerConfig(initial: Partial<ServerConfig> = {}): ServerConfig {
+  return Object.freeze({
+    port: initial.port ?? 8080,
+    host: initial.host || "localhost",
+    autoStart: initial.autoStart ?? false,
+  });
 }
 
-export function createInitialState(nowMs = Date.now()): TuiState {
+export function createInitialState(nowMs = Date.now(), initial: InitialTuiStateOptions = {}): TuiState {
   const viewport = initialViewport();
+  const serverConfig = createInitialServerConfig(initial.serverConfig);
 
   return Object.freeze({
     nowMs,
@@ -128,16 +144,16 @@ export function createInitialState(nowMs = Date.now()): TuiState {
     activeScreen: "live",
     focusRegion: "sidebar",
     sidebarIndex: 0,
-    sidebarMode: "expanded",
-    themeName: "dark",
-    iconMode: "nerd",
-    runtime: createInitialRuntime(),
+    sidebarMode: initial.sidebarMode ?? "expanded",
+    themeName: initial.themeName ?? "dark",
+    iconMode: initial.iconMode ?? "nerd",
+    runtime: createInitialRuntime(serverConfig),
     shouldQuit: false,
     live: createInitialLiveState(),
     artifacts: createInitialArtifactsState(),
     accounts: createInitialAccountsState(),
     usage: createInitialUsageState(),
-    serverConfig: createInitialServerConfig(),
+    serverConfig,
   });
 }
 
@@ -192,7 +208,7 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
     case "cycle-theme":
       return Object.freeze({
         ...state,
-        themeName: state.themeName === "dark" ? "light" : "dark",
+        themeName: nextThemeName(state.themeName),
       });
     case "set-theme":
       return Object.freeze({

@@ -1,7 +1,7 @@
 export type ScreenId = "live" | "artifacts" | "accounts" | "usage" | "settings" | "help";
 export type FocusRegion = "sidebar" | "main";
 export type SidebarMode = "expanded" | "collapsed";
-export type ThemeName = "dark" | "light";
+export type ThemeName = "dark" | "light" | "amber" | "contrast";
 export type IconMode = "fallback" | "nerd";
 export type RotationMode = "RR" | "single" | "none";
 export type RuntimeStatus = "ready" | "unauthenticated";

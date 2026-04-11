@@ -1,8 +1,7 @@
-import chalk from "chalk";
 import type { AccountInfo, TuiState } from "../types.js";
 import {
   caption, danger, formatExpiry, hRule, layoutLabeledButtonGrid, muted, padRight,
-  sectionHeader, success, truncLine, warning,
+  sectionHeader, selected, strong, success, truncLine, value, warning,
 } from "../render.js";
 
 export const ACCOUNTS_ADD_BUTTON_ROW = 2;
@@ -40,10 +39,10 @@ export function renderAccountsScreen(state: TuiState, width: number): string[] {
   const colReqs = 8;
 
   const header =
-    padRight(chalk.bold("ID"), colId) +
-    padRight(chalk.bold("Status"), colStatus) +
-    padRight(chalk.bold("Expires"), colExpiry) +
-    chalk.bold("Reqs");
+    padRight(strong("ID"), colId) +
+    padRight(strong("Status"), colStatus) +
+    padRight(strong("Expires"), colExpiry) +
+    strong("Reqs");
   lines.push(truncLine("  " + header, width));
   lines.push(hRule(width));
 
@@ -58,7 +57,7 @@ export function renderAccountsScreen(state: TuiState, width: number): string[] {
       muted(String(acc.todayRequests));
 
     const line = isSelected
-      ? chalk.inverse(padRight("  " + row, width))
+      ? selected(padRight("  " + row, width))
       : "  " + row;
     lines.push(truncLine(line, width));
   }
@@ -66,7 +65,7 @@ export function renderAccountsScreen(state: TuiState, width: number): string[] {
   const sel = accounts.find((a) => a.id === selectedId);
   if (sel) {
     lines.push(hRule(width));
-    lines.push(truncLine(caption("  selected: ") + chalk.white(sel.id) + "  " + statusColor(sel.status)(sel.status) + "  expires " + muted(formatExpiry(sel.expiresAt)), width));
+    lines.push(truncLine(caption("  selected: ") + value(sel.id) + "  " + statusColor(sel.status)(sel.status) + "  expires " + muted(formatExpiry(sel.expiresAt)), width));
   }
 
   return lines;
