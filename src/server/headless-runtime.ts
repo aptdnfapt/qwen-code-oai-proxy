@@ -86,6 +86,12 @@ export function createHeadlessAppRuntime(): {
 export function startHeadlessServer(options: { host?: string; port?: number; registerProcessHandlers?: boolean } = {}): Promise<{ server: any; host: string; port: number; stop: (reason?: string) => Promise<void> }> {
   const host = options.host || config.host;
   const port = options.port || config.port;
+
+  // Sync CLI-provided port/host back to config so internal consumers
+  // (e.g. MCP handler's axios call to /v1/web/search) see the actual listening address.
+  if (options.port !== undefined) config.port = port;
+  if (options.host !== undefined) config.host = host;
+
   const registerProcessHandlers = options.registerProcessHandlers !== false;
   const runtime = createHeadlessAppRuntime();
 
