@@ -1,6 +1,6 @@
 {
   "name": "qwen-proxy",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "A proxy server that exposes Qwen models through an OpenAI-compatible API",
   "main": "dist/src/index.js",
   "files": [
