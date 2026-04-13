@@ -723,6 +723,7 @@ export class QwenAPI {
   async executeWithAccountRotation(accountIds: string[], executeAttempt: (accountInfo: AccountInfo) => Promise<any>, onSuccess: (accountId: string, result: any) => Promise<void>): Promise<any> {
     let lastError: any = null;
     const rotationOrder = this.getRotationOrder(accountIds);
+    const maxRetriesPerAccount = 3; // Matches official SDK background retries
 
     for (const accountId of rotationOrder) {
       let candidate: AccountInfo | null;
@@ -737,13 +738,27 @@ export class QwenAPI {
         continue;
       }
 
-      try {
-        const result = await this.executeOperationWithAccount(candidate, executeAttempt);
-        await onSuccess(candidate.accountId, result);
-        return result;
-      } catch (outcome: any) {
-        lastError = outcome.error || outcome;
-        if (outcome.rotate === false) throw lastError;
+      // NEW: Inner loop to retry the SAME account before giving up or rotating
+      for (let attempt = 1; attempt <= maxRetriesPerAccount; attempt++) {
+        try {
+          const result = await this.executeOperationWithAccount(candidate, executeAttempt);
+          await onSuccess(candidate.accountId, result);
+          return result;
+        } catch (outcome: any) {
+          lastError = outcome.error || outcome;
+          
+          // outcome.rotate === true means it's a retryable error (like 429 or 500)
+          if (outcome.rotate !== false && attempt < maxRetriesPerAccount) {
+            const backoffMs = attempt * 2000; // Wait 2s, then 4s...
+            console.log(`\x1b[33m[Attempt ${attempt}/${maxRetriesPerAccount}] Rate limited or network error on ${accountId}. Retrying silently in ${backoffMs}ms...\x1b[0m`);
+            
+            await new Promise((resolve) => setTimeout(resolve, backoffMs));
+            continue; // Try the same account again!
+          }
+
+          if (outcome.rotate === false) throw lastError; // Hard client error (400), don't retry
+          break; // Exhausted retries for this account, break to rotate to the next account
+        }
       }
     }
 
