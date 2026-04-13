@@ -142,6 +142,35 @@ function getErrorDebugDetails(errorOrMessage: any, statusCode: number, loggingSt
   return Object.keys(details).length > 1 ? details : null;
 }
 
+function buildUpstreamErrorArtifact(errorOrMessage: any, timestamp: string): Record<string, unknown> {
+  // Pull the real upstream status (e.g. 429) — never our synthetic 500
+  const upstreamStatus: number | undefined =
+    errorOrMessage?.upstreamErrorDetails?.status ??
+    errorOrMessage?.response?.status;
+
+  const upstreamStatusText: string | undefined =
+    errorOrMessage?.upstreamErrorDetails?.statusText ??
+    errorOrMessage?.response?.statusText;
+
+  // Raw body Qwen actually sent back
+  const rawBody: string | undefined =
+    errorOrMessage?.upstreamErrorDetails?.rawBody;
+
+  // Try to parse rawBody as JSON for readability; fall back to string
+  let upstreamBody: unknown = rawBody;
+  if (rawBody) {
+    try { upstreamBody = JSON.parse(rawBody); } catch { upstreamBody = rawBody; }
+  }
+
+  const artifact: Record<string, unknown> = { timestamp };
+
+  if (upstreamStatus !== undefined)    artifact.status     = upstreamStatus;
+  if (upstreamStatusText !== undefined) artifact.statusText = upstreamStatusText;
+  if (upstreamBody !== undefined)      artifact.body       = upstreamBody;
+
+  return artifact;
+}
+
 function logError(requestId: string, accountId: string | null | undefined, statusCode: number, errorOrMessage: any, responseData?: unknown, loggingState?: LoggingStateSnapshot): void {
   const timestamp = new Date().toISOString();
   const id = accountId ? accountId.substring(0, 8) : "default";
@@ -149,13 +178,9 @@ function logError(requestId: string, accountId: string | null | undefined, statu
   const resolvedResponseData = getErrorResponseData(errorOrMessage, responseData, loggingState);
   const errorDebugDetails = getErrorDebugDetails(errorOrMessage, statusCode, loggingState);
 
-   runtimeLoggingService.writeRequestErrorArtifact(requestId, {
-    status: statusCode,
-    error: errorMessage,
-    timestamp,
-    response: resolvedResponseData,
-    details: errorDebugDetails,
-  }, statusCode, loggingState);
+  // error.json → only upstream data, no local stack / synthetic status codes
+  const upstreamArtifact = buildUpstreamErrorArtifact(errorOrMessage, timestamp);
+  runtimeLoggingService.writeRequestErrorArtifact(requestId, upstreamArtifact, statusCode, loggingState);
 
   let logEntry = `[${timestamp}] STATUS=${statusCode} ACCOUNT=${id} REQUEST_ID=${requestId}\n`;
   logEntry += `Error: ${errorMessage}\n`;
