@@ -106,10 +106,10 @@ function buildDashScopeHeaders(accessToken: string, isStreaming = false): Record
     accept: "application/json",
     authorization: `Bearer ${accessToken}`,
     "content-type": "application/json",
-    "user-agent": "QwenCode/0.11.1 (linux; x64)",
+    "user-agent": "QwenCode/0.14.3 (linux; x64)",
     "x-dashscope-authtype": "qwen-oauth",
     "x-dashscope-cachecontrol": "enable",
-    "x-dashscope-useragent": "QwenCode/0.11.1 (linux; x64)",
+    "x-dashscope-useragent": "QwenCode/0.14.3 (linux; x64)",
     "x-stainless-arch": "x64",
     "x-stainless-lang": "js",
     "x-stainless-os": "Linux",
@@ -184,6 +184,62 @@ function processMessagesForVision(messages: any[], model: string): any[] {
       return {
         ...message,
         content: parts,
+      };
+    }
+
+    return message;
+  });
+}
+
+/**
+ * Sanitizes and transforms message payloads to comply with the undocumented 
+ * strict formatting rules of the `portal.qwen.ai/v1/chat/completions` endpoint.
+ * 
+ * Context: 
+ * The proprietary Qwen frontend gateway expects a highly specific mismatch of formats:
+ * 1. `system` role messages MUST be formatted as an array containing `cache_control`.
+ * 2. `user` role messages MUST be flat strings. Array-wrapped user messages 
+ *    (e.g., from Anthropic/Claude Code) will trigger a strict HTTP 400 Bad Request.
+ * 
+ * @param messages - The original array of messages from the client request
+ * @returns A transformed array of messages safe for the Qwen upstream
+ */
+function transformMessagesForPortal(messages: any[]): any[] {
+  return messages.map((message, index) => {
+    if (!message.content) {
+      return message;
+    }
+
+    // Fix 1: Wrap system strings into cache-controlled arrays.
+    // Without this, portal.qwen.ai rejects the payload with HTTP 400.
+    if (message.role === "system" && typeof message.content === "string") {
+      return {
+        ...message,
+        content: [
+          {
+            type: "text",
+            text: message.content,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+      };
+    }
+
+    // Fix 2: Flatten complex user content arrays back into simple strings.
+    // Clients like Claude Code Router send user messages as Anthropic-style blocks 
+    // [{type: "text", text: "..."}], but the Qwen portal strictly requires flat strings.
+    if (message.role === "user" && Array.isArray(message.content)) {
+      let flattenedText = "";
+      for (const part of message.content) {
+        if (part.type === "text" && typeof part.text === "string") {
+          flattenedText += part.text;
+        } else if (typeof part === "string") {
+          flattenedText += part;
+        }
+      }
+      return {
+        ...message,
+        content: flattenedText || " "
       };
     }
 
@@ -734,7 +790,8 @@ export class QwenAPI {
     const apiEndpoint = await this.getApiEndpoint(credentials);
     const url = `${apiEndpoint}/chat/completions`;
     const model = resolveModelAlias(request.model) || DEFAULT_MODEL;
-    const processedMessages = processMessagesForVision(request.messages, model);
+    const visionMessages = processMessagesForVision(request.messages, model);
+    const processedMessages = transformMessagesForPortal(visionMessages);
     const maxTokens = clampMaxTokens(model, request.max_tokens);
 
     const payload = {
@@ -780,7 +837,8 @@ export class QwenAPI {
     const apiEndpoint = await this.getApiEndpoint(credentials);
     const url = `${apiEndpoint}/chat/completions`;
     const model = resolveModelAlias(request.model) || DEFAULT_MODEL;
-    const processedMessages = processMessagesForVision(request.messages, model);
+    const visionMessages = processMessagesForVision(request.messages, model);
+    const processedMessages = transformMessagesForPortal(visionMessages);
     const maxTokens = clampMaxTokens(model, request.max_tokens);
     const payload = {
       model,
