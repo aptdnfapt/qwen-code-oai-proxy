@@ -82,6 +82,17 @@ function isAuthLikeError(error: any): boolean {
   return typeof message === "string" && (message.includes("Not authenticated") || message.includes("access token"));
 }
 
+function isRateLimitLikeError(error: any): boolean {
+  const statusCode = error?.response?.status || error?.status || error?.statusCode;
+  if (statusCode === 429) return true;
+  const message = error?.message || "";
+  return typeof message === "string" && (
+    message.toLowerCase().includes("quota") || 
+    message.toLowerCase().includes("rate limit") ||
+    message.toLowerCase().includes("429")
+  );
+}
+
 export class QwenOpenAIProxy {
   qwenAPI: any;
   authService: any;
@@ -165,6 +176,12 @@ export class QwenOpenAIProxy {
       if (isAuthLikeError(error)) {
         const authError = this.ErrorFormatter.openAIAuthError();
         res.status(authError.status).json(authError.body);
+        return;
+      }
+
+      if (isRateLimitLikeError(error)) {
+        const rateLimitError = this.ErrorFormatter.openAIRateLimitError(error.message);
+        res.status(rateLimitError.status).json(rateLimitError.body);
         return;
       }
 
@@ -307,8 +324,13 @@ export class QwenOpenAIProxy {
           this.fileLogger.logError(requestId, displayAccount, 500, error, undefined, loggingState);
           this.liveLogger.proxyError(requestId, 500, displayAccount, error.message, loggingState);
         if (!res.headersSent) {
-          const apiError = this.ErrorFormatter.openAIApiError(error.message, "streaming_error");
-          res.status(apiError.status).json(apiError.body);
+          if (isRateLimitLikeError(error)) {
+            const rateLimitError = this.ErrorFormatter.openAIRateLimitError(error.message);
+            res.status(rateLimitError.status).json(rateLimitError.body);
+          } else {
+            const apiError = this.ErrorFormatter.openAIApiError(error.message, "streaming_error");
+            res.status(apiError.status).json(apiError.body);
+          }
         }
         res.end();
       });
@@ -332,9 +354,14 @@ export class QwenOpenAIProxy {
         return;
       }
 
-      const apiError = this.ErrorFormatter.openAIApiError(error.message);
       if (!res.headersSent) {
-        res.status(apiError.status).json(apiError.body);
+        if (isRateLimitLikeError(error)) {
+          const rateLimitError = this.ErrorFormatter.openAIRateLimitError(error.message);
+          res.status(rateLimitError.status).json(rateLimitError.body);
+        } else {
+          const apiError = this.ErrorFormatter.openAIApiError(error.message);
+          res.status(apiError.status).json(apiError.body);
+        }
         res.end();
       }
     }
@@ -434,6 +461,12 @@ export class QwenOpenAIProxy {
 
       this.fileLogger.logError(requestId, "auth", 500, error, undefined, loggingState);
       this.liveLogger.proxyError(requestId, 500, "auth", error.message, loggingState);
+      if (isRateLimitLikeError(error)) {
+        const rateLimitError = this.ErrorFormatter.openAIRateLimitError(error.message);
+        res.status(rateLimitError.status).json(rateLimitError.body);
+        return;
+      }
+
       const apiError = this.ErrorFormatter.openAIApiError(error.message, "authentication_error");
       res.status(apiError.status).json(apiError.body);
     }
@@ -506,6 +539,12 @@ export class QwenOpenAIProxy {
             code: "quota_exceeded",
           },
         });
+        return;
+      }
+
+      if (isRateLimitLikeError(error)) {
+        const rateLimitError = this.ErrorFormatter.openAIRateLimitError(error.message);
+        res.status(rateLimitError.status).json(rateLimitError.body);
         return;
       }
 
