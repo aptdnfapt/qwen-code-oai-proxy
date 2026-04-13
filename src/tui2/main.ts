@@ -120,10 +120,12 @@ function artifactExists(tree: readonly ArtifactNode[], target: string): boolean 
 
 let appView!: AppView;
 
+const FORCE_RENDER_ACTIONS = new Set(["navigate", "toggle-sidebar", "cycle-theme", "set-theme", "set-selection-style", "set-icon-mode", "set-sidebar-mode"]);
+
 function dispatch(action: TuiAction): void {
   currentState = reduceTuiState(currentState, action);
   appView?.setState(currentState);
-  tui.requestRender(true);
+  tui.requestRender(FORCE_RENDER_ACTIONS.has(action.type));
 
   if (action.type === "set-theme" || action.type === "cycle-theme") {
     void persistTuiPreferences({ theme: currentState.themeName });
@@ -390,16 +392,20 @@ process.on("resize", () => {
 
 tickTimer = setInterval(() => {
   dispatch({ type: "tick", nowMs: Date.now() });
-  dispatch({
-    type: "set-viewport",
-    cols: terminal.columns ?? currentState.viewportCols,
-    rows: terminal.rows ?? currentState.viewportRows,
-  });
+
+  // Only dispatch set-viewport if dimensions actually changed (avoids forced full redraw every second)
+  const newCols = terminal.columns ?? currentState.viewportCols;
+  const newRows = terminal.rows ?? currentState.viewportRows;
+  if (newCols !== currentState.viewportCols || newRows !== currentState.viewportRows) {
+    dispatch({ type: "set-viewport", cols: newCols, rows: newRows });
+  }
+
   void refreshRuntimeSummary();
-  void refreshUsage();
-  void refreshAccounts();
+  // Stagger slower refreshes to avoid multiple redraws firing in the same tick
+  setTimeout(() => { void refreshUsage(); }, 200);
+  setTimeout(() => { void refreshAccounts(); }, 400);
   if (currentState.activeScreen === "artifacts") {
-    void refreshArtifacts();
+    setTimeout(() => { void refreshArtifacts(); }, 600);
   }
 }, TICK_MS);
 
