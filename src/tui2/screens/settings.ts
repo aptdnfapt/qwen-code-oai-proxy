@@ -11,6 +11,8 @@ export const SETTINGS_LOG_LEVEL_ROW = 11;
 export const SETTINGS_AUTOSTART_ROW = 15;
 export const SETTINGS_PORT_ROW = 16;
 export const SETTINGS_HOST_ROW = 17;
+export const SETTINGS_RETRIES_ROW = 18;
+export const SETTINGS_BACKOFF_ROW = 19;
 
 function appearanceRows(state: TuiState): readonly ButtonGridRow<string>[] {
   const themes: readonly ThemeName[] = THEME_ORDER;
@@ -48,7 +50,7 @@ function runtimeRows(state: TuiState): readonly ButtonGridRow<string>[] {
   ]);
 }
 
-export function renderSettingsScreen(state: TuiState, width: number, editingField: "port" | "host" | null = null, editBuffer = ""): string[] {
+export function renderSettingsScreen(state: TuiState, width: number, editingField: "port" | "host" | "retries" | "backoff" | null = null, editBuffer = ""): string[] {
   const lines: string[] = [];
   const sc = state.serverConfig;
 
@@ -83,6 +85,20 @@ export function renderSettingsScreen(state: TuiState, width: number, editingFiel
   lines.push(truncLine(caption("  Port    ") + portValue + portHint, width));
   lines.push(truncLine(caption("  Host    ") + hostValue + hostHint, width));
 
+  // Retry section
+  lines.push(hRule(width));
+  lines.push(truncLine(strong("Retry"), width));
+  lines.push(hRule(width));
+
+  const rc = state.retryConfig;
+  const retryValue = editingField === "retries" ? warning(editBuffer + "▌") : value(String(rc.maxRetriesPerAccount));
+  const backoffValue = editingField === "backoff" ? warning(editBuffer + "▌") : value(`${rc.retryBackoffMs}ms`);
+  const retryHint = editingField === "retries" ? warning(" (editing — Enter save, Esc cancel)") : muted("  [R] edit");
+  const backoffHint = editingField === "backoff" ? warning(" (editing — Enter save, Esc cancel)") : muted("  [B] edit");
+
+  lines.push(truncLine(caption("  Retries ") + retryValue + retryHint, width));
+  lines.push(truncLine(caption("  Backoff") + backoffValue + backoffHint, width));
+
   lines.push(hRule(width));
   lines.push(truncLine(strong("Storage paths"), width));
   lines.push(hRule(width));
@@ -94,7 +110,7 @@ export function renderSettingsScreen(state: TuiState, width: number, editingFiel
   lines.push(truncLine(caption("  Selection") + muted(" saved here automatically"), width));
 
   lines.push(hRule(width));
-  lines.push(truncLine(caption("  click a row  t theme  i icons  1-4 log level  P port  H host"), width));
+  lines.push(truncLine(caption("  click a row  t theme  i icons  1-4 log level  P port  H host  R retries  B backoff"), width));
 
   return lines;
 }

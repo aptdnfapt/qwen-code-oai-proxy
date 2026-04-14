@@ -5,6 +5,7 @@ import {
   type ArtifactsScreenState,
   type IconMode,
   type LiveScreenState,
+  type RetryConfigState,
   type RuntimeSummary,
   type SelectionStyle,
   type ServerConfig,
@@ -59,6 +60,7 @@ type InitialTuiStateOptions = Readonly<{
   sidebarMode?: SidebarMode;
   iconMode?: IconMode;
   serverConfig?: Partial<ServerConfig>;
+  retryConfig?: Partial<RetryConfigState>;
 }>;
 
 function createInitialRuntime(serverConfig?: Partial<ServerConfig>): RuntimeSummary {
@@ -134,9 +136,17 @@ function createInitialServerConfig(initial: Partial<ServerConfig> = {}): ServerC
   });
 }
 
+function createInitialRetryConfig(initial: Partial<RetryConfigState> = {}): RetryConfigState {
+  return Object.freeze({
+    maxRetriesPerAccount: initial.maxRetriesPerAccount ?? 3,
+    retryBackoffMs: initial.retryBackoffMs ?? 1000,
+  });
+}
+
 export function createInitialState(nowMs = Date.now(), initial: InitialTuiStateOptions = {}): TuiState {
   const viewport = initialViewport();
   const serverConfig = createInitialServerConfig(initial.serverConfig);
+  const retryConfig = createInitialRetryConfig(initial.retryConfig);
 
   return Object.freeze({
     nowMs,
@@ -157,6 +167,7 @@ export function createInitialState(nowMs = Date.now(), initial: InitialTuiStateO
     accounts: createInitialAccountsState(),
     usage: createInitialUsageState(),
     serverConfig,
+    retryConfig,
   });
 }
 
@@ -525,6 +536,14 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
           port: action.port,
           host: action.host,
           autoStart: action.autoStart,
+        }),
+      });
+    case "set-retry-config":
+      return Object.freeze({
+        ...state,
+        retryConfig: Object.freeze({
+          maxRetriesPerAccount: action.maxRetriesPerAccount,
+          retryBackoffMs: action.retryBackoffMs,
         }),
       });
     default:

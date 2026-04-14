@@ -18,10 +18,12 @@ import { ARTIFACT_BODY_START_ROW, artifactPaneWidths, getVisibleArtifactRows, re
 import {
   renderSettingsScreen,
   SETTINGS_AUTOSTART_ROW,
+  SETTINGS_BACKOFF_ROW,
   SETTINGS_HOST_ROW,
   SETTINGS_ICONS_ROW,
   SETTINGS_LOG_LEVEL_ROW,
   SETTINGS_PORT_ROW,
+  SETTINGS_RETRIES_ROW,
   SETTINGS_SELECTION_ROW,
   SETTINGS_SIDEBAR_ROW,
   SETTINGS_THEME_ROW,
@@ -50,6 +52,7 @@ export type AppCallbacks = {
   onThemeChange: (theme: TuiState["themeName"]) => void;
   onSelectionStyleChange: (style: TuiState["selectionStyle"]) => void;
   onServerConfigChange: (port: number, host: string, autoStart: boolean) => void;
+  onRetryConfigChange: (maxRetries: number, backoffMs: number) => void;
 };
 
 export class AppView implements Component, Focusable {
@@ -63,7 +66,7 @@ export class AppView implements Component, Focusable {
   private authOverlay: AuthOverlay | null = null;
   private deleteOverlayHandle: ReturnType<TUI["showOverlay"]> | null = null;
   private deleteOverlay: DeleteConfirmOverlay | null = null;
-  private inputMode: "usage-filter" | "artifact-filter" | "port" | "host" | null = null;
+  private inputMode: "usage-filter" | "artifact-filter" | "port" | "host" | "retries" | "backoff" | null = null;
   private inputBuffer = "";
 
   constructor(tui: TUI, initialState: TuiState, cb: AppCallbacks) {
@@ -263,6 +266,14 @@ export class AppView implements Component, Focusable {
     } else if (this.inputMode === "host") {
       const host = this.inputBuffer.trim().length > 0 ? this.inputBuffer.trim() : sc.host;
       this.cb.onServerConfigChange(sc.port, host, sc.autoStart);
+    } else if (this.inputMode === "retries") {
+      const parsed = parseInt(this.inputBuffer, 10);
+      const retries = Number.isNaN(parsed) || parsed < 0 ? this.state.retryConfig.maxRetriesPerAccount : parsed;
+      this.cb.onRetryConfigChange(retries, this.state.retryConfig.retryBackoffMs);
+    } else if (this.inputMode === "backoff") {
+      const parsed = parseInt(this.inputBuffer, 10);
+      const backoff = Number.isNaN(parsed) || parsed < 100 ? this.state.retryConfig.retryBackoffMs : parsed;
+      this.cb.onRetryConfigChange(this.state.retryConfig.maxRetriesPerAccount, backoff);
     }
     this.inputMode = null;
     this.inputBuffer = "";
@@ -275,7 +286,7 @@ export class AppView implements Component, Focusable {
   handleInput(data: string): void {
     if (this.inputMode) {
       if (matchesKey(data, Key.escape)) {
-        if (this.inputMode === "port" || this.inputMode === "host") {
+        if (this.inputMode === "port" || this.inputMode === "host" || this.inputMode === "retries" || this.inputMode === "backoff") {
           this.inputMode = null;
           this.inputBuffer = "";
         } else {
@@ -283,19 +294,19 @@ export class AppView implements Component, Focusable {
           this.inputMode = null;
         }
       } else if (matchesKey(data, Key.enter)) {
-        if (this.inputMode === "port" || this.inputMode === "host") {
+        if (this.inputMode === "port" || this.inputMode === "host" || this.inputMode === "retries" || this.inputMode === "backoff") {
           this.commitServerField();
         } else {
           this.inputMode = null;
         }
       } else if (matchesKey(data, Key.backspace)) {
-        if (this.inputMode === "port" || this.inputMode === "host") {
+        if (this.inputMode === "port" || this.inputMode === "host" || this.inputMode === "retries" || this.inputMode === "backoff") {
           this.inputBuffer = this.inputBuffer.slice(0, -1);
         } else {
           this.applyInputValue(this.inputBuffer.slice(0, -1));
         }
       } else if (data.length === 1 && data >= " ") {
-        if (this.inputMode === "port" || this.inputMode === "host") {
+        if (this.inputMode === "port" || this.inputMode === "host" || this.inputMode === "retries" || this.inputMode === "backoff") {
           this.inputBuffer = this.inputBuffer + data;
         } else {
           this.applyInputValue(this.inputBuffer + data);
@@ -522,6 +533,18 @@ export class AppView implements Component, Focusable {
         this.tui.requestRender();
         return;
       }
+      if (data === "r" || data === "R") {
+        this.inputMode = "retries";
+        this.inputBuffer = String(this.state.retryConfig.maxRetriesPerAccount);
+        this.tui.requestRender();
+        return;
+      }
+      if (data === "b" || data === "B") {
+        this.inputMode = "backoff";
+        this.inputBuffer = String(this.state.retryConfig.retryBackoffMs);
+        this.tui.requestRender();
+        return;
+      }
     }
   }
 
@@ -734,6 +757,21 @@ export class AppView implements Component, Focusable {
       this.inputMode = "host";
       this.inputBuffer = this.state.serverConfig.host;
       this.tui.requestRender();
+      return;
+    }
+
+    // Retry config rows
+    if (localRow === SETTINGS_RETRIES_ROW) {
+      this.inputMode = "retries";
+      this.inputBuffer = String(this.state.retryConfig.maxRetriesPerAccount);
+      this.tui.requestRender();
+      return;
+    }
+
+    if (localRow === SETTINGS_BACKOFF_ROW) {
+      this.inputMode = "backoff";
+      this.inputBuffer = String(this.state.retryConfig.retryBackoffMs);
+      this.tui.requestRender();
     }
   }
 
@@ -840,6 +878,8 @@ export class AppView implements Component, Focusable {
     else if (this.inputMode === "artifact-filter") filterHint = warning("  [ARTIFACT SEARCH] type, Enter/Esc done");
     else if (this.inputMode === "port") filterHint = warning("  [PORT] type number, Enter save, Esc cancel");
     else if (this.inputMode === "host") filterHint = warning("  [HOST] type hostname, Enter save, Esc cancel");
+    else if (this.inputMode === "retries") filterHint = warning("  [RETRIES] type number, Enter save, Esc cancel");
+    else if (this.inputMode === "backoff") filterHint = warning("  [BACKOFF] type ms, Enter save, Esc cancel");
     return truncLine(base + filterHint, mainW);
   }
 
@@ -875,7 +915,7 @@ export class AppView implements Component, Focusable {
         screenLines = renderSettingsScreen(
           state,
           mainW,
-          (this.inputMode === "port" || this.inputMode === "host") ? this.inputMode : null,
+          (this.inputMode === "port" || this.inputMode === "host" || this.inputMode === "retries" || this.inputMode === "backoff") ? this.inputMode : null,
           this.inputBuffer,
         );
         break;

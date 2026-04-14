@@ -172,6 +172,11 @@ export type ServerConfig = Readonly<{
   autoStart: boolean;
 }>;
 
+export type RetryConfigState = Readonly<{
+  maxRetriesPerAccount: number;
+  retryBackoffMs: number;
+}>;
+
 export type TuiState = Readonly<{
   nowMs: number;
   bootMs: number;
@@ -191,6 +196,7 @@ export type TuiState = Readonly<{
   accounts: AccountsScreenState;
   usage: UsageScreenState;
   serverConfig: ServerConfig;
+  retryConfig: RetryConfigState;
 }>;
 
 export type TuiAction =
@@ -235,7 +241,8 @@ export type TuiAction =
   | Readonly<{ type: "set-usage-days"; days: readonly UsageDay[] }>
   | Readonly<{ type: "select-usage-date"; date: string | null }>
   | Readonly<{ type: "set-usage-filter"; value: string }>
-  | Readonly<{ type: "set-server-config"; port: number; host: string; autoStart: boolean }>;
+  | Readonly<{ type: "set-server-config"; port: number; host: string; autoStart: boolean }>
+  | Readonly<{ type: "set-retry-config"; maxRetriesPerAccount: number; retryBackoffMs: number }>;
 
 export type ScreenRouteDeps = Readonly<{
   onNavigate: (screen: ScreenId) => void;

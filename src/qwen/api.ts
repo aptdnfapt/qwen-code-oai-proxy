@@ -247,6 +247,32 @@ function transformMessagesForPortal(messages: any[]): any[] {
   });
 }
 
+function isHardQuotaError(error: any): boolean {
+  // Detects 429 insufficient_quota that is a HARD limit (not transient rate limit).
+  // These should NOT be retried on the same account.
+  const statusCode = error?.response?.status || error?.status || error?.statusCode;
+  const errorCode = error?.code || error?.response?.data?.error?.code;
+  const errorMessage = (
+    error?.message || error?.response?.data?.error?.message || ""
+  ).toLowerCase();
+
+  if (statusCode === 429 && errorCode === "insufficient_quota") {
+    return true;
+  }
+
+  // Also catch quota errors embedded in response body text
+  if (
+    statusCode === 429 &&
+    (errorMessage.includes("free allocated quota exceeded") ||
+      errorMessage.includes("exceeded your current quota") ||
+      (errorMessage.includes("quota") && errorMessage.includes("exceeded")))
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 function isAuthError(error: any): boolean {
   if (!error) {
     return false;
@@ -324,9 +350,14 @@ function isRetryableRequestError(error: any): boolean {
   );
 }
 
-function classifyRequestError(error: any): "auth" | "client" | "retryable" {
+function classifyRequestError(error: any): "auth" | "client" | "retryable" | "quota" {
   if (isAuthError(error)) {
     return "auth";
+  }
+
+  // Hard quota exceeded — don't retry same account
+  if (isHardQuotaError(error)) {
+    return "quota";
   }
 
   if (isClientRequestError(error)) {
@@ -690,37 +721,91 @@ export class QwenAPI {
     return accountIds.slice(startIndex).concat(accountIds.slice(0, startIndex));
   }
 
-  async executeOperationWithAccount(accountInfo: AccountInfo, executeAttempt: (accountInfo: AccountInfo) => Promise<any>): Promise<any> {
-    try {
-      return await executeAttempt(accountInfo);
-    } catch (error: any) {
-      const errorType = classifyRequestError(error);
-      if (errorType !== "auth") {
-        throw { error, rotate: errorType !== "client" };
-      }
+  async executeOperationWithAccount(
+    accountInfo: AccountInfo,
+    executeAttempt: (accountInfo: AccountInfo) => Promise<any>,
+    retryConfig?: { maxRetries: number; backoffMs: number },
+  ): Promise<any> {
+    const maxRetries = retryConfig?.maxRetries ?? 0;
+    const backoffMs = retryConfig?.backoffMs ?? 1000;
 
-      console.log(`\x1b[33mAuth error for ${accountInfo.accountId}, attempting refresh...\x1b[0m`);
-      let refreshedCredentials: any;
+    // First attempt + optional retries on same account
+    let lastError: any = null;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        refreshedCredentials = await this.authManager.refreshCredentialsIfNeeded(
-          accountInfo.credentials,
-          accountInfo.accountId === "default" ? null : accountInfo.accountId,
-          { force: true },
+        return await executeAttempt(accountInfo);
+      } catch (error: any) {
+        lastError = error;
+        const errorType = classifyRequestError(error);
+
+        // Auth error → try refresh once, then give up on this account
+        if (errorType === "auth") {
+          console.log(`\x1b[33mAuth error for ${accountInfo.accountId}, attempting refresh...\x1b[0m`);
+          let refreshedCredentials: any;
+          try {
+            refreshedCredentials = await this.authManager.refreshCredentialsIfNeeded(
+              accountInfo.credentials,
+              accountInfo.accountId === "default" ? null : accountInfo.accountId,
+              { force: true },
+            );
+          } catch (refreshError) {
+            throw { error: refreshError, rotate: true };
+          }
+
+          try {
+            return await executeAttempt({ ...accountInfo, credentials: refreshedCredentials });
+          } catch (retryError: any) {
+            const retryErrorType = classifyRequestError(retryError);
+            throw { error: retryError, rotate: retryErrorType !== "client" };
+          }
+        }
+
+        // Hard quota → always rotate to next account
+        if (errorType === "quota") {
+          throw { error, rotate: true };
+        }
+
+        // Client error → don't retry, don't rotate
+        if (errorType === "client") {
+          throw { error, rotate: false };
+        }
+
+        // Retryable (429 rate limit, 5xx, network) → retry same account if attempts left
+        if (attempt < maxRetries) {
+          const delay = backoffMs * (attempt + 1); // linear backoff
+          const liveLogger = require("../utils/liveLogger.js");
+          liveLogger.proxyRetry(
+            "per-account",
+            accountInfo.accountId,
+            attempt + 1,
+            maxRetries,
+            delay,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+
+        // Exhausted per-account retries → rotate
+        const liveLogger = require("../utils/liveLogger.js");
+        liveLogger.proxyRetryFailed(
+          "per-account",
+          accountInfo.accountId,
+          attempt + 1,
+          maxRetries,
         );
-      } catch (refreshError) {
-        throw { error: refreshError, rotate: true };
-      }
-
-      try {
-        return await executeAttempt({ ...accountInfo, credentials: refreshedCredentials });
-      } catch (retryError: any) {
-        const retryErrorType = classifyRequestError(retryError);
-        throw { error: retryError, rotate: retryErrorType !== "client" };
+        throw { error, rotate: true };
       }
     }
+
+    throw { error: lastError, rotate: true };
   }
 
-  async executeWithAccountRotation(accountIds: string[], executeAttempt: (accountInfo: AccountInfo) => Promise<any>, onSuccess: (accountId: string, result: any) => Promise<void>): Promise<any> {
+  async executeWithAccountRotation(
+    accountIds: string[],
+    executeAttempt: (accountInfo: AccountInfo) => Promise<any>,
+    onSuccess: (accountId: string, result: any) => Promise<void>,
+    retryConfig?: { maxRetries: number; backoffMs: number },
+  ): Promise<any> {
     let lastError: any = null;
     const rotationOrder = this.getRotationOrder(accountIds);
 
@@ -738,11 +823,18 @@ export class QwenAPI {
       }
 
       try {
-        const result = await this.executeOperationWithAccount(candidate, executeAttempt);
+        const result = await this.executeOperationWithAccount(candidate, executeAttempt, retryConfig);
         await onSuccess(candidate.accountId, result);
         return result;
       } catch (outcome: any) {
         lastError = outcome.error || outcome;
+
+        // Log quota exceeded
+        if (classifyRequestError(lastError) === "quota") {
+          const liveLogger = require("../utils/liveLogger.js");
+          liveLogger.proxyQuotaExceeded("rotation", candidate.accountId);
+        }
+
         if (outcome.rotate === false) throw lastError;
       }
     }
@@ -769,9 +861,29 @@ export class QwenAPI {
     return DEFAULT_QWEN_API_BASE_URL;
   }
 
+  async loadRetryConfig(): Promise<{ maxRetries: number; backoffMs: number }> {
+    // Try loading from persisted runtime config
+    try {
+      const { RuntimeConfigStore } = require("../core/config/runtime-config-store.js") as any;
+      const store = new RuntimeConfigStore();
+      const retryConfig = await store.getRetryConfig();
+      return {
+        maxRetries: retryConfig.maxRetriesPerAccount,
+        backoffMs: retryConfig.retryBackoffMs,
+      };
+    } catch {
+      // Fallback to env vars or defaults
+      return {
+        maxRetries: parseInt(process.env.MAX_RETRIES_PER_ACCOUNT || "3", 10) || 3,
+        backoffMs: parseInt(process.env.RETRY_BACKOFF_MS || "1000", 10) || 1000,
+      };
+    }
+  }
+
   async chatCompletions(request: any): Promise<any> {
     await this.authManager.loadAllAccounts();
     const configuredAccounts = request.accountId ? [request.accountId] : (this.authManager.getAccountIds().length > 0 ? this.authManager.getAccountIds() : ["default"]);
+    const retryConfig = await this.loadRetryConfig();
 
     return await this.executeWithAccountRotation(
       configuredAccounts,
@@ -782,6 +894,7 @@ export class QwenAPI {
           await this.recordTokenUsage(accountId, response.usage);
         }
       },
+      retryConfig,
     );
   }
 
@@ -888,6 +1001,7 @@ export class QwenAPI {
   async streamChatCompletions(request: any): Promise<any> {
     await this.authManager.loadAllAccounts();
     const configuredAccounts = request.accountId ? [request.accountId] : (this.authManager.getAccountIds().length > 0 ? this.authManager.getAccountIds() : ["default"]);
+    const retryConfig = await this.loadRetryConfig();
 
     return await this.executeWithAccountRotation(
       configuredAccounts,
@@ -900,12 +1014,14 @@ export class QwenAPI {
             .catch(() => null);
         }
       },
+      retryConfig,
     );
   }
 
   async webSearch(request: any): Promise<any> {
     await this.authManager.loadAllAccounts();
     const configuredAccounts = request.accountId ? [request.accountId] : (this.authManager.getAccountIds().length > 0 ? this.authManager.getAccountIds() : ["default"]);
+    const retryConfig = await this.loadRetryConfig();
 
     return await this.executeWithAccountRotation(
       configuredAccounts,
@@ -917,6 +1033,7 @@ export class QwenAPI {
           await this.incrementWebSearchResultCount(accountId, resultCount);
         }
       },
+      retryConfig,
     );
   }
 

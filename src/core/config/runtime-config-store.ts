@@ -2,6 +2,11 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolveRuntimeStoragePaths, type RuntimeStoragePathOptions, type RuntimeStoragePaths } from "./storage-paths";
 import { RUNTIME_LOG_LEVELS, type RuntimeLogLevel } from "../types/logging";
 
+export interface RetryConfig {
+  maxRetriesPerAccount: number;
+  retryBackoffMs: number;
+}
+
 export interface RuntimeConfig {
   logLevel: RuntimeLogLevel;
   port?: number;
@@ -9,6 +14,7 @@ export interface RuntimeConfig {
   autoStart?: boolean;
   theme?: string;
   selectionStyle?: string;
+  retry?: RetryConfig;
   updatedAt: string;
 }
 
@@ -66,6 +72,26 @@ function normalizeSelectionStyle(value: string | undefined): string | undefined 
   return (TUI_SELECTION_STYLE_NAMES as readonly string[]).includes(value) ? value : undefined;
 }
 
+const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetriesPerAccount: 3,
+  retryBackoffMs: 1000,
+};
+
+function normalizeRetryConfig(value: Partial<RetryConfig> | undefined): RetryConfig {
+  if (!value) {
+    return { ...DEFAULT_RETRY_CONFIG };
+  }
+
+  return {
+    maxRetriesPerAccount: typeof value.maxRetriesPerAccount === "number" && value.maxRetriesPerAccount >= 0
+      ? value.maxRetriesPerAccount
+      : DEFAULT_RETRY_CONFIG.maxRetriesPerAccount,
+    retryBackoffMs: typeof value.retryBackoffMs === "number" && value.retryBackoffMs >= 100
+      ? value.retryBackoffMs
+      : DEFAULT_RETRY_CONFIG.retryBackoffMs,
+  };
+}
+
 export class RuntimeConfigStore {
   private readonly paths: RuntimeStoragePaths;
 
@@ -120,6 +146,7 @@ export class RuntimeConfigStore {
       autoStart: typeof parsed.autoStart === "boolean" ? parsed.autoStart : undefined,
       theme: normalizeTheme(parsed.theme),
       selectionStyle: normalizeSelectionStyle(parsed.selectionStyle),
+      retry: normalizeRetryConfig(parsed.retry as Partial<RetryConfig> | undefined),
       updatedAt: parsed.updatedAt ?? defaultConfig.updatedAt,
     };
   }
@@ -133,6 +160,7 @@ export class RuntimeConfigStore {
       autoStart: input.autoStart !== undefined ? input.autoStart : current.autoStart,
       theme: input.theme !== undefined ? (normalizeTheme(input.theme) ?? current.theme) : current.theme,
       selectionStyle: input.selectionStyle !== undefined ? (normalizeSelectionStyle(input.selectionStyle) ?? current.selectionStyle) : current.selectionStyle,
+      retry: input.retry ? normalizeRetryConfig(input.retry) : current.retry,
       updatedAt: nowIso(),
     };
 
@@ -172,6 +200,15 @@ export class RuntimeConfigStore {
 
   async setTuiPreferences(input: { theme?: string; selectionStyle?: string }): Promise<RuntimeConfig> {
     return this.writeConfig(input);
+  }
+
+  async getRetryConfig(): Promise<RetryConfig> {
+    const config = await this.readConfig();
+    return config.retry ?? { ...DEFAULT_RETRY_CONFIG };
+  }
+
+  async setRetryConfig(input: Partial<RetryConfig>): Promise<RuntimeConfig> {
+    return this.writeConfig({ retry: input } as Partial<RuntimeConfig>);
   }
 
   async readState(): Promise<RuntimeState> {

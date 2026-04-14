@@ -82,6 +82,45 @@ function isAuthLikeError(error: any): boolean {
   return typeof message === "string" && (message.includes("Not authenticated") || message.includes("access token"));
 }
 
+/**
+ * Detect rate-limit / quota errors so we forward the correct 429 status
+ * to the caller instead of a misleading 500.
+ * Co-authored-by: noneherell <noormuameer@gmail.com>
+ */
+function isRateLimitLikeError(error: any): boolean {
+  const statusCode = error?.response?.status || error?.status || error?.statusCode;
+  if (statusCode === 429) return true;
+  const message = (error?.message || "").toLowerCase();
+  return (
+    message.includes("quota") ||
+    message.includes("rate limit") ||
+    message.includes("too many requests")
+  );
+}
+
+/**
+ * Extract the real error message from the upstream response.
+ * Axios wraps the Qwen error in error.message = "Request failed with status code 429"
+ * The actual Qwen message lives in error.response.data.error.message or upstreamErrorDetails.
+ */
+function extractRealErrorMessage(error: any): string {
+  // Try upstream error details attached by attachUpstreamErrorDetails()
+  const raw = error?.upstreamErrorDetails?.rawBody;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed?.error?.message) return parsed.error.message;
+    } catch { /* not JSON */ }
+  }
+
+  // Try Axios response body
+  const responseData = error?.response?.data;
+  if (responseData?.error?.message) return responseData.error.message;
+
+  // Fallback to the error message itself
+  return error?.message || "Unknown error";
+}
+
 export class QwenOpenAIProxy {
   qwenAPI: any;
   authService: any;
@@ -158,9 +197,12 @@ export class QwenOpenAIProxy {
         return;
       }
 
-      this.logFailedRequestArtifacts(requestId, req, model, undefined, 500, loggingState);
-      this.fileLogger.logError(requestId, displayAccount, 500, error, undefined, loggingState);
-      this.liveLogger.proxyError(requestId, 500, displayAccount, error.message, loggingState);
+      const realStatus = isRateLimitLikeError(error) ? 429 : (error?.response?.status || 500);
+      const realMessage = extractRealErrorMessage(error);
+
+      this.logFailedRequestArtifacts(requestId, req, model, undefined, realStatus, loggingState);
+      this.fileLogger.logError(requestId, displayAccount, realStatus, error, undefined, loggingState);
+      this.liveLogger.proxyError(requestId, realStatus, displayAccount, realMessage, loggingState);
 
       if (isAuthLikeError(error)) {
         const authError = this.ErrorFormatter.openAIAuthError();
@@ -168,7 +210,13 @@ export class QwenOpenAIProxy {
         return;
       }
 
-      const apiError = this.ErrorFormatter.openAIApiError(error.message);
+      if (isRateLimitLikeError(error)) {
+        const rateLimitError = this.ErrorFormatter.openAIRateLimitError(realMessage);
+        res.status(rateLimitError.status).json(rateLimitError.body);
+        return;
+      }
+
+      const apiError = this.ErrorFormatter.openAIApiError(realMessage);
       res.status(apiError.status).json(apiError.body);
     }
   }
@@ -208,10 +256,11 @@ export class QwenOpenAIProxy {
       this.liveLogger.proxyResponse(requestId, 200, displayAccount, latency, inputTokens, outputTokens, qwenId, loggingState);
       res.json(response);
     } catch (error: any) {
-      const statusCode = error.response?.status || 500;
-      this.logFailedRequestArtifacts(requestId, req, model, transformedMessages, statusCode, loggingState);
-      this.fileLogger.logError(requestId, displayAccount, statusCode, error, undefined, loggingState);
-      this.liveLogger.proxyError(requestId, statusCode, displayAccount, error.message, loggingState);
+      const realStatus = error.response?.status || 500;
+      const realMessage = extractRealErrorMessage(error);
+      this.logFailedRequestArtifacts(requestId, req, model, transformedMessages, realStatus, loggingState);
+      this.fileLogger.logError(requestId, displayAccount, realStatus, error, undefined, loggingState);
+      this.liveLogger.proxyError(requestId, realStatus, displayAccount, realMessage, loggingState);
 
       if (isAuthLikeError(error)) {
         const authError = this.ErrorFormatter.openAIAuthError();
@@ -303,12 +352,19 @@ export class QwenOpenAIProxy {
 
       stream.on("error", (error: any) => {
           settleStream();
-          this.logFailedRequestArtifacts(requestId, req, model, transformedMessages, 500, loggingState);
-          this.fileLogger.logError(requestId, displayAccount, 500, error, undefined, loggingState);
-          this.liveLogger.proxyError(requestId, 500, displayAccount, error.message, loggingState);
+          const realMessage = extractRealErrorMessage(error);
+          const realStatus = isRateLimitLikeError(error) ? 429 : 500;
+          this.logFailedRequestArtifacts(requestId, req, model, transformedMessages, realStatus, loggingState);
+          this.fileLogger.logError(requestId, displayAccount, realStatus, error, undefined, loggingState);
+          this.liveLogger.proxyError(requestId, realStatus, displayAccount, realMessage, loggingState);
         if (!res.headersSent) {
-          const apiError = this.ErrorFormatter.openAIApiError(error.message, "streaming_error");
-          res.status(apiError.status).json(apiError.body);
+          if (isRateLimitLikeError(error)) {
+            const rateLimitError = this.ErrorFormatter.openAIRateLimitError(realMessage);
+            res.status(rateLimitError.status).json(rateLimitError.body);
+          } else {
+            const apiError = this.ErrorFormatter.openAIApiError(realMessage, "streaming_error");
+            res.status(apiError.status).json(apiError.body);
+          }
         }
         res.end();
       });
@@ -318,10 +374,11 @@ export class QwenOpenAIProxy {
         stream.destroy();
       });
     } catch (error: any) {
-      const statusCode = error.response?.status || 500;
-      this.logFailedRequestArtifacts(requestId, req, model, transformedMessages, statusCode, loggingState);
-      this.fileLogger.logError(requestId, displayAccount, statusCode, error, undefined, loggingState);
-      this.liveLogger.proxyError(requestId, statusCode, displayAccount, error.message, loggingState);
+      const realStatus = error.response?.status || 500;
+      const realMessage = extractRealErrorMessage(error);
+      this.logFailedRequestArtifacts(requestId, req, model, transformedMessages, realStatus, loggingState);
+      this.fileLogger.logError(requestId, displayAccount, realStatus, error, undefined, loggingState);
+      this.liveLogger.proxyError(requestId, realStatus, displayAccount, realMessage, loggingState);
 
       if (isAuthLikeError(error)) {
         const authError = this.ErrorFormatter.openAIAuthError();
@@ -332,7 +389,16 @@ export class QwenOpenAIProxy {
         return;
       }
 
-      const apiError = this.ErrorFormatter.openAIApiError(error.message);
+      if (isRateLimitLikeError(error)) {
+        const rateLimitError = this.ErrorFormatter.openAIRateLimitError(realMessage);
+        if (!res.headersSent) {
+          res.status(rateLimitError.status).json(rateLimitError.body);
+          res.end();
+        }
+        return;
+      }
+
+      const apiError = this.ErrorFormatter.openAIApiError(realMessage);
       if (!res.headersSent) {
         res.status(apiError.status).json(apiError.body);
         res.end();
@@ -351,7 +417,8 @@ export class QwenOpenAIProxy {
       this.liveLogger.proxyResponse(requestId, 200, "system", latency, 0, 0, undefined, loggingState);
       res.json(models);
     } catch (error: any) {
-      this.liveLogger.proxyError(requestId, 500, "system", error.message, loggingState);
+      const realMessage = extractRealErrorMessage(error);
+      this.liveLogger.proxyError(requestId, 500, "system", realMessage, loggingState);
       this.fileLogger.logError(requestId, "system", 500, error, undefined, loggingState);
 
       if (isAuthLikeError(error)) {
@@ -364,9 +431,15 @@ export class QwenOpenAIProxy {
         return;
       }
 
+      if (isRateLimitLikeError(error)) {
+        const rateLimitError = this.ErrorFormatter.openAIRateLimitError(realMessage);
+        res.status(rateLimitError.status).json(rateLimitError.body);
+        return;
+      }
+
       res.status(500).json({
         error: {
-          message: error.message,
+          message: realMessage,
           type: "internal_server_error",
         },
       });
@@ -388,10 +461,10 @@ export class QwenOpenAIProxy {
       });
     } catch (error: any) {
       this.fileLogger.logError(requestId, "auth", 500, error, undefined, loggingState);
-      this.liveLogger.proxyError(requestId, 500, "auth", error.message, loggingState);
+      this.liveLogger.proxyError(requestId, 500, "auth", extractRealErrorMessage(error), loggingState);
       res.status(500).json({
         error: {
-          message: error.message,
+          message: extractRealErrorMessage(error),
           type: "authentication_error",
         },
       });
@@ -433,8 +506,8 @@ export class QwenOpenAIProxy {
       }
 
       this.fileLogger.logError(requestId, "auth", 500, error, undefined, loggingState);
-      this.liveLogger.proxyError(requestId, 500, "auth", error.message, loggingState);
-      const apiError = this.ErrorFormatter.openAIApiError(error.message, "authentication_error");
+      this.liveLogger.proxyError(requestId, 500, "auth", extractRealErrorMessage(error), loggingState);
+      const apiError = this.ErrorFormatter.openAIApiError(extractRealErrorMessage(error), "authentication_error");
       res.status(apiError.status).json(apiError.body);
     }
   }
@@ -490,7 +563,7 @@ export class QwenOpenAIProxy {
       }
 
       this.fileLogger.logError(requestId, "web", 500, error, undefined, loggingState);
-      this.liveLogger.proxyError(requestId, 500, "web", error.message, loggingState);
+      this.liveLogger.proxyError(requestId, 500, "web", extractRealErrorMessage(error), loggingState);
 
       if (isAuthLikeError(error)) {
         const authError = this.ErrorFormatter.openAIAuthError();
@@ -498,18 +571,13 @@ export class QwenOpenAIProxy {
         return;
       }
 
-      if ((error.message || "").includes("quota") || (error.message || "").includes("exceeded")) {
-        res.status(429).json({
-          error: {
-            message: "Web search quota exceeded. Free accounts have 2000 requests per day.",
-            type: "quota_exceeded",
-            code: "quota_exceeded",
-          },
-        });
+      if (isRateLimitLikeError(error)) {
+        const rateLimitError = this.ErrorFormatter.openAIRateLimitError(extractRealErrorMessage(error));
+        res.status(rateLimitError.status).json(rateLimitError.body);
         return;
       }
 
-      const apiError = this.ErrorFormatter.openAIApiError(error.message);
+      const apiError = this.ErrorFormatter.openAIApiError(extractRealErrorMessage(error));
       res.status(apiError.status).json(apiError.body);
     }
   }

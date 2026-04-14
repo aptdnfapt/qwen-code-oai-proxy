@@ -49,6 +49,10 @@ let currentState: TuiState = createInitialState(Date.now(), {
     host: initialConfig?.host,
     autoStart: initialConfig?.autoStart,
   },
+  retryConfig: initialConfig?.retry ? {
+    maxRetriesPerAccount: initialConfig.retry.maxRetriesPerAccount,
+    retryBackoffMs: initialConfig.retry.retryBackoffMs,
+  } : undefined,
 });
 const runtimeMonitor = createRuntimeMonitor(currentState.bootMs);
 
@@ -377,6 +381,17 @@ appView = new AppView(tui, currentState, {
   onThemeChange: (theme) => { dispatch({ type: "set-theme", theme }); },
   onSelectionStyleChange: (style) => { dispatch({ type: "set-selection-style", style }); },
   onServerConfigChange: (port, host, autoStart) => { void handleServerConfigChange(port, host, autoStart); },
+  onRetryConfigChange: (maxRetries, backoffMs) => {
+    dispatch({ type: "set-retry-config", maxRetriesPerAccount: maxRetries, retryBackoffMs: backoffMs });
+    void (async () => {
+      try {
+        const store = runtimeConfigStore;
+        if (store) {
+          await store.setRetryConfig({ maxRetriesPerAccount: maxRetries, retryBackoffMs: backoffMs });
+        }
+      } catch { /* config store may not be available */ }
+    })();
+  },
 });
 
 tui.addChild(appView);

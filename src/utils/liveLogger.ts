@@ -155,6 +155,24 @@ const liveLogger = {
     log(`${colors.green("●")} Server | ${colors.cyan(`http://${host}:${port}`)}`);
   },
 
+  proxyRetry(requestId: string, accountId: string | null | undefined, attempt: number, maxAttempts: number, delayMs: number, loggingState?: { liveEnabled?: boolean }): void {
+    const shortId = requestId.length > 12 ? requestId.substring(0, 8) : requestId;
+    const message = `${colors.yellow("⟳")} ${formatAccountTag(accountId)} ${colors.gray(shortId)} | ${colors.yellow(`retry ${attempt}/${maxAttempts}`)} in ${colors.yellow(`${delayMs}ms`)}`;
+    log(message, loggingState);
+  },
+
+  proxyRetryFailed(requestId: string, accountId: string | null | undefined, attempt: number, maxAttempts: number, loggingState?: { liveEnabled?: boolean }): void {
+    const shortId = requestId.length > 12 ? requestId.substring(0, 8) : requestId;
+    const message = `${colors.yellow("⟳")} ${formatAccountTag(accountId)} ${colors.gray(shortId)} | ${colors.yellow(`retry ${attempt}/${maxAttempts} failed, rotating...`)}`;
+    log(message, loggingState);
+  },
+
+  proxyQuotaExceeded(requestId: string, accountId: string | null | undefined, loggingState?: { liveEnabled?: boolean }): void {
+    const shortId = requestId.length > 12 ? requestId.substring(0, 8) : requestId;
+    const message = `${colors.red("⛔")} ${formatAccountTag(accountId)} ${colors.gray(shortId)} | ${colors.red("quota exceeded — hard stop")}`;
+    log(message, loggingState);
+  },
+
   shutdown(reason: string): void {
     log(`${colors.yellow("■")} Shutdown | ${colors.gray(reason)}`);
   },
