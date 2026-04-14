@@ -919,6 +919,7 @@ export class QwenAPI {
       tool_choice: request.tool_choice,
       ...resolveThinkingParams(request),
       stream: false,
+      response_format: request.response_format,
     };
 
     try {
@@ -966,6 +967,7 @@ export class QwenAPI {
       ...resolveThinkingParams(request),
       stream: true,
       stream_options: { include_usage: true },
+      response_format: request.response_format,
     };
 
     try {
