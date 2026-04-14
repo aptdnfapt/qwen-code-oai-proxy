@@ -192,6 +192,7 @@ export class QwenOpenAIProxy {
         reasoning: req.body.reasoning,
         enable_thinking: req.body.enable_thinking,
         thinking_budget: req.body.thinking_budget,
+        response_format: req.body.response_format,
         accountId,
       });
 
@@ -247,6 +248,7 @@ export class QwenOpenAIProxy {
         reasoning: req.body.reasoning,
         enable_thinking: req.body.enable_thinking,
         thinking_budget: req.body.thinking_budget,
+        response_format: req.body.response_format,
         accountId,
       });
 
