@@ -1,7 +1,11 @@
-# qwen-proxy — OpenAI-Compatible Proxy for Qwen Models
+# qwen-proxy — OpenAI-Compatible Proxy for Qwen Models (DEAD)
 
 Works with opencode, crush, claude code router, roo code, cline and anything that speaks the OpenAI API. Has tool calling and streaming support.
 
+> ⚠️ **DEPRECATED** — Qwen free usage has ended. You will get 401 errors. See [GitHub Issue #3203](https://github.com/QwenLM/qwen-code/issues/3203). This project is no longer actively maintained.
+
+> **New** — Qwen CLI free quota is dead, but we have a great community on Discord that keeps up with AI news and free usage quotas. [Join us](https://discord.gg/6S7HwCxbMy).
+>
 > **New** — Minimal terminal UI with full mouse support — lightweight, low resource usage. 
 >
 > **New** — TUI themes: **dark**, **light**, **amber**, **contrast**. Change from **Settings** or press **t**. Theme saves to `~/.local/share/qwen-proxy/config.json`.
