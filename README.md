@@ -1,5 +1,10 @@
 # qwen-proxy — OpenAI-Compatible Proxy for Qwen Models (DEAD)
 
+## What's different in this fork
+
+
+
+
 Works with opencode, crush, claude code router, roo code, cline and anything that speaks the OpenAI API. Has tool calling and streaming support.
 
 > ⚠️ **DEPRECATED** — Qwen free usage has ended. You will get 401 errors. See [GitHub Issue #3203](https://github.com/QwenLM/qwen-code/issues/3203). This project is no longer actively maintained.
